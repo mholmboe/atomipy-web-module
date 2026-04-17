@@ -899,6 +899,8 @@ export default function VisualBuilder() {
     [setNodes],
   );
 
+  const [downloadToken, setDownloadToken] = useState<string | null>(null);
+
   const handleCompileAndRun = async () => {
     if (nodes.length === 0) {
       toast.error("Workflow Empty", {
@@ -924,6 +926,7 @@ export default function VisualBuilder() {
 
       resetNodeStatuses();
       setIsBuilding(true);
+      setDownloadToken(null);
       setBuildProgress(0);
       setBuildStatus("Initializing build...");
       setBuildLogs([]);
@@ -988,12 +991,12 @@ export default function VisualBuilder() {
                   updateNodeStatus(lastNodeId, data.success ? "success" : "error");
                 }
                 if (data.success) {
-                  setBuildStatus("Build complete! Ready for download.");
-                  window.location.href = `/api/download-result/${data.token}`;
-                  toast.success("Build successful! Downloading results...");
+                  setBuildStatus("Build complete! System bundle is ready.");
+                  setDownloadToken(data.token);
+                  toast.success("Build successful! Ready for download.");
                 } else {
                   setBuildStatus("Build failed. See logs for details.");
-                  window.location.href = `/api/download-result/${data.token}`;
+                  setDownloadToken(data.token);
                   toast.error("Build failed.");
                 }
                 return;
@@ -1263,12 +1266,30 @@ export default function VisualBuilder() {
                 )}
 
                 {buildProgress === 100 && (
-                  <div className="pt-2">
+                  <div className="pt-2 flex gap-2">
+                    {downloadToken ? (
+                      <Button 
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white gap-2 font-semibold shadow-lg shadow-emerald-900/20"
+                        onClick={() => {
+                          window.location.href = `/api/download-result/${downloadToken}`;
+                        }}
+                      >
+                        <Download className="w-4 h-4" /> Download Result ZIP
+                      </Button>
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground italic">
+                        Processing final bundle...
+                      </div>
+                    )}
                     <Button 
-                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white gap-2 font-semibold shadow-lg shadow-emerald-900/20"
-                      onClick={() => setIsBuilding(false)}
+                      variant="outline"
+                      className="px-4"
+                      onClick={() => {
+                        setIsBuilding(false);
+                        setDownloadToken(null);
+                      }}
                     >
-                      <Download className="w-4 h-4" /> Finalize Build
+                      Dismiss
                     </Button>
                   </div>
                 )}
