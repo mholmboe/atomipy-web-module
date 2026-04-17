@@ -33,7 +33,14 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
           <select
             className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
             value={data.forcefield || "minff"}
-            onChange={(e) => updateNodeData(id, { ...data, forcefield: e.target.value })}
+            onChange={(e) => {
+              const newValue = e.target.value as "minff" | "clayff";
+              const updates: Partial<ForcefieldNodeData> = { forcefield: newValue };
+              if (data.log && (!data.logFile || data.logFile === `${data.forcefield || "minff"}.log`)) {
+                updates.logFile = `${newValue}.log`;
+              }
+              updateNodeData(id, { ...data, ...updates });
+            }}
             onPointerDown={(e) => e.stopPropagation()}
           >
             <option value="minff">MINFF</option>
@@ -95,7 +102,14 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
                 type="checkbox"
                 className="nodrag"
                 checked={data.log || false}
-                onChange={(e) => updateNodeData(id, { ...data, log: e.target.checked })}
+                onChange={(e) => {
+                  const isChecked = e.target.checked;
+                  const updates: Partial<ForcefieldNodeData> = { log: isChecked };
+                  if (isChecked && !data.logFile) {
+                    updates.logFile = `${data.forcefield || "minff"}.log`;
+                  }
+                  updateNodeData(id, { ...data, ...updates });
+                }}
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </label>
