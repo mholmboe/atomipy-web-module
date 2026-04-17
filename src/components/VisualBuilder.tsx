@@ -48,6 +48,15 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Loader2, Terminal } from "lucide-react";
 import { toast } from "sonner";
 
 // Import Custom Nodes
@@ -487,6 +496,20 @@ export default function VisualBuilder() {
   const workflowImportInputRef = useRef<HTMLInputElement>(null);
   const [presets, setPresets] = useState<PresetOption[]>([]);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
+
+  // Build Progress States
+  const [isBuilding, setIsBuilding] = useState(false);
+  const [buildProgress, setBuildProgress] = useState(0);
+  const [buildStatus, setBuildStatus] = useState("");
+  const [buildLogs, setBuildLogs] = useState<string[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [buildLogs]);
+
   const [customTemplates, setCustomTemplates] = useState<SavedWorkflow[]>([]);
   const [savedWorkflows, setSavedWorkflows] = useState<SavedWorkflow[]>([]);
   const [selectedWorkflowKey, setSelectedWorkflowKey] = useState(DEFAULT_WORKFLOW_SELECTION);
@@ -856,7 +879,12 @@ export default function VisualBuilder() {
   );
 
   const handleCompileAndRun = async () => {
-    toast("Compiling Script...");
+    if (nodes.length === 0) {
+      toast.error("Workflow Empty", {
+        description: "Please add some nodes to your system before building.",
+      });
+      return;
+    }
 
     const validationErrors = validateWorkflow(nodes, edges);
     if (validationErrors.length > 0) {
@@ -873,44 +901,81 @@ export default function VisualBuilder() {
       const code = generatePythonCode(nodes, edges);
       console.log("Generated Script:\n", code);
 
-      const res = await fetch("/api/execute-script", {
+      setIsBuilding(true);
+      setBuildProgress(0);
+      setBuildStatus("Initializing build...");
+      setBuildLogs([]);
+
+      const response = await fetch("/api/build-stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ script: code, workflow: { nodes, edges } }),
       });
 
-      const contentType = res.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        const errorData = (await res.json()) as { stderr?: string; error?: string };
-        const msg = errorData.stderr || errorData.error || `Execution failed (status ${res.status}).`;
-        console.error("Execution error:", msg);
-        toast.error("Build Failed", {
-          description: msg.length > 140 ? msg.substring(0, 140) + "..." : msg,
-          duration: 7000,
-        });
-        return;
+      if (!response.ok) {
+        throw new Error(`Build request failed with status ${response.status}`);
       }
 
-      const blob = await res.blob();
-      if (!contentType.includes("application/zip")) {
-        toast.error(`Unexpected response format (status ${res.status}).`);
-        return;
-      }
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "atomipy_results.zip";
-      a.click();
-      window.URL.revokeObjectURL(url);
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("Could not start stream reader.");
 
-      if (res.ok) {
-        toast.success("Build successful! Downloading results...");
-      } else {
-        toast.error("Build failed. Downloading error bundle...", { duration: 7000 });
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const rawLine of lines) {
+          if (!rawLine.trim() || !rawLine.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(rawLine.slice(6));
+            switch (data.type) {
+              case "status":
+                setBuildStatus(data.message);
+                break;
+              case "log":
+                setBuildLogs((prev) => [...prev, data.message]);
+                break;
+              case "progress": {
+                const total = nodes.length;
+                const progressPercentage = Math.min(Math.round(((data.index + 1) / total) * 100), 99);
+                setBuildProgress(progressPercentage);
+                const currentNode = nodes.find((n) => n.id === data.nodeId);
+                if (currentNode) {
+                  setBuildStatus(`Processing ${currentNode.type} (${data.index + 1}/${total})...`);
+                }
+                break;
+              }
+              case "complete":
+                setBuildProgress(100);
+                if (data.success) {
+                  setBuildStatus("Build complete! Preparing download...");
+                  window.location.href = `/api/download-result/${data.token}`;
+                  toast.success("Build successful! Downloading results...");
+                } else {
+                  setBuildStatus("Build failed. Check logs in the results bundle.");
+                  window.location.href = `/api/download-result/${data.token}`;
+                  toast.error("Build failed. See logs for details.");
+                }
+                setTimeout(() => setIsBuilding(false), 2000);
+                return;
+              default:
+                break;
+            }
+          } catch (err) {
+            console.error("Error parsing stream chunk:", err);
+          }
+        }
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       toast.error("Build error: " + message);
+      setIsBuilding(false);
     }
   };
 
@@ -1105,6 +1170,54 @@ export default function VisualBuilder() {
           </ReactFlow>
         </ReactFlowProvider>
       </div>
+
+      <Dialog open={isBuilding} onOpenChange={(open) => !open && setIsBuilding(false)}>
+        <DialogContent className="max-w-2xl bg-card border-amber-500/20 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {buildProgress < 100 ? (
+                <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
+              ) : (
+                <Terminal className="w-5 h-5 text-green-500" />
+              )}
+              System Build in Progress
+            </DialogTitle>
+            <DialogDescription>{buildStatus}</DialogDescription>
+          </DialogHeader>
+
+          <div className="py-6 space-y-6">
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                <span>Overall Progress</span>
+                <span>{buildProgress}%</span>
+              </div>
+              <Progress value={buildProgress} className="h-2.5 bg-muted border border-border" />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <Terminal className="w-3.5 h-3.5" />
+                Live Build Console
+              </div>
+              <div
+                ref={scrollRef}
+                className="bg-black/90 p-4 rounded-xl border border-white/5 h-[200px] overflow-y-auto font-mono text-[11px] leading-relaxed text-zinc-300 scrollbar-thin scrollbar-thumb-zinc-800"
+              >
+                {buildLogs.length === 0 ? (
+                  <div className="text-zinc-600 animate-pulse">Waiting for backend logs...</div>
+                ) : (
+                  buildLogs.map((log, i) => (
+                    <div key={i} className="mb-0.5 border-l-2 border-transparent hover:border-amber-500/50 pl-2 transition-colors">
+                      <span className="text-zinc-600 mr-2">[{i + 1}]</span>
+                      {log}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
@@ -1193,6 +1306,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
     const opTypeEscaped = pyEscape(opType);
     const opIdEscaped = pyEscape(id);
     pythonCode += `\n# --- Operation: ${opType} (${id}) ---\n`;
+    pythonCode += `print("__NODE_START__:${opIdEscaped}:${index}")\n`;
     const nodeBlockStart = pythonCode.length;
 
     switch (n.type) {

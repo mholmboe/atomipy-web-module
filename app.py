@@ -8,7 +8,7 @@ import zipfile
 from uuid import uuid4
 from typing import Any
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, Response
 from werkzeug.utils import secure_filename
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -466,6 +466,146 @@ def build_system():
             500,
         )
 
+
+# Global cache for build results to support async downloads
+from collections import OrderedDict
+BUILD_RESULTS_CACHE = OrderedDict()
+MAX_CACHE_SIZE = 10
+
+@app.route("/api/download-result/<token>")
+def download_result(token):
+    res_data = BUILD_RESULTS_CACHE.get(token)
+    if not res_data:
+        return jsonify({"error": "Result not found or expired. Please build again."}), 404
+    
+    return send_file(
+        io.BytesIO(res_data["blob"]),
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=res_data["filename"]
+    )
+
+@app.route("/api/build-stream", methods=["POST"])
+def build_stream():
+    try:
+        payload = _parse_payload()
+        script_code = payload.get("script", "")
+        workflow_data = payload.get("workflow")
+        
+        if not script_code:
+            return jsonify({"error": "No script provided."}), 400
+
+        def generate():
+            with tempfile.TemporaryDirectory(prefix="atomipy_stream_") as work_dir:
+                # 1. Setup Environment (Same as execute_script)
+                potential_dirs = [
+                    os.path.join(AP_DATA_DIR, "structures", "minerals", "UC_conf"),
+                    os.path.join(BASE_DIR, "UC_conf"),
+                    os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
+                ]
+                uc_conf_src = next((d for d in potential_dirs if os.path.exists(d)), None)
+                if uc_conf_src:
+                    os.symlink(uc_conf_src, os.path.join(work_dir, "UC_conf"))
+                
+                uploads_src = os.path.join(BASE_DIR, "uploads")
+                if os.path.exists(uploads_src):
+                    os.symlink(uploads_src, os.path.join(work_dir, "uploads"))
+
+                script_path = os.path.join(work_dir, "build_script.py")
+                with open(script_path, "w", encoding="utf-8") as f:
+                    f.write(script_code)
+                
+                if workflow_data:
+                    with open(os.path.join(work_dir, "workflow.json"), "w", encoding="utf-8") as f:
+                        json.dump(workflow_data, f, indent=2)
+
+                # 2. Execute with Popen for real-time output
+                import subprocess, sys
+                env = os.environ.copy()
+                env["PYTHONPATH"] = BASE_DIR
+                
+                process = subprocess.Popen(
+                    [sys.executable, "-u", "build_script.py"], # -u for unbuffered
+                    cwd=work_dir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    env=env
+                )
+
+                yield f"data: {json.status('Build initializing...')}\n\n"
+
+                all_stdout = []
+                for line in process.stdout:
+                    all_stdout.append(line)
+                    # Detect progress markers: __NODE_START__:nodeId:index
+                    if "__NODE_START__:" in line:
+                        try:
+                            parts = line.strip().split(":")
+                            yield f"data: {json.progress(parts[1], parts[2])}\n\n"
+                        except: pass
+                    else:
+                        yield f"data: {json.log(line)}\n\n"
+
+                process.wait()
+                success = process.returncode == 0
+                stdout_text = "".join(all_stdout)
+
+                # 3. Package Results
+                summary = {
+                    "success": success,
+                    "exit_code": process.returncode,
+                    "message": "Build succeeded." if success else "Build failed.",
+                }
+
+                memory_file = io.BytesIO()
+                with zipfile.ZipFile(memory_file, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                    for fname in os.listdir(work_dir):
+                        if fname in {"UC_conf", "uploads"}: continue
+                        path = os.path.join(work_dir, fname)
+                        if os.path.isfile(path):
+                            zf.write(path, arcname=fname)
+                    
+                    zf.writestr("execution_stdout.txt", stdout_text)
+                    zf.writestr("build_summary.json", json.dumps(summary, indent=2))
+
+                # Store in cache
+                token = str(uuid4())
+                memory_file.seek(0)
+                BUILD_RESULTS_CACHE[token] = {
+                    "blob": memory_file.read(),
+                    "filename": "atomipy_v2_system_bundle.zip",
+                    "timestamp": time.time()
+                }
+                # Cleanup old entries
+                while len(BUILD_RESULTS_CACHE) > MAX_CACHE_SIZE:
+                    BUILD_RESULTS_CACHE.popitem(last=False)
+
+                yield f"data: {json.complete(token, success)}\n\n"
+
+        # Helper to format SSE data
+        class json:
+            @staticmethod
+            def status(msg): return json._fmt("status", {"message": msg})
+            @staticmethod
+            def progress(node_id, index): return json._fmt("progress", {"nodeId": node_id, "index": int(index)})
+            @staticmethod
+            def log(line): return json._fmt("log", {"message": line})
+            @staticmethod
+            def complete(token, success): return json._fmt("complete", {"token": token, "success": success})
+            @staticmethod
+            def _fmt(t, d): return json.dumps({"type": t, **d})
+            @staticmethod
+            def dumps(d): return json_orig.dumps(d) # Hook back to real json
+
+        import json as json_orig
+        import time
+        return Response(generate(), mimetype="text/event-stream")
+
+    except Exception as exc:
+        return jsonify({"error": str(exc), "traceback": traceback.format_exc()}), 500
+
+
 @app.route("/api/execute-script", methods=["POST"])
 def execute_script():
     try:
@@ -506,7 +646,7 @@ def execute_script():
             if workflow_data:
                 workflow_path = os.path.join(work_dir, "workflow.json")
                 with open(workflow_path, "w", encoding="utf-8") as f:
-                    json.dump(workflow_data, f, indent=2)
+                    json_orig.dump(workflow_data, f, indent=2)
 
             import subprocess
             # Execute script in work_dir with the current python environment
@@ -549,7 +689,7 @@ def execute_script():
                 if "build_errors.log" not in included_files:
                     zf.writestr("build_errors.log", "")
                 summary["included_files"] = sorted(included_files)
-                zf.writestr("build_summary.json", json.dumps(summary, indent=2))
+                zf.writestr("build_summary.json", json_orig.dumps(summary, indent=2))
 
             memory_file.seek(0)
             status_code = 200 if success else 400
@@ -564,7 +704,6 @@ def execute_script():
 
     except Exception as exc:
         return jsonify({"error": str(exc), "traceback": traceback.format_exc()}), 500
-
 
 
 if __name__ == "__main__":
