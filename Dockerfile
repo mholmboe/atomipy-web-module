@@ -1,9 +1,22 @@
 # --- Stage 1: Build the React frontend ---
 FROM node:20-slim AS frontend-build
 WORKDIR /app
+
+# Copy dependency files first for caching
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
-COPY . .
+
+# Only copy frontend-related source files (avoids bloat from UC_conf/atomipy)
+COPY src ./src
+COPY public ./public
+COPY index.html ./
+COPY tsconfig*.json ./
+COPY vite.config.ts ./
+COPY tailwind.config.ts ./
+COPY components.json ./
+COPY postcss.config.js ./
+
+# Build the frontend
 RUN npm run build
 
 # --- Stage 2: Final image with Python backend ---
@@ -18,7 +31,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install atomipy from GitHub to ensure latest version
+# Install atomipy from GitHub
 RUN pip install git+https://github.com/mholmboe/atomipy.git
 
 # Copy the built frontend from the first stage
@@ -33,9 +46,7 @@ COPY atomipy/ ./atomipy/
 ENV PORT=5002
 ENV FLASK_ENV=production
 
-# Expose the port
 EXPOSE 5002
 
-# Run the app using gunicorn for production
-# We use the PORT environment variable provided by Render
+# Run the app using gunicorn
 CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-5002} app:app"]
