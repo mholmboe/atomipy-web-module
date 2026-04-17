@@ -475,11 +475,21 @@ def execute_script():
             return jsonify({"error": "No script provided."}), 400
 
         with tempfile.TemporaryDirectory(prefix="atomipy_v2_") as work_dir:
-            # Create symlink to UC_conf
-            uc_conf_src = os.path.join(BASE_DIR, "UC_conf")
-            uc_conf_dst = os.path.join(work_dir, "UC_conf")
-            if os.path.exists(uc_conf_src):
-                os.symlink(uc_conf_src, uc_conf_dst)
+            # Create symlink to UC_conf by checking potential locations
+            potential_dirs = [
+                os.path.join(AP_DATA_DIR, "structures", "minerals", "UC_conf"),
+                os.path.join(BASE_DIR, "UC_conf"),
+                os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
+            ]
+            
+            uc_conf_src = None
+            for d in potential_dirs:
+                if os.path.exists(d):
+                    uc_conf_src = d
+                    break
+            
+            if uc_conf_src:
+                os.symlink(uc_conf_src, os.path.join(work_dir, "UC_conf"))
 
             uploads_src = os.path.join(BASE_DIR, "uploads")
             uploads_dst = os.path.join(work_dir, "uploads")
