@@ -532,8 +532,7 @@ def build_stream():
                     with open(os.path.join(work_dir, "workflow.json"), "w", encoding="utf-8") as f:
                         json.dump(workflow_data, f, indent=2)
 
-                # 2. Execute with Popen for real-time output
-                import subprocess, sys
+                import subprocess, sys, selectors
                 env = os.environ.copy()
                 env["PYTHONPATH"] = BASE_DIR
                 
@@ -548,8 +547,27 @@ def build_stream():
 
                 yield SSE.status('Build initializing...')
 
+                # Use selectors for non-blocking read to allow heartbeats
+                sel = selectors.DefaultSelector()
+                sel.register(process.stdout, selectors.EVENT_READ)
+                
                 all_stdout = []
-                for line in process.stdout:
+                while True:
+                    # Wait for output with a 15-second timeout for heartbeat
+                    events = sel.select(timeout=15)
+                    
+                    if not events:
+                        # No output for 15s? Send a heartbeat to keep Render connection alive
+                        yield SSE.log(" ") 
+                        continue
+
+                    line = process.stdout.readline()
+                    if not line:
+                        # Check if process ended
+                        if process.poll() is not None:
+                            break
+                        continue
+
                     all_stdout.append(line)
                     # Detect progress markers: __NODE_START__:nodeId:index
                     if "__NODE_START__:" in line:

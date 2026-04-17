@@ -47,5 +47,5 @@ ENV FLASK_ENV=production
 
 EXPOSE 5002
 
-# Run the app using gunicorn
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-5002} app:app"]
+# Run the app using gunicorn with threaded workers and 5-min timeout
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-5002} --workers 1 --worker-class gthread --threads 4 --timeout 300 app:app"]
