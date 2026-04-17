@@ -11,8 +11,16 @@ from typing import Any
 from flask import Flask, jsonify, request, send_file, Response
 from werkzeug.utils import secure_filename
 
+import threading
+import gc
+import contextlib
+import queue
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
+
+# Global lock to ensure only one memory-intensive build runs at a time
+BUILD_LOCK = threading.Lock()
 
 import atomipy as ap
 
@@ -536,68 +544,81 @@ def build_stream():
                     with open(os.path.join(work_dir, "workflow.json"), "w", encoding="utf-8") as f:
                         json.dump(workflow_data, f, indent=2)
 
-                import subprocess, sys, selectors
-                env = os.environ.copy()
-                env["PYTHONPATH"] = BASE_DIR
-                
-                process = subprocess.Popen(
-                    [sys.executable, "-u", "build_script.py"], # -u for unbuffered
-                    cwd=work_dir,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    env=env
-                )
+                yield SSE.status('Build initializing (Locked Mode)...')
 
-                yield SSE.status('Build initializing...')
-
-                # Use selectors for non-blocking read to allow heartbeats
-                sel = selectors.DefaultSelector()
-                sel.register(process.stdout, selectors.EVENT_READ)
+                # 2. Execute In-Process via Thread (Saves ~150MB RAM over Subprocess)
+                log_queue = queue.Queue()
                 
+                def run_build_in_process():
+                    # Acquire lock to ensure we don't double-dip on RAM for large systems
+                    with BUILD_LOCK:
+                        old_cwd = os.getcwd()
+                        # Use a custom writer to bridge stdout to our SSE stream
+                        class QueueWriter:
+                            def __init__(self, q): self.q = q
+                            def write(self, s):
+                                if s: self.q.put(s)
+                            def flush(self): pass
+                        
+                        writer = QueueWriter(log_queue)
+                        try:
+                            os.chdir(work_dir)
+                            gc.collect() # Clear memory before starting
+                            with contextlib.redirect_stdout(writer), contextlib.redirect_stderr(writer):
+                                # Execute the modeling script in the current environment
+                                # Passing ap and other modules explicitly
+                                exec_globals = {
+                                    "__name__": "__main__",
+                                    "ap": ap,
+                                    "os": os,
+                                    "sys": sys,
+                                    "json": json,
+                                }
+                                exec(script_code, exec_globals)
+                            
+                            log_queue.put("__FINISH__:0")
+                        except Exception as e:
+                            writer.write(f"\nFATAL BUILD ERROR: {str(e)}\n{traceback.format_exc()}\n")
+                            log_queue.put("__FINISH__:1")
+                        finally:
+                            os.chdir(old_cwd)
+                            gc.collect() # Clear memory after finish
+
+                thread = threading.Thread(target=run_build_in_process, daemon=True)
+                thread.start()
+
                 log_path = os.path.join(work_dir, "execution_stdout.txt")
                 curr_line = ""
+                success = False
+                
                 with open(log_path, "w", encoding="utf-8") as log_f:
                     while True:
-                        # Wait for output with a 15-second timeout for heartbeat
-                        events = sel.select(timeout=15)
-                        
-                        if not events:
-                            # No output for 15s? Send a heartbeat to keep Render connection alive
+                        try:
+                            content = log_queue.get(timeout=15)
+                            if content.startswith("__FINISH__"):
+                                success = content.endswith(":0")
+                                break
+                            
+                            # Log and process characters
+                            for char in content:
+                                log_f.write(char)
+                                if char in ('\n', '\r'):
+                                    if curr_line.strip():
+                                        if "__NODE_START__:" in curr_line:
+                                            try:
+                                                parts = curr_line.strip().split(":")
+                                                yield SSE.progress(parts[1], parts[2])
+                                            except: pass
+                                        else:
+                                            yield SSE.log(curr_line)
+                                    curr_line = ""
+                                else:
+                                    curr_line += char
+                                    
+                        except queue.Empty:
+                            # 15s pulse to keep Render connection alive
                             yield SSE.log(" ") 
                             continue
-
-                        # Read character by character to catch \r progress updates
-                        char = process.stdout.read(1)
-                        if not char:
-                            # Check if process ended
-                            if process.poll() is not None:
-                                # Read any remaining content before breaking
-                                remaining = process.stdout.read()
-                                if remaining:
-                                    log_f.write(remaining)
-                                    yield SSE.log(remaining)
-                                break
-                            continue
-
-                        log_f.write(char) # Write directly to file to save RAM
-                        if char in ('\n', '\r'):
-                            if curr_line.strip():
-                                # Detect progress markers: __NODE_START__:nodeId:index
-                                if "__NODE_START__:" in curr_line:
-                                    try:
-                                        parts = curr_line.strip().split(":")
-                                        yield SSE.progress(parts[1], parts[2])
-                                    except: pass
-                                else:
-                                    # Send the line (stripping whitespace but keeping identifying content)
-                                    yield SSE.log(curr_line)
-                            curr_line = ""
-                        else:
-                            curr_line += char
-
-                process.wait()
-                success = process.returncode == 0
 
                 # 3. Package Results to Disk Cache
                 token = str(uuid4())
@@ -605,7 +626,6 @@ def build_stream():
                 
                 summary = {
                     "success": success,
-                    "exit_code": process.returncode,
                     "message": "Build succeeded." if success else "Build failed.",
                 }
                 
@@ -615,17 +635,14 @@ def build_stream():
                         path = os.path.join(work_dir, fname)
                         if os.path.isfile(path):
                             zf.write(path, arcname=fname)
-                    
                     zf.writestr("build_summary.json", json.dumps(summary, indent=2))
 
-                # Update Cache metadata (store path, not blob)
                 BUILD_RESULTS_CACHE[token] = {
                     "path": zip_path,
                     "filename": "atomipy_v2_system_bundle.zip",
                     "timestamp": time.time()
                 }
                 
-                # Cleanup old disk entries
                 while len(BUILD_RESULTS_CACHE) > MAX_CACHE_SIZE:
                     old_token, old_data = BUILD_RESULTS_CACHE.popitem(last=False)
                     if os.path.exists(old_data["path"]):
@@ -633,6 +650,7 @@ def build_stream():
                         except: pass
 
                 yield SSE.complete(token, success)
+                gc.collect() # Final cleanup
 
         import time
         return Response(
