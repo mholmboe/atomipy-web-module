@@ -122,7 +122,7 @@ const initialNodes: Node[] = [
     type: "export",
     position: { x: 750, y: 150 },
     data: {
-      outputName: "mineral_system",
+      outputName: "system",
       structureFormat: "xyz",
       topologyFormat: "none",
       angleTerms: "500",
