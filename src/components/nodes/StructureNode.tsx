@@ -28,18 +28,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
   const source =
     data.source === "preset" || data.source === "upload"
       ? data.source
-      : data.filename
-        ? "upload"
-        : "preset";
-
-  const handleSetSource = (next: "preset" | "upload") => {
-    updateNodeData(id, { source: next });
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const uploadFile = async (file: File) => {
     setUploading(true);
     const formData = new FormData();
     formData.append("file", file);
@@ -68,6 +57,48 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!uploading) setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (uploading) return;
+
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      const validExts = ["pdb", "gro", "cif", "xyz"];
+      if (ext && validExts.includes(ext)) {
+        uploadFile(file);
+      } else {
+        toast.error("Unsupported file format");
+      }
+    }
+  };
+
+  const source =
+    data.source === "preset" || data.source === "upload"
+      ? data.source
+      : data.filename
+        ? "upload"
+        : "preset";
+
+  const handleSetSource = (next: "preset" | "upload") => {
+    updateNodeData(id, { source: next });
   };
 
   return (
@@ -136,8 +167,13 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
             />
             <label
               htmlFor={`file-upload-${id}`}
-              className={`nodrag flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-4 cursor-pointer hover:border-primary/50 transition-colors ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+              className={`nodrag flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-4 cursor-pointer transition-all duration-200 ${
+                isDragging ? "border-primary bg-primary/5 scale-[1.02]" : "border-border hover:border-primary/50"
+              } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
               onPointerDown={(e) => e.stopPropagation()}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             >
               {uploading ? (
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
