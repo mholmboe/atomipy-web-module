@@ -9,11 +9,16 @@ type ForcefieldNodeData = {
   rmaxH?: number;
   log?: boolean;
   logFile?: string;
+  angleTerms?: "none" | "0" | "250" | "500" | "1500";
+  resetMolid?: boolean;
 };
 
 export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeData>) {
   const { updateNodeData } = useReactFlow();
   const [showMore, setShowMore] = useState(false);
+
+  const angleTerms = data.angleTerms || "500";
+  const resetMolid = data.resetMolid ?? true;
 
   return (
     <div className="bg-card w-[250px] shadow-lg rounded-xl border border-amber-500/50 overflow-hidden font-sans select-none">
@@ -38,6 +43,22 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
           </select>
         </div>
 
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground block mb-1">Angle Terms (K)</label>
+          <select
+            className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+            value={angleTerms}
+            onChange={(e) => updateNodeData(id, { ...data, angleTerms: e.target.value })}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <option value="none">none (skip angles)</option>
+            <option value="0">0</option>
+            <option value="250">250</option>
+            <option value="500">500</option>
+            <option value="1500">1500</option>
+          </select>
+        </div>
+
         <button
           type="button"
           className="nodrag w-full flex items-center justify-between text-xs font-semibold text-muted-foreground border border-border rounded-md px-2 py-1.5 bg-background hover:bg-muted/50"
@@ -50,6 +71,17 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
 
         {showMore && (
           <div className="space-y-2 border border-border rounded-md p-2 bg-muted/30">
+            <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
+              Reset MolID (H2O sep)
+              <input
+                type="checkbox"
+                className="nodrag"
+                checked={resetMolid}
+                onChange={(e) => updateNodeData(id, { ...data, resetMolid: e.target.checked })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </label>
+
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1">rmax long (Å)</label>
@@ -88,7 +120,7 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
 
             {(data.log || false) && (
               <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-1">Log filename (optional)</label>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">Log filename</label>
                 <input
                   type="text"
                   className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"

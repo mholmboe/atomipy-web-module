@@ -58,6 +58,7 @@ import { SolvateNode } from "./nodes/SolvateNode";
 import { PositionNode } from "./nodes/PositionNode";
 import { WrapNode } from "./nodes/WrapNode";
 import { BoxNode } from "./nodes/BoxNode";
+import { AddHNode } from "./nodes/AddHNode";
 import { MergeNode } from "./nodes/MergeNode";
 import { AddNode } from "./nodes/AddNode";
 import { RotateNode } from "./nodes/RotateNode";
@@ -97,6 +98,7 @@ const nodeTypes = {
   molecule: MoleculeNode,
   forcefield: ForcefieldNode,
   bondAngle: BondAngleNode,
+  addH: AddHNode,
   bvs: BvsNode,
   xrd: XrdNode,
 };
@@ -942,6 +944,9 @@ export default function VisualBuilder() {
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("solvate")} title="Solvate">
                 <Droplet className="w-4 h-4" /> Solv
               </Button>
+              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("addH")} title="Add Hydrogens">
+                <Droplets className="w-4 h-4" /> Add H
+              </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("forcefield")} title="Assign Forcefield">
                 <FlaskConical className="w-4 h-4" /> FF
               </Button>
@@ -1136,6 +1141,25 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
   pythonCode += `        _err.write(f'Node {node_type} ({node_id}) failed: {exc}\\n')\n`;
   pythonCode += `        _err.write(traceback.format_exc() + '\\n')\n`;
   pythonCode += `    raise\n\n`;
+  pythonCode += `def __add_hydrogens_bvs__(atoms, box_dim, delta_threshold=-0.5, max_additions=10):\n`;
+  pythonCode += `    \"\"\"Helper to protonate underbonded oxygen sites (BVS).\"\"\"\n`;
+  pythonCode += `    if max_additions <= 0: return atoms\n`;
+  pythonCode += `    bvs_report = ap.analyze_bvs(atoms[:], box_dim, top_n=max_additions)\n`;
+  pythonCode += `    candidates = []\n`;
+  pythonCode += `    for row in bvs_report.get("results", []):\n`;
+  pythonCode += `        el = (row.get("element") or "").upper()\n`;
+  pythonCode += `        delta = row.get("delta")\n`;
+  pythonCode += `        if el != "O" or delta is None or delta >= delta_threshold: continue\n`;
+  pythonCode += `        idx0 = int(row.get("index", 1)) - 1\n`;
+  pythonCode += `        if any((atoms[int(n)-1].get("element") or "").upper() == "H" for n, *_ in row.get("bonds", [])): continue\n`;
+  pythonCode += `        candidates.append((delta, idx0))\n`;
+  pythonCode += `    candidates.sort(key=lambda x: x[0])\n`;
+  pythonCode += `    for _, idx0 in candidates[:max_additions]:\n`;
+  pythonCode += `        mt = f"__BVS_TARGET_{idx0}__"; orig = atoms[idx0].get("type", "O")\n`;
+  pythonCode += `        atoms[idx0]["type"] = mt; prev = len(atoms)\n`;
+  pythonCode += `        atoms = ap.add_H_atom(atoms, box_dim, target_type=mt, h_type="H", bond_length=0.98, coordination=2, max_h_per_atom=1)\n`;
+  pythonCode += `        if idx0 < len(atoms): atoms[idx0]["type"] = orig\n`;
+  pythonCode += `    return atoms\n\n`;
   pythonCode += `open('build_errors.log', 'w', encoding='utf-8').close()\n`;
 
   const stateVars = new Map<string, { atoms: string; box: string }>();
@@ -1534,18 +1558,38 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
+      case "addH": {
+        const delta = getNumber(data, "deltaThreshold", -0.5);
+        const maxAdd = getNumber(data, "maxAdditions", 10);
+        pythonCode += `${blockOutAtoms} = __add_hydrogens_bvs__(${inAtoms}, ${inBox}, delta_threshold=${delta}, max_additions=${maxAdd})\n`;
+        pythonCode += `${blockOutBox} = ${inBox}\n`;
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
       case "forcefield": {
-        const ff = getString(data, "forcefield", "minff").toLowerCase();
+        const ffType = getString(data, "forcefield", "minff").toLowerCase();
         const rmaxLong = getNumber(data, "rmaxLong", 2.45);
         const rmaxH = getNumber(data, "rmaxH", 1.2);
         const log = getBoolean(data, "log", false);
         const logFile = getString(data, "logFile", "").trim();
-        const logArg = log ? `, log=True${logFile ? `, log_file='${pyEscape(logFile)}'` : ""}` : "";
-        if (ff === "clayff") {
-          pythonCode += `${blockOutAtoms} = ap.clayff(${inAtoms}, ${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArg})\n`;
-        } else {
-          pythonCode += `${blockOutAtoms} = ap.minff(${inAtoms}, ${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArg})\n`;
+        const resetMolid = (data.resetMolid ?? true) ? "True" : "False";
+        const angleTerms = getString(data, "angleTerms", "500");
+
+        if (ffType === "minff") {
+          pythonCode += `if ${resetMolid}:\n`;
+          pythonCode += `    try:\n`;
+          pythonCode += `        _sol, _nosol = ap.find_H2O(${inAtoms}, ${inBox})\n`;
+          pythonCode += `        _nosol = ap.assign_resname(_nosol)\n`;
+          pythonCode += `        _ions = [a for a in _nosol if a.get('resname') == 'ION']\n`;
+          pythonCode += `        _min = [a for a in _nosol if a.get('resname') != 'ION']\n`;
+          pythonCode += `        if _min: _min = ap.molecule(_min, molid=1, resname='MIN')\n`;
+          pythonCode += `        ${inAtoms} = ap.update(_min, _ions, _sol)\n`;
+          pythonCode += `    except Exception as e: print(f"Warning: MolID reset failed ({e})")\n`;
         }
+
+        const logArg = log ? `, log=True${logFile ? `, log_file='${pyEscape(logFile)}'` : ""}` : "";
+        const angleArg = ffType === "minff" ? `, KANGLE=${angleTerms}` : "";
+        pythonCode += `${blockOutAtoms} = ap.forcefield.${ffType}(${inAtoms}, Box=${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArg}${angleArg})\n`;
         pythonCode += `${blockOutBox} = ${inBox}\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
