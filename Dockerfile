@@ -24,10 +24,10 @@ RUN pip install git+https://github.com/mholmboe/atomipy.git
 # Copy the built frontend from the first stage
 COPY --from=frontend-build /app/dist ./dist
 
-# Copy the backend code
+# Copy the backend code and local data folders
 COPY app.py .
-# Copy any other necessary assets if they exist (e.g. structures)
-# COPY structures/ ./structures/
+COPY UC_conf/ ./UC_conf/
+COPY atomipy/ ./atomipy/
 
 # Set environment variables
 ENV PORT=5002
