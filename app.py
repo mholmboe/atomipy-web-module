@@ -490,6 +490,13 @@ def execute_script():
             script_path = os.path.join(work_dir, "build_script.py")
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(script_code)
+            
+            # Save the workflow JSON for re-importing
+            workflow_data = payload.get("workflow")
+            if workflow_data:
+                workflow_path = os.path.join(work_dir, "workflow.json")
+                with open(workflow_path, "w", encoding="utf-8") as f:
+                    json.dump(workflow_data, f, indent=2)
 
             import subprocess
             # Execute script in work_dir with the current python environment
