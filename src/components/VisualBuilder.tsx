@@ -1084,6 +1084,7 @@ export default function VisualBuilder() {
             onConnect={onConnect}
             nodeTypes={nodeTypes}
             fitView
+            fitViewOptions={{ padding: 0.4, maxZoom: 0.8 }}
           >
             <Controls />
             <Background gap={20} size={1} color="rgba(0,0,0,0.1)" />
