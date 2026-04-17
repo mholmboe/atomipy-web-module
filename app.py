@@ -600,7 +600,15 @@ def build_stream():
 
         import json as json_orig
         import time
-        return Response(generate(), mimetype="text/event-stream")
+        return Response(
+            generate(),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive",
+            }
+        )
 
     except Exception as exc:
         return jsonify({"error": str(exc), "traceback": traceback.format_exc()}), 500
