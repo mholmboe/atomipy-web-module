@@ -1574,7 +1574,6 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         const log = getBoolean(data, "log", false);
         const logFile = getString(data, "logFile", "").trim();
         const resetMolid = (data.resetMolid ?? true) ? "True" : "False";
-        const angleTerms = getString(data, "angleTerms", "500");
 
         if (ffType === "minff") {
           pythonCode += `if ${resetMolid}:\n`;

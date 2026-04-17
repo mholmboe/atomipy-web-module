@@ -9,7 +9,6 @@ type ForcefieldNodeData = {
   rmaxH?: number;
   log?: boolean;
   logFile?: string;
-  angleTerms?: "none" | "0" | "250" | "500" | "1500";
   resetMolid?: boolean;
 };
 
@@ -17,7 +16,6 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
   const { updateNodeData } = useReactFlow();
   const [showMore, setShowMore] = useState(false);
 
-  const angleTerms = data.angleTerms || "500";
   const resetMolid = data.resetMolid ?? true;
 
   return (
@@ -40,22 +38,6 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
           >
             <option value="minff">MINFF</option>
             <option value="clayff">CLAYFF</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground block mb-1">Angle Terms (K)</label>
-          <select
-            className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
-            value={angleTerms}
-            onChange={(e) => updateNodeData(id, { ...data, angleTerms: e.target.value })}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <option value="none">none (skip angles)</option>
-            <option value="0">0</option>
-            <option value="250">250</option>
-            <option value="500">500</option>
-            <option value="1500">1500</option>
           </select>
         </div>
 
