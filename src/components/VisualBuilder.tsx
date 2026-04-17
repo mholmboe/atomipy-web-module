@@ -878,6 +878,27 @@ export default function VisualBuilder() {
     [applyWorkflowGraph],
   );
 
+  const [showConsole, setShowConsole] = useState(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll logs to bottom
+  useEffect(() => {
+    if (showConsole && logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [buildLogs, showConsole]);
+
+  const resetNodeStatuses = useCallback(() => {
+    setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, status: "idle" } })));
+  }, [setNodes]);
+
+  const updateNodeStatus = useCallback(
+    (nodeId: string, status: "idle" | "running" | "success" | "error") => {
+      setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, status } } : n)));
+    },
+    [setNodes],
+  );
+
   const handleCompileAndRun = async () => {
     if (nodes.length === 0) {
       toast.error("Workflow Empty", {
@@ -901,10 +922,12 @@ export default function VisualBuilder() {
       const code = generatePythonCode(nodes, edges);
       console.log("Generated Script:\n", code);
 
+      resetNodeStatuses();
       setIsBuilding(true);
       setBuildProgress(0);
       setBuildStatus("Initializing build...");
       setBuildLogs([]);
+      let lastNodeId: string | null = null;
 
       const response = await fetch("/api/build-stream", {
         method: "POST",
@@ -943,8 +966,16 @@ export default function VisualBuilder() {
                 break;
               case "progress": {
                 const total = nodes.length;
-                const progressPercentage = Math.min(Math.round(((data.index + 1) / total) * 100), 99);
+                const progressPercentage = Math.min(Math.round(((data.index + 1) / total) * 100), 100);
                 setBuildProgress(progressPercentage);
+                
+                // Update Node Statuses
+                if (lastNodeId) {
+                  updateNodeStatus(lastNodeId, "success");
+                }
+                updateNodeStatus(data.nodeId, "running");
+                lastNodeId = data.nodeId;
+
                 const currentNode = nodes.find((n) => n.id === data.nodeId);
                 if (currentNode) {
                   setBuildStatus(`Processing ${currentNode.type} (${data.index + 1}/${total})...`);
@@ -953,16 +984,18 @@ export default function VisualBuilder() {
               }
               case "complete":
                 setBuildProgress(100);
+                if (lastNodeId) {
+                  updateNodeStatus(lastNodeId, data.success ? "success" : "error");
+                }
                 if (data.success) {
-                  setBuildStatus("Build complete! Preparing download...");
+                  setBuildStatus("Build complete! Ready for download.");
                   window.location.href = `/api/download-result/${data.token}`;
                   toast.success("Build successful! Downloading results...");
                 } else {
-                  setBuildStatus("Build failed. Check logs in the results bundle.");
+                  setBuildStatus("Build failed. See logs for details.");
                   window.location.href = `/api/download-result/${data.token}`;
-                  toast.error("Build failed. See logs for details.");
+                  toast.error("Build failed.");
                 }
-                setTimeout(() => setIsBuilding(false), 2000);
                 return;
               default:
                 break;
@@ -1169,55 +1202,81 @@ export default function VisualBuilder() {
             <Background gap={20} size={1} color="rgba(0,0,0,0.1)" />
           </ReactFlow>
         </ReactFlowProvider>
-      </div>
 
-      <Dialog open={isBuilding} onOpenChange={(open) => !open && setIsBuilding(false)}>
-        <DialogContent className="max-w-2xl bg-card border-amber-500/20 shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {buildProgress < 100 ? (
-                <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
-              ) : (
-                <Terminal className="w-5 h-5 text-green-500" />
-              )}
-              System Build in Progress
-            </DialogTitle>
-            <DialogDescription>{buildStatus}</DialogDescription>
-          </DialogHeader>
+        {/* Global Progress Overlay (Modern Integrated UI) */}
+        {isBuilding && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl z-[100] px-4">
+            <div className="bg-card/90 backdrop-blur-xl border border-primary/20 shadow-2xl rounded-2xl overflow-hidden">
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {buildProgress < 100 ? (
+                      <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    ) : (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                    )}
+                    <span className="text-sm font-semibold tracking-tight">{buildStatus}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-medium text-muted-foreground">{buildProgress}%</span>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowConsole(!showConsole)}
+                    >
+                      <Terminal className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Flowbite-style Progress Bar */}
+                <div className="w-full bg-secondary/30 rounded-full h-2.5 overflow-hidden">
+                  <div 
+                    className="bg-primary h-full transition-all duration-500 ease-out relative"
+                    style={{ width: `${buildProgress}%` }}
+                  >
+                    <div className="absolute inset-0 bg-white/20 animate-[pulse_2s_infinite]" />
+                  </div>
+                </div>
 
-          <div className="py-6 space-y-6">
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs font-medium text-muted-foreground">
-                <span>Overall Progress</span>
-                <span>{buildProgress}%</span>
-              </div>
-              <Progress value={buildProgress} className="h-2.5 bg-muted border border-border" />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <Terminal className="w-3.5 h-3.5" />
-                Live Build Console
-              </div>
-              <div
-                ref={scrollRef}
-                className="bg-black/90 p-4 rounded-xl border border-white/5 h-[200px] overflow-y-auto font-mono text-[11px] leading-relaxed text-zinc-300 scrollbar-thin scrollbar-thumb-zinc-800"
-              >
-                {buildLogs.length === 0 ? (
-                  <div className="text-zinc-600 animate-pulse">Waiting for backend logs...</div>
-                ) : (
-                  buildLogs.map((log, i) => (
-                    <div key={i} className="mb-0.5 border-l-2 border-transparent hover:border-amber-500/50 pl-2 transition-colors">
-                      <span className="text-zinc-600 mr-2">[{i + 1}]</span>
-                      {log}
+                {/* Collapsible Console Content */}
+                {showConsole && (
+                  <div className="mt-4 bg-zinc-950 rounded-xl border border-white/10 p-4 h-64 overflow-hidden flex flex-col">
+                    <div className="flex items-center gap-2 mb-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                      <Terminal className="w-3 h-3" />
+                      Live Build Logs
                     </div>
-                  ))
+                    <div className="flex-1 font-mono text-xs overflow-y-auto space-y-1 custom-scrollbar">
+                      {buildLogs.length === 0 ? (
+                        <div className="text-zinc-700 italic">Waiting for logs...</div>
+                      ) : (
+                        buildLogs.map((log, i) => (
+                          <div key={i} className="text-zinc-300 border-l border-zinc-800 pl-2 py-0.5 leading-relaxed break-all">
+                            {log}
+                          </div>
+                        ))
+                      )}
+                      <div ref={logEndRef} />
+                    </div>
+                  </div>
+                )}
+
+                {buildProgress === 100 && (
+                  <div className="pt-2">
+                    <Button 
+                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white gap-2 font-semibold shadow-lg shadow-emerald-900/20"
+                      onClick={() => setIsBuilding(false)}
+                    >
+                      <Download className="w-4 h-4" /> Finalize Build
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        )}
+      </div>
     </section>
   );
 }

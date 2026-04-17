@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { ChevronDown, ChevronUp, Droplet } from "lucide-react";
+import { ChevronDown, ChevronUp, Droplet, HelpCircle } from "lucide-react";
+import { NodeStatus } from "./NodeStatus";
 import type { NodeComponentProps } from "./types";
 
 type SolvateNodeData = {
@@ -38,7 +39,8 @@ export function SolvateNode({ id, data }: NodeComponentProps<SolvateNodeData>) {
   };
 
   return (
-    <div className="bg-card w-[260px] shadow-lg rounded-xl border border-cyan-500/50 overflow-hidden font-sans select-none">
+    <div className="bg-card w-[300px] shadow-lg rounded-xl border border-primary/50 overflow-hidden font-sans select-none relative">
+      <NodeStatus status={data.status} />
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
       
