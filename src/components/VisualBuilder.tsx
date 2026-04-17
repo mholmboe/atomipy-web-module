@@ -1589,8 +1589,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         }
 
         const logArg = log ? `, log=True${logFile ? `, log_file='${pyEscape(logFile)}'` : ""}` : "";
-        const angleArg = ffType === "minff" ? `, KANGLE=${angleTerms}` : "";
-        pythonCode += `${blockOutAtoms} = ap.forcefield.${ffType}(${inAtoms}, Box=${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArg}${angleArg})\n`;
+        pythonCode += `${blockOutAtoms} = ap.forcefield.${ffType}(${inAtoms}, Box=${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArg})\n`;
         pythonCode += `${blockOutBox} = ${inBox}\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
