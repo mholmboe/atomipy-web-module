@@ -9,7 +9,7 @@ const Navbar = () => {
           <Atom className="h-6 w-6 text-primary" />
           <div>
             <span className="text-lg font-bold tracking-tight">atomipy</span>
-            <span className="ml-2 text-xs text-nav-foreground/60">web module</span>
+            <span className="ml-2 text-lg font-bold tracking-tight text-nav-foreground/60">web module</span>
           </div>
         </Link>
         <div className="flex items-center gap-6 text-sm">

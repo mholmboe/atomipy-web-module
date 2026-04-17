@@ -1,0 +1,12 @@
+node_modules
+.venv
+dist
+.git
+.github
+.dev-logs
+*.log
+__pycache__
+.DS_Store
+.antigravity
+.gemini
+package-lock.json

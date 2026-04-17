@@ -16,8 +16,18 @@ sys.path.append(BASE_DIR)
 
 import atomipy as ap
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="dist", static_url_path="")
 app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024  # 128 MB
+
+# Serve the frontend
+@app.route("/")
+def serve_index():
+    return send_file(os.path.join(app.static_folder, "index.html"))
+
+@app.errorhandler(404)
+def not_found(e):
+    # This ensures that React Router works by redirecting 404s to index.html
+    return send_file(os.path.join(app.static_folder, "index.html"))
 
 ALLOWED_EXTENSIONS = {"pdb", "gro", "xyz", "cif", "mmcif", "mcif"}
 

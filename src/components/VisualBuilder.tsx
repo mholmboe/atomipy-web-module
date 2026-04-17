@@ -904,13 +904,10 @@ export default function VisualBuilder() {
   };
 
   return (
-    <section className="mx-auto w-full max-w-[1700px] py-8 px-4 h-[850px] flex flex-col space-y-4">
-      <div className="flex justify-between items-center bg-card/50 backdrop-blur-md p-4 rounded-2xl border border-border shadow-2xl">
+    <section className="mx-auto w-full max-w-[1700px] py-2 px-4 h-[850px] flex flex-col space-y-2">
+      <div className="flex justify-between items-center bg-card/50 backdrop-blur-md p-2 rounded-2xl border border-border shadow-2xl">
         <div>
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-blue-500 bg-clip-text text-transparent lowercase">
-            atomipy
-          </h2>
-          <p className="text-xs text-muted-foreground mt-1 text-balance">Compose your system as a workflow</p>
+          <p className="text-sm font-medium text-muted-foreground text-balance">Add and connect nodes to compose your system as a workflow</p>
         </div>
         <div className="flex gap-2 items-start flex-1 justify-center ml-8">
           <div className="space-y-2">

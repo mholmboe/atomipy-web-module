@@ -7,7 +7,7 @@ const About = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       <main className="container mx-auto px-6 py-12 max-w-4xl">
         <div className="space-y-12">
           {/* Hero Section */}
@@ -16,7 +16,7 @@ const About = () => {
               <Atom className="h-10 w-10 text-primary" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl">
-              About <span className="text-primary italic">atomipy</span>
+              About  <span className="text-primary italic"> atomipy</span>
             </h1>
             <p className="text-xl text-muted-foreground text-balance">
               Constructing molecular systems with visual clarity and scientific precision.
@@ -43,7 +43,7 @@ const About = () => {
                 <span>Quick Manual</span>
               </div>
               <h2 className="text-2xl font-bold">How to Build Your System</h2>
-              
+
               <div className="grid sm:grid-cols-2 gap-4">
                 {[
                   {
@@ -63,7 +63,7 @@ const About = () => {
                   },
                   {
                     title: "Export Results",
-                    desc: "Generate a full simulation package for GROMACS or LAMMPS, including a Python script for local use.",
+                    desc: "Generate a full simulation package including a custom 'build_script.py' for local execution in your preferred Python IDE.",
                     icon: BarChart3
                   }
                 ].map((item, i) => (
@@ -76,6 +76,31 @@ const About = () => {
               </div>
             </section>
 
+            {/* Local Execution & AI Section */}
+            <section className="bg-primary/5 p-8 rounded-2xl space-y-4 border border-primary/20">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Zap className="h-6 w-6 text-primary" />
+                Local Execution & AI Assistance
+              </h2>
+              <p className="text-muted-foreground leading-relaxed">
+                For large systems, running the backend locally is often faster. Every build includes a <code>build_script.py</code> that can be executed in any Python IDE (e.g., VS Code, Cursor, Windsurf, or Antigravity) with the <code>atomipy</code> package installed.
+              </p>
+              <p className="text-muted-foreground leading-relaxed">
+                When paired with an AI-assisted IDE, you can leverage agentic coding using <strong>atomipy</strong> as an API to refine and scale your molecular system construction far beyond the capabilities of a web interface.
+              </p>
+            </section>
+
+            {/* Forcefield Support Section */}
+            <section className="bg-muted/50 p-8 rounded-2xl space-y-4 border border-border/50">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Zap className="h-6 w-6 text-primary" />
+                Forcefield Support & Atomtyping
+              </h2>
+              <p className="text-muted-foreground leading-relaxed">
+                The <strong>atomipy</strong> web module integrates advanced atomtyping engines for mineral and interface systems. It features native support for the <strong>CLAYFF</strong> (Cygan et al., 2004) and <strong>MINFF</strong> (Holmboe, 2025) forcefields, ensuring that your generated topologies are physically consistent and ready for high-fidelity simulations.
+              </p>
+            </section>
+
             {/* XRD Simulation Section */}
             <section className="bg-muted/50 p-8 rounded-2xl space-y-4 border border-border/50">
               <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -84,6 +109,17 @@ const About = () => {
               </h2>
               <p className="text-muted-foreground leading-relaxed">
                 One of the core features of <strong>atomipy</strong> is the ability to simulate Powder X-ray Diffraction (XRD) patterns on-the-fly. You can test your structures for preferred orientation, instrumental broadening, and wavelength effects without ever leaving the builder.
+              </p>
+            </section>
+
+            {/* BVS Analysis Section */}
+            <section className="bg-muted/50 p-8 rounded-2xl space-y-4 border border-border/50">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Zap className="h-6 w-6 text-primary" />
+                Bond Valence Sum (BVS) Analysis
+              </h2>
+              <p className="text-muted-foreground leading-relaxed">
+                Validate the chemical environment of your structures using <strong>Bond Valence Sum (BVS)</strong> analysis. This tool helps identify oxidation states and coordination geometry, providing a quantitative metric for structural stability and refinement.
               </p>
             </section>
 
@@ -102,7 +138,7 @@ const About = () => {
                 </Button>
                 <Button asChild variant="outline" className="w-full sm:w-auto">
                   <Link to="/" className="gap-2">
-                    Back to Builder
+                    Back to <>atomipy</> web module
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -111,7 +147,7 @@ const About = () => {
           </div>
         </div>
       </main>
-      
+
       <footer className="py-12 border-t mt-12">
         <div className="container mx-auto px-6 text-center text-sm text-muted-foreground">
           &copy; {new Date().getFullYear()} atomipy project. Open source and science-first.
