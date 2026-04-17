@@ -930,12 +930,6 @@ export default function VisualBuilder() {
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("add")} title="Join branches">
                 <Combine className="w-4 h-4" /> Join
               </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("merge")} title="Merge with overlap removal">
-                <GitMerge className="w-4 h-4" /> Merge
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("wrap")} title="Wrap">
-                <Maximize className="w-4 h-4" /> Wrap
-              </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("insert")} title="Insert Molecule">
                 <PackagePlus className="w-4 h-4" /> Insert
               </Button>
@@ -969,6 +963,12 @@ export default function VisualBuilder() {
 
             {showMoreOptions && (
               <div className="flex bg-muted p-1 rounded-lg flex-wrap">
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("merge")} title="Merge with overlap removal">
+                  <GitMerge className="w-4 h-4" /> Merge
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("wrap")} title="Wrap">
+                  <Maximize className="w-4 h-4" /> Wrap
+                </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("rotate")} title="Rotate">
                   <RotateCw className="w-4 h-4" /> Rot
                 </Button>
