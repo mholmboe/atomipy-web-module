@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { ChevronDown, ChevronUp, Droplet, HelpCircle } from "lucide-react";
-import { NodeStatus } from "./NodeStatus";
 import type { NodeComponentProps } from "./types";
 
 type SolvateNodeData = {

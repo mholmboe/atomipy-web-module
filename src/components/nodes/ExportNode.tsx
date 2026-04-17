@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { FileOutput, Download, Save, ChevronDown, ChevronUp } from "lucide-react";
-import { NodeStatus } from "./NodeStatus";
 import type { NodeComponentProps } from "./types";
 
 type ExportNodeData = {
@@ -27,8 +26,7 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
   const topologyFormat = data.topologyFormat || "none";
 
   return (
-    <div className="bg-card w-[300px] shadow-lg rounded-xl border border-primary/50 overflow-hidden font-sans select-none relative">
-      <NodeStatus status={data.status} />
+    <div className="bg-card w-[300px] shadow-lg rounded-xl border border-destructive/50 overflow-hidden font-sans select-none relative">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
       <div className="bg-destructive/10 p-3 border-b border-border flex items-center gap-2">

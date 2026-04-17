@@ -878,29 +878,6 @@ export default function VisualBuilder() {
     [applyWorkflowGraph],
   );
 
-  const [showConsole, setShowConsole] = useState(false);
-  const logEndRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll logs to bottom
-  useEffect(() => {
-    if (showConsole && logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [buildLogs, showConsole]);
-
-  const resetNodeStatuses = useCallback(() => {
-    setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, status: "idle" } })));
-  }, [setNodes]);
-
-  const updateNodeStatus = useCallback(
-    (nodeId: string, status: "idle" | "running" | "success" | "error") => {
-      setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, status } } : n)));
-    },
-    [setNodes],
-  );
-
-  const [downloadToken, setDownloadToken] = useState<string | null>(null);
-
   const handleCompileAndRun = async () => {
     if (nodes.length === 0) {
       toast.error("Workflow Empty", {
@@ -911,36 +888,24 @@ export default function VisualBuilder() {
 
     const validationErrors = validateWorkflow(nodes, edges);
     if (validationErrors.length > 0) {
-      const preview = validationErrors.slice(0, 3).join(" | ");
       console.error("Workflow validation errors:", validationErrors);
       toast.error("Workflow validation failed", {
-        description: validationErrors.length > 3 ? `${preview} | ...` : preview,
-        duration: 7000,
+        description: validationErrors[0],
       });
       return;
     }
 
+    const buildToastId = toast.loading("Building your system... this may take a minute.");
+
     try {
       const code = generatePythonCode(nodes, edges);
-      console.log("Generated Script:\n", code);
-
-      resetNodeStatuses();
-      setIsBuilding(true);
-      setDownloadToken(null);
-      setBuildProgress(0);
-      setBuildStatus("Initializing build...");
-      setBuildLogs([]);
-      let lastNodeId: string | null = null;
-
       const response = await fetch("/api/build-stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ script: code, workflow: { nodes, edges } }),
       });
 
-      if (!response.ok) {
-        throw new Error(`Build request failed with status ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Build request failed: ${response.status}`);
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error("Could not start stream reader.");
@@ -960,48 +925,15 @@ export default function VisualBuilder() {
           if (!rawLine.trim() || !rawLine.startsWith("data: ")) continue;
           try {
             const data = JSON.parse(rawLine.slice(6));
-            switch (data.type) {
-              case "status":
-                setBuildStatus(data.message);
-                break;
-              case "log":
-                setBuildLogs((prev) => [...prev, data.message]);
-                break;
-              case "progress": {
-                const total = nodes.length;
-                const progressPercentage = Math.min(Math.round(((data.index + 1) / total) * 100), 100);
-                setBuildProgress(progressPercentage);
-                
-                // Update Node Statuses
-                if (lastNodeId) {
-                  updateNodeStatus(lastNodeId, "success");
-                }
-                updateNodeStatus(data.nodeId, "running");
-                lastNodeId = data.nodeId;
-
-                const currentNode = nodes.find((n) => n.id === data.nodeId);
-                if (currentNode) {
-                  setBuildStatus(`Processing ${currentNode.type} (${data.index + 1}/${total})...`);
-                }
-                break;
+            if (data.type === "complete") {
+              if (data.success) {
+                toast.success("Build successful! Downloading...", { id: buildToastId });
+                window.location.href = `/api/download-result/${data.token}`;
+              } else {
+                toast.error("Build failed. Results bundle contains details.", { id: buildToastId });
+                window.location.href = `/api/download-result/${data.token}`;
               }
-              case "complete":
-                setBuildProgress(100);
-                if (lastNodeId) {
-                  updateNodeStatus(lastNodeId, data.success ? "success" : "error");
-                }
-                if (data.success) {
-                  setBuildStatus("Build complete! System bundle is ready.");
-                  setDownloadToken(data.token);
-                  toast.success("Build successful! Ready for download.");
-                } else {
-                  setBuildStatus("Build failed. See logs for details.");
-                  setDownloadToken(data.token);
-                  toast.error("Build failed.");
-                }
-                return;
-              default:
-                break;
+              return;
             }
           } catch (err) {
             console.error("Error parsing stream chunk:", err);
@@ -1009,9 +941,7 @@ export default function VisualBuilder() {
         }
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast.error("Build error: " + message);
-      setIsBuilding(false);
+      toast.error("Build error: " + (error instanceof Error ? error.message : String(error)), { id: buildToastId });
     }
   };
 
@@ -1205,98 +1135,6 @@ export default function VisualBuilder() {
             <Background gap={20} size={1} color="rgba(0,0,0,0.1)" />
           </ReactFlow>
         </ReactFlowProvider>
-
-        {/* Global Progress Overlay (Modern Integrated UI) */}
-        {isBuilding && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl z-[100] px-4">
-            <div className="bg-card/90 backdrop-blur-xl border border-primary/20 shadow-2xl rounded-2xl overflow-hidden">
-              <div className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {buildProgress < 100 ? (
-                      <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                    ) : (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                    )}
-                    <span className="text-sm font-semibold tracking-tight">{buildStatus}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-medium text-muted-foreground">{buildProgress}%</span>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                      onClick={() => setShowConsole(!showConsole)}
-                    >
-                      <Terminal className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-                
-                {/* Flowbite-style Progress Bar */}
-                <div className="w-full bg-secondary/30 rounded-full h-2.5 overflow-hidden">
-                  <div 
-                    className="bg-primary h-full transition-all duration-500 ease-out relative"
-                    style={{ width: `${buildProgress}%` }}
-                  >
-                    <div className="absolute inset-0 bg-white/20 animate-[pulse_2s_infinite]" />
-                  </div>
-                </div>
-
-                {/* Collapsible Console Content */}
-                {showConsole && (
-                  <div className="mt-4 bg-zinc-950 rounded-xl border border-white/10 p-4 h-64 overflow-hidden flex flex-col">
-                    <div className="flex items-center gap-2 mb-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                      <Terminal className="w-3 h-3" />
-                      Live Build Logs
-                    </div>
-                    <div className="flex-1 font-mono text-xs overflow-y-auto space-y-1 custom-scrollbar">
-                      {buildLogs.length === 0 ? (
-                        <div className="text-zinc-700 italic">Waiting for logs...</div>
-                      ) : (
-                        buildLogs.map((log, i) => (
-                          <div key={i} className="text-zinc-300 border-l border-zinc-800 pl-2 py-0.5 leading-relaxed break-all">
-                            {log}
-                          </div>
-                        ))
-                      )}
-                      <div ref={logEndRef} />
-                    </div>
-                  </div>
-                )}
-
-                {buildProgress === 100 && (
-                  <div className="pt-2 flex gap-2">
-                    {downloadToken ? (
-                      <Button 
-                        className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white gap-2 font-semibold shadow-lg shadow-emerald-900/20"
-                        onClick={() => {
-                          window.location.href = `/api/download-result/${downloadToken}`;
-                        }}
-                      >
-                        <Download className="w-4 h-4" /> Download Result ZIP
-                      </Button>
-                    ) : (
-                      <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground italic">
-                        Processing final bundle...
-                      </div>
-                    )}
-                    <Button 
-                      variant="outline"
-                      className="px-4"
-                      onClick={() => {
-                        setIsBuilding(false);
-                        setDownloadToken(null);
-                      }}
-                    >
-                      Dismiss
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </section>
   );
