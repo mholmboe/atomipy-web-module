@@ -517,7 +517,7 @@ export default function VisualBuilder() {
   );
 
   const addNode = (type: string) => {
-    const baseData: Record<string, unknown> = { presets };
+    const baseData: Record<string, unknown> = {};
 
     if (type === "structure") {
       baseData.source = "preset";
@@ -625,7 +625,15 @@ export default function VisualBuilder() {
 
   const applyWorkflowGraph = useCallback(
     (graph: WorkflowGraph) => {
-      setNodes(deepClone(graph.nodes));
+      // Clean nodes to remove bulky data like presets before setting state
+      const cleanedNodes = deepClone(graph.nodes).map((node) => {
+        if (node.data && typeof node.data === "object") {
+          const { presets: _p, ...cleanData } = node.data as Record<string, unknown>;
+          return { ...node, data: cleanData };
+        }
+        return node;
+      });
+      setNodes(cleanedNodes);
       setEdges(deepClone(graph.edges));
     },
     [setEdges, setNodes],
