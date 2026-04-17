@@ -552,6 +552,7 @@ def build_stream():
                 sel.register(process.stdout, selectors.EVENT_READ)
                 
                 all_stdout = []
+                curr_line = ""
                 while True:
                     # Wait for output with a 15-second timeout for heartbeat
                     events = sel.select(timeout=15)
@@ -561,22 +562,34 @@ def build_stream():
                         yield SSE.log(" ") 
                         continue
 
-                    line = process.stdout.readline()
-                    if not line:
+                    # Read character by character to catch \r progress updates
+                    char = process.stdout.read(1)
+                    if not char:
                         # Check if process ended
                         if process.poll() is not None:
+                            # Read any remaining content before breaking
+                            remaining = process.stdout.read()
+                            if remaining:
+                                all_stdout.append(remaining)
+                                yield SSE.log(remaining)
                             break
                         continue
 
-                    all_stdout.append(line)
-                    # Detect progress markers: __NODE_START__:nodeId:index
-                    if "__NODE_START__:" in line:
-                        try:
-                            parts = line.strip().split(":")
-                            yield SSE.progress(parts[1], parts[2])
-                        except: pass
+                    all_stdout.append(char)
+                    if char in ('\n', '\r'):
+                        if curr_line.strip():
+                            # Detect progress markers: __NODE_START__:nodeId:index
+                            if "__NODE_START__:" in curr_line:
+                                try:
+                                    parts = curr_line.strip().split(":")
+                                    yield SSE.progress(parts[1], parts[2])
+                                except: pass
+                            else:
+                                # Send the line (stripping whitespace but keeping identifying content)
+                                yield SSE.log(curr_line)
+                        curr_line = ""
                     else:
-                        yield SSE.log(line)
+                        curr_line += char
 
                 process.wait()
                 success = process.returncode == 0
