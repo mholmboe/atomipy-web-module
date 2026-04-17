@@ -23,11 +23,9 @@ type UploadApiResponse = {
 export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData>) {
   const { updateNodeData } = useReactFlow();
   const [uploading, setUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const presets = data.presets || [];
 
-  const source =
-    data.source === "preset" || data.source === "upload"
-      ? data.source
   const uploadFile = async (file: File) => {
     setUploading(true);
     const formData = new FormData();
