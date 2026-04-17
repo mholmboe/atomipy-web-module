@@ -19,6 +19,10 @@ import atomipy as ap
 app = Flask(__name__, static_folder="dist", static_url_path="")
 app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024  # 128 MB
 
+# Persistent directory for build results cache (moved from RAM to disk for Render stability)
+CACHE_DIR = os.path.join(tempfile.gettempdir(), "atomipy_results_cache")
+os.makedirs(CACHE_DIR, exist_ok=True)
+
 # Serve the frontend
 @app.route("/")
 def serve_index():
@@ -467,19 +471,19 @@ def build_system():
         )
 
 
-# Global cache for build results to support async downloads
+# Global cache for build results to support async downloads (now disk-based)
 from collections import OrderedDict
 BUILD_RESULTS_CACHE = OrderedDict()
-MAX_CACHE_SIZE = 10
+MAX_CACHE_SIZE = 5  # Store fewer results on disk to save space
 
 @app.route("/api/download-result/<token>")
 def download_result(token):
     res_data = BUILD_RESULTS_CACHE.get(token)
-    if not res_data:
+    if not res_data or not os.path.exists(res_data["path"]):
         return jsonify({"error": "Result not found or expired. Please build again."}), 404
     
     return send_file(
-        io.BytesIO(res_data["blob"]),
+        res_data["path"],
         mimetype="application/zip",
         as_attachment=True,
         download_name=res_data["filename"]
@@ -551,79 +555,82 @@ def build_stream():
                 sel = selectors.DefaultSelector()
                 sel.register(process.stdout, selectors.EVENT_READ)
                 
-                all_stdout = []
+                log_path = os.path.join(work_dir, "execution_stdout.txt")
                 curr_line = ""
-                while True:
-                    # Wait for output with a 15-second timeout for heartbeat
-                    events = sel.select(timeout=15)
-                    
-                    if not events:
-                        # No output for 15s? Send a heartbeat to keep Render connection alive
-                        yield SSE.log(" ") 
-                        continue
+                with open(log_path, "w", encoding="utf-8") as log_f:
+                    while True:
+                        # Wait for output with a 15-second timeout for heartbeat
+                        events = sel.select(timeout=15)
+                        
+                        if not events:
+                            # No output for 15s? Send a heartbeat to keep Render connection alive
+                            yield SSE.log(" ") 
+                            continue
 
-                    # Read character by character to catch \r progress updates
-                    char = process.stdout.read(1)
-                    if not char:
-                        # Check if process ended
-                        if process.poll() is not None:
-                            # Read any remaining content before breaking
-                            remaining = process.stdout.read()
-                            if remaining:
-                                all_stdout.append(remaining)
-                                yield SSE.log(remaining)
-                            break
-                        continue
+                        # Read character by character to catch \r progress updates
+                        char = process.stdout.read(1)
+                        if not char:
+                            # Check if process ended
+                            if process.poll() is not None:
+                                # Read any remaining content before breaking
+                                remaining = process.stdout.read()
+                                if remaining:
+                                    log_f.write(remaining)
+                                    yield SSE.log(remaining)
+                                break
+                            continue
 
-                    all_stdout.append(char)
-                    if char in ('\n', '\r'):
-                        if curr_line.strip():
-                            # Detect progress markers: __NODE_START__:nodeId:index
-                            if "__NODE_START__:" in curr_line:
-                                try:
-                                    parts = curr_line.strip().split(":")
-                                    yield SSE.progress(parts[1], parts[2])
-                                except: pass
-                            else:
-                                # Send the line (stripping whitespace but keeping identifying content)
-                                yield SSE.log(curr_line)
-                        curr_line = ""
-                    else:
-                        curr_line += char
+                        log_f.write(char) # Write directly to file to save RAM
+                        if char in ('\n', '\r'):
+                            if curr_line.strip():
+                                # Detect progress markers: __NODE_START__:nodeId:index
+                                if "__NODE_START__:" in curr_line:
+                                    try:
+                                        parts = curr_line.strip().split(":")
+                                        yield SSE.progress(parts[1], parts[2])
+                                    except: pass
+                                else:
+                                    # Send the line (stripping whitespace but keeping identifying content)
+                                    yield SSE.log(curr_line)
+                            curr_line = ""
+                        else:
+                            curr_line += char
 
                 process.wait()
                 success = process.returncode == 0
-                stdout_text = "".join(all_stdout)
 
-                # 3. Package Results
+                # 3. Package Results to Disk Cache
+                token = str(uuid4())
+                zip_path = os.path.join(CACHE_DIR, f"result_{token}.zip")
+                
                 summary = {
                     "success": success,
                     "exit_code": process.returncode,
                     "message": "Build succeeded." if success else "Build failed.",
                 }
-
-                memory_file = io.BytesIO()
-                with zipfile.ZipFile(memory_file, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                
+                with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
                     for fname in os.listdir(work_dir):
                         if fname in {"UC_conf", "uploads"}: continue
                         path = os.path.join(work_dir, fname)
                         if os.path.isfile(path):
                             zf.write(path, arcname=fname)
                     
-                    zf.writestr("execution_stdout.txt", stdout_text)
                     zf.writestr("build_summary.json", json.dumps(summary, indent=2))
 
-                # Store in cache
-                token = str(uuid4())
-                memory_file.seek(0)
+                # Update Cache metadata (store path, not blob)
                 BUILD_RESULTS_CACHE[token] = {
-                    "blob": memory_file.read(),
+                    "path": zip_path,
                     "filename": "atomipy_v2_system_bundle.zip",
                     "timestamp": time.time()
                 }
-                # Cleanup old entries
+                
+                # Cleanup old disk entries
                 while len(BUILD_RESULTS_CACHE) > MAX_CACHE_SIZE:
-                    BUILD_RESULTS_CACHE.popitem(last=False)
+                    old_token, old_data = BUILD_RESULTS_CACHE.popitem(last=False)
+                    if os.path.exists(old_data["path"]):
+                        try: os.remove(old_data["path"])
+                        except: pass
 
                 yield SSE.complete(token, success)
 
