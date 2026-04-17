@@ -31,13 +31,14 @@ def not_found(e):
 
 ALLOWED_EXTENSIONS = {"pdb", "gro", "xyz", "cif", "mmcif", "mcif"}
 
+AP_DATA_DIR = os.path.dirname(ap.__file__)
 PRESET_SLAB_FILES = {
-    "montmorillonite": "atomipy/structures/minerals/3WNaMMT.pdb",
-    "pyrophyllite": "atomipy/structures/minerals/Pyrophyllite.pdb",
-    "kaolinite": "atomipy/structures/minerals/UC_conf/Kaolinite_GII_0.0487.pdb",
-    "muscovite": "atomipy/structures/minerals/UC_conf/Muscovite_Rothbauer_GII_0.142.pdb",
-    "talc": "atomipy/structures/minerals/UC_conf/Talc_GII_0.0748.pdb",
-    "brucite": "atomipy/structures/minerals/UC_conf/Brucite_GII_0.0027.pdb",
+    "montmorillonite": os.path.join(AP_DATA_DIR, "structures/minerals/3WNaMMT.pdb"),
+    "pyrophyllite": os.path.join(AP_DATA_DIR, "structures/minerals/Pyrophyllite.pdb"),
+    "kaolinite": os.path.join(AP_DATA_DIR, "structures/minerals/UC_conf/Kaolinite_GII_0.0487.pdb"),
+    "muscovite": os.path.join(AP_DATA_DIR, "structures/minerals/UC_conf/Muscovite_Rothbauer_GII_0.142.pdb"),
+    "talc": os.path.join(AP_DATA_DIR, "structures/minerals/UC_conf/Talc_GII_0.0748.pdb"),
+    "brucite": os.path.join(AP_DATA_DIR, "structures/minerals/UC_conf/Brucite_GII_0.0027.pdb"),
 }
 
 
@@ -165,7 +166,8 @@ def upload_file():
 
 @app.route("/api/presets", methods=["GET"])
 def list_presets():
-    uc_conf_dir = os.path.join(BASE_DIR, "UC_conf")
+    # Use the structure library inside the installed atomipy package
+    uc_conf_dir = os.path.join(AP_DATA_DIR, "structures", "minerals", "UC_conf")
     presets = []
     if os.path.exists(uc_conf_dir):
         for fname in os.listdir(uc_conf_dir):
