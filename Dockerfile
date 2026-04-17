@@ -39,7 +39,6 @@ COPY --from=frontend-build /app/dist ./dist
 
 # Copy the backend code and local data folders
 COPY app.py .
-COPY UC_conf/ ./UC_conf/
 COPY atomipy/ ./atomipy/
 
 # Set environment variables
