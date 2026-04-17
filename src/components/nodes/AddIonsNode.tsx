@@ -1,0 +1,213 @@
+import React, { useState } from "react";
+import { Handle, Position, useReactFlow } from "@xyflow/react";
+import { BadgePlus, ChevronDown, ChevronUp } from "lucide-react";
+import type { NodeComponentProps } from "./types";
+
+type AddIonsNodeData = {
+  ionType?: string;
+  count?: number;
+  minDistance?: number;
+  placement?: "random" | "surface" | "bulk";
+  direction?: "x" | "y" | "z" | "";
+  directionValue?: number;
+  xlo?: number;
+  ylo?: number;
+  zlo?: number;
+  xhi?: number;
+  yhi?: number;
+  zhi?: number;
+};
+
+export function AddIonsNode({ id, data }: NodeComponentProps<AddIonsNodeData>) {
+  const { updateNodeData } = useReactFlow();
+  const [showMore, setShowMore] = useState(false);
+
+  const handleChange = (field: keyof AddIonsNodeData, value: string | number) => {
+    updateNodeData(id, { ...data, [field]: value });
+  };
+
+  const handleOptionalNumber = (field: keyof AddIonsNodeData, value: string) => {
+    const parsed = parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      updateNodeData(id, { ...data, [field]: parsed });
+    } else {
+      updateNodeData(id, { ...data, [field]: undefined });
+    }
+  };
+
+  const placement = data.placement || "random";
+  const direction = data.direction || "";
+
+  return (
+    <div className="bg-card w-[260px] shadow-lg rounded-xl border border-blue-500/50 overflow-hidden font-sans select-none">
+      <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
+
+      
+      <div className="bg-blue-500/10 p-3 border-b border-border flex items-center gap-2">
+        <BadgePlus className="w-4 h-4 text-blue-500" />
+        <h3 className="text-sm font-semibold text-foreground m-0">Add Ions</h3>
+      </div>
+      
+      <div className="p-4 space-y-3 bg-background">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1">Ion Type</label>
+            <select 
+              className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
+              value={data.ionType || "Na"}
+              onChange={(e) => handleChange("ionType", e.target.value)}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <option value="Na">Na+</option>
+              <option value="K">K+</option>
+              <option value="Li">Li+</option>
+              <option value="Ca">Ca2+</option>
+              <option value="Mg">Mg2+</option>
+              <option value="Cl">Cl-</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1">Count</label>
+            <input 
+              type="number" min="0"
+              className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
+              value={data.count || 0}
+              onChange={(e) => handleChange("count", parseInt(e.target.value) || 0)}
+              onPointerDown={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+
+        <div>
+           <label className="text-xs font-semibold text-muted-foreground block mb-1">Min Distance (Å)</label>
+           <input 
+              type="number" step="0.1"
+              className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
+              value={data.minDistance || 3.0}
+              onChange={(e) => handleChange("minDistance", parseFloat(e.target.value) || 3.0)}
+              onPointerDown={(e) => e.stopPropagation()}
+           />
+        </div>
+
+        <button
+          type="button"
+          className="nodrag w-full flex items-center justify-between text-xs font-semibold text-muted-foreground border border-border rounded-md px-2 py-1.5 bg-background hover:bg-muted/50"
+          onClick={() => setShowMore((prev) => !prev)}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          More options
+          {showMore ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </button>
+
+        {showMore && (
+          <div className="space-y-3 border border-border rounded-md p-2 bg-muted/30">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Placement</label>
+              <select
+                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
+                value={placement}
+                onChange={(e) => handleChange("placement", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <option value="random">random</option>
+                <option value="surface">surface</option>
+                <option value="bulk">bulk</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">Direction</label>
+                <select
+                  className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
+                  value={direction}
+                  onChange={(e) => handleChange("direction", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <option value="">none</option>
+                  <option value="x">x</option>
+                  <option value="y">y</option>
+                  <option value="z">z</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">Dir Value</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
+                  value={data.directionValue ?? ""}
+                  placeholder="optional"
+                  onChange={(e) => handleOptionalNumber("directionValue", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                type="number"
+                step="0.1"
+                className="nodrag w-full text-center text-xs bg-muted border border-border rounded-md py-1"
+                placeholder="xlo"
+                value={data.xlo ?? ""}
+                onChange={(e) => handleOptionalNumber("xlo", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+              <input
+                type="number"
+                step="0.1"
+                className="nodrag w-full text-center text-xs bg-muted border border-border rounded-md py-1"
+                placeholder="ylo"
+                value={data.ylo ?? ""}
+                onChange={(e) => handleOptionalNumber("ylo", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+              <input
+                type="number"
+                step="0.1"
+                className="nodrag w-full text-center text-xs bg-muted border border-border rounded-md py-1"
+                placeholder="zlo"
+                value={data.zlo ?? ""}
+                onChange={(e) => handleOptionalNumber("zlo", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                type="number"
+                step="0.1"
+                className="nodrag w-full text-center text-xs bg-muted border border-border rounded-md py-1"
+                placeholder="xhi"
+                value={data.xhi ?? ""}
+                onChange={(e) => handleOptionalNumber("xhi", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+              <input
+                type="number"
+                step="0.1"
+                className="nodrag w-full text-center text-xs bg-muted border border-border rounded-md py-1"
+                placeholder="yhi"
+                value={data.yhi ?? ""}
+                onChange={(e) => handleOptionalNumber("yhi", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+              <input
+                type="number"
+                step="0.1"
+                className="nodrag w-full text-center text-xs bg-muted border border-border rounded-md py-1"
+                placeholder="zhi"
+                value={data.zhi ?? ""}
+                onChange={(e) => handleOptionalNumber("zhi", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+      
+      <Handle type="source" position={Position.Right} id="out" className="w-3 h-3 bg-primary" />
+    </div>
+  );
+}

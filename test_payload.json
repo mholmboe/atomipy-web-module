@@ -1,0 +1,23 @@
+{
+  "box": {
+    "lx": 30.96,
+    "ly": 35.864,
+    "lz": 30.0,
+    "alpha": 91.18,
+    "beta": 100.46,
+    "gamma": 89.64
+  },
+  "slabs": [
+    {
+      "name": "Pyrophyllite Lee Guggenheim 1981",
+      "source": "preset",
+      "presetId": "Pyrophyllite_Lee_Guggenheim_1981_GII_0.071.pdb",
+      "replicate": { "x": 6, "y": 4, "z": 1 },
+      "position": { "x": 0, "y": 0, "z": 0, "mode": "absolute"}
+    }
+  ],
+  "ions": [],
+  "solvation": { "enabled": true, "waterModel": "spce" },
+  "outputFormat": "gromacs",
+  "outputName": "debug_run"
+}

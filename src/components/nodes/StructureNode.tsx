@@ -1,0 +1,167 @@
+import React, { useState } from "react";
+import { Handle, Position, useReactFlow } from "@xyflow/react";
+import { FileInput, Upload, File, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { formatPresetLabel } from "./types";
+import type { NodeComponentProps, PresetOption } from "./types";
+
+type StructureNodeData = {
+  source?: "preset" | "upload";
+  value?: string;
+  presets?: PresetOption[];
+  filename?: string;
+  originalName?: string;
+  path?: string;
+};
+
+type UploadApiResponse = {
+  filename?: string;
+  originalName?: string;
+  path?: string;
+};
+
+export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData>) {
+  const { updateNodeData } = useReactFlow();
+  const [uploading, setUploading] = useState(false);
+  const presets = data.presets || [];
+
+  const source =
+    data.source === "preset" || data.source === "upload"
+      ? data.source
+      : data.filename
+        ? "upload"
+        : "preset";
+
+  const handleSetSource = (next: "preset" | "upload") => {
+    updateNodeData(id, { source: next });
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const result: UploadApiResponse = await res.json();
+      updateNodeData(id, {
+        source: "upload",
+        filename: result.filename,
+        originalName: result.originalName || file.name,
+        path: result.path,
+      });
+      toast.success(`Uploaded ${file.name}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to upload file");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="bg-card w-[300px] shadow-lg rounded-xl border border-primary/50 overflow-hidden font-sans select-none">
+      <div className="bg-primary/10 p-3 border-b border-border flex items-center gap-2">
+        <FileInput className="w-4 h-4 text-primary" />
+        <h3 className="text-sm font-semibold text-foreground m-0">Import Structure</h3>
+      </div>
+
+      <div className="p-4 space-y-3 bg-secondary/20">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className={`nodrag rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
+              source === "preset"
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border bg-background text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => handleSetSource("preset")}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            Preset Slab
+          </button>
+          <button
+            type="button"
+            className={`nodrag rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
+              source === "upload"
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border bg-background text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => handleSetSource("upload")}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            Custom File
+          </button>
+        </div>
+
+        {source === "preset" ? (
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1 uppercase tracking-wider">
+              Select Mineral
+            </label>
+            <select
+              className="nodrag w-full text-sm bg-background border border-border rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary h-8"
+              value={data.value || ""}
+              onChange={(e) => updateNodeData(id, { source: "preset", value: e.target.value })}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <option value="">-- Choose --</option>
+              {presets.map((p) => (
+                <option key={p.id} value={p.fileName}>
+                  {formatPresetLabel(p)}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="relative">
+            <input
+              type="file"
+              className="hidden"
+              id={`file-upload-${id}`}
+              accept=".pdb,.gro,.cif,.xyz"
+              onChange={handleFileChange}
+              disabled={uploading}
+            />
+            <label
+              htmlFor={`file-upload-${id}`}
+              className={`nodrag flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-4 cursor-pointer hover:border-primary/50 transition-colors ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {uploading ? (
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              ) : data.filename ? (
+                <div className="flex flex-col items-center text-center">
+                  <File className="w-6 h-6 text-primary mb-2" />
+                  <span className="text-[10px] font-medium truncate w-[180px]">
+                    {data.originalName || data.filename}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center text-center">
+                  <Upload className="w-6 h-6 text-muted-foreground mb-2" />
+                  <span className="text-[10px] text-muted-foreground">
+                    Click to upload .pdb, .gro, .cif, or .xyz
+                  </span>
+                </div>
+              )}
+            </label>
+          </div>
+        )}
+      </div>
+
+      <Handle type="source" position={Position.Right} id="out" className="w-3 h-3 bg-primary" />
+    </div>
+  );
+}
