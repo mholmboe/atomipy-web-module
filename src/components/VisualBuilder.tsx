@@ -36,6 +36,7 @@ import {
   FolderOpen,
   Trash2,
   Droplet,
+  Droplets,
   FlaskConical,
   Maximize,
   FileOutput,
