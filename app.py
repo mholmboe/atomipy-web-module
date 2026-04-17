@@ -495,6 +495,19 @@ def build_stream():
         if not script_code:
             return jsonify({"error": "No script provided."}), 400
 
+        # Helper to format SSE data
+        class SSE:
+            @staticmethod
+            def status(msg): return SSE._fmt("status", {"message": msg})
+            @staticmethod
+            def progress(node_id, index): return SSE._fmt("progress", {"nodeId": node_id, "index": int(index)})
+            @staticmethod
+            def log(line): return SSE._fmt("log", {"message": line})
+            @staticmethod
+            def complete(token, success): return SSE._fmt("complete", {"token": token, "success": success})
+            @staticmethod
+            def _fmt(t, d): return f"data: {json.dumps({'type': t, **d})}\n\n"
+
         def generate():
             with tempfile.TemporaryDirectory(prefix="atomipy_stream_") as work_dir:
                 # 1. Setup Environment (Same as execute_script)
@@ -533,7 +546,7 @@ def build_stream():
                     env=env
                 )
 
-                yield f"data: {json.status('Build initializing...')}\n\n"
+                yield SSE.status('Build initializing...')
 
                 all_stdout = []
                 for line in process.stdout:
@@ -542,10 +555,10 @@ def build_stream():
                     if "__NODE_START__:" in line:
                         try:
                             parts = line.strip().split(":")
-                            yield f"data: {json.progress(parts[1], parts[2])}\n\n"
+                            yield SSE.progress(parts[1], parts[2])
                         except: pass
                     else:
-                        yield f"data: {json.log(line)}\n\n"
+                        yield SSE.log(line)
 
                 process.wait()
                 success = process.returncode == 0
@@ -581,24 +594,8 @@ def build_stream():
                 while len(BUILD_RESULTS_CACHE) > MAX_CACHE_SIZE:
                     BUILD_RESULTS_CACHE.popitem(last=False)
 
-                yield f"data: {json.complete(token, success)}\n\n"
+                yield SSE.complete(token, success)
 
-        # Helper to format SSE data
-        class json:
-            @staticmethod
-            def status(msg): return json._fmt("status", {"message": msg})
-            @staticmethod
-            def progress(node_id, index): return json._fmt("progress", {"nodeId": node_id, "index": int(index)})
-            @staticmethod
-            def log(line): return json._fmt("log", {"message": line})
-            @staticmethod
-            def complete(token, success): return json._fmt("complete", {"token": token, "success": success})
-            @staticmethod
-            def _fmt(t, d): return json.dumps({"type": t, **d})
-            @staticmethod
-            def dumps(d): return json_orig.dumps(d) # Hook back to real json
-
-        import json as json_orig
         import time
         return Response(
             generate(),
