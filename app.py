@@ -166,16 +166,33 @@ def upload_file():
 
 @app.route("/api/presets", methods=["GET"])
 def list_presets():
-    # Use the structure library inside the installed atomipy package
-    uc_conf_dir = os.path.join(AP_DATA_DIR, "structures", "minerals", "UC_conf")
+    # Try multiple locations for the structure library
+    # 1. Inside the installed atomipy package
+    # 2. In the local UC_conf directory (fallback for different environments)
+    potential_dirs = [
+        os.path.join(AP_DATA_DIR, "structures", "minerals", "UC_conf"),
+        os.path.join(BASE_DIR, "UC_conf"),
+        os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
+    ]
+    
+    uc_conf_dir = None
+    for d in potential_dirs:
+        if os.path.exists(d):
+            uc_conf_dir = d
+            break
+            
     presets = []
-    if os.path.exists(uc_conf_dir):
+    if uc_conf_dir and os.path.exists(uc_conf_dir):
         for fname in os.listdir(uc_conf_dir):
             if fname.endswith(".pdb") or fname.endswith(".gro") or fname.endswith(".cif"):
+                # Sanitize the name for display
+                # Strip extensions and truncate starting from _GII_
                 name = fname.split(".")[0]
                 if "_GII_" in name:
                     name = name.split("_GII_")[0]
-                name = name.replace("_", " ")
+                
+                # Replace underscores with spaces for a cleaner look
+                display_name = name.replace("_", " ").strip()
 
                 a, b, c, alpha, beta, gamma = None, None, None, None, None, None
                 filepath = os.path.join(uc_conf_dir, fname)
@@ -196,7 +213,7 @@ def list_presets():
                 
                 presets.append({
                     "id": fname,
-                    "name": name,
+                    "name": display_name,
                     "fileName": fname,
                     "metrics": {
                         "a": a, "b": b, "c": c,
