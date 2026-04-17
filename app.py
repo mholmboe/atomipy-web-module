@@ -63,12 +63,16 @@ def _parse_payload() -> dict[str, Any]:
 
 
 def _as_box_dim(box_like):
+    if box_like is None or (hasattr(box_like, "__len__") and len(box_like) == 0):
+        # Default fallback as requested by user
+        return ap.Cell2Box_dim([50.0, 50.0, 50.0, 90.0, 90.0, 90.0])
+    
     vals = [float(v) for v in box_like]
     if len(vals) in (3, 9):
         return vals
     if len(vals) == 6:
         return ap.Cell2Box_dim(vals)
-    raise ValueError("Unsupported box/cell format. Expected 3, 6, or 9 numbers.")
+    raise ValueError(f"Unsupported box/cell format. Expected 3, 6, or 9 numbers, got {len(vals)}.")
 
 
 def _import_structure(file_path):

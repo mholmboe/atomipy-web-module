@@ -1172,21 +1172,30 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
           const file = pyEscape(getString(data, "value", "unknown.pdb"));
           pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'UC_conf/${file}')\n`;
         }
-        pythonCode += `${blockOutBox} = ap.Cell2Box_dim(${blockOutBox})\n`;
+        pythonCode += `if ${blockOutBox} is None or (not isinstance(${blockOutBox}, str) and hasattr(${blockOutBox}, '__len__') and len(${blockOutBox}) == 0):\n`;
+        pythonCode += `    ${blockOutBox} = [50.0, 50.0, 50.0, 90.0, 90.0, 90.0]\n`;
+        pythonCode += `if hasattr(${blockOutBox}, '__len__') and len(${blockOutBox}) in [3, 6]:\n`;
+        pythonCode += `    ${blockOutBox} = ap.Cell2Box_dim(${blockOutBox})\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
       case "preset": {
         const file = pyEscape(getString(data, "value", "unknown.pdb"));
         pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'UC_conf/${file}')\n`;
-        pythonCode += `${blockOutBox} = ap.Cell2Box_dim(${blockOutBox})\n`;
+        pythonCode += `if ${blockOutBox} is None or (not isinstance(${blockOutBox}, str) and hasattr(${blockOutBox}, '__len__') and len(${blockOutBox}) == 0):\n`;
+        pythonCode += `    ${blockOutBox} = [50.0, 50.0, 50.0, 90.0, 90.0, 90.0]\n`;
+        pythonCode += `if hasattr(${blockOutBox}, '__len__') and len(${blockOutBox}) in [3, 6]:\n`;
+        pythonCode += `    ${blockOutBox} = ap.Cell2Box_dim(${blockOutBox})\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
       case "upload": {
         const upFilename = pyEscape(getString(data, "filename", "uploaded.pdb"));
         pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'uploads/${upFilename}')\n`;
-        pythonCode += `${blockOutBox} = ap.Cell2Box_dim(${blockOutBox})\n`;
+        pythonCode += `if ${blockOutBox} is None or (not isinstance(${blockOutBox}, str) and hasattr(${blockOutBox}, '__len__') and len(${blockOutBox}) == 0):\n`;
+        pythonCode += `    ${blockOutBox} = [50.0, 50.0, 50.0, 90.0, 90.0, 90.0]\n`;
+        pythonCode += `if hasattr(${blockOutBox}, '__len__') and len(${blockOutBox}) in [3, 6]:\n`;
+        pythonCode += `    ${blockOutBox} = ap.Cell2Box_dim(${blockOutBox})\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
