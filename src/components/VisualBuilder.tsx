@@ -14,6 +14,7 @@ import {
   applyEdgeChanges,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import {
   Play,
@@ -47,6 +48,7 @@ import {
   Waypoints,
   ChevronDown,
   ChevronUp,
+  GripHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -907,196 +909,205 @@ export default function VisualBuilder() {
   };
 
   return (
-    <section className="mx-auto w-full max-w-[1700px] py-2 px-4 h-[850px] flex flex-col space-y-2">
-      <div className="flex justify-between items-center bg-card/50 backdrop-blur-md p-2 rounded-2xl border border-border shadow-2xl">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground text-balance">Add and connect nodes to compose your system as a workflow</p>
-        </div>
-        <div className="flex gap-2 items-start flex-1 justify-center ml-8">
-          <div className="space-y-2">
-            <div className="flex bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto">
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
-                <FileInput className="w-4 h-4" /> Import
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("replicate")} title="Replicate">
-                <Grid3x3 className="w-4 h-4" /> Rep
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("box")} title="Box Settings">
-                <Box className="w-4 h-4" /> Box
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("position")} title="Position">
-                <Target className="w-4 h-4" /> Pos
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("add")} title="Join branches">
-                <Combine className="w-4 h-4" /> Join
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("merge")} title="Merge with overlap removal">
-                <GitMerge className="w-4 h-4" /> Merge
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("wrap")} title="Wrap">
-                <Maximize className="w-4 h-4" /> Wrap
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("insert")} title="Insert Molecule">
-                <PackagePlus className="w-4 h-4" /> Insert
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("addIons")} title="Add Ions">
-                <BadgePlus className="w-4 h-4" /> Ions
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("solvate")} title="Solvate">
-                <Droplet className="w-4 h-4" /> Solv
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("addH")} title="Add Hydrogens">
-                <Droplets className="w-4 h-4" /> Add H
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("forcefield")} title="Assign Forcefield">
-                <FlaskConical className="w-4 h-4" /> FF
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
-                <FileOutput className="w-4 h-4" /> Export
-              </Button>
+    <section className="mx-auto w-full max-w-[1800px] py-2 px-4 h-[calc(100vh-120px)] min-h-[700px] flex flex-col transition-all duration-500">
+      <PanelGroup direction="vertical">
+        <Panel defaultSize={20} minSize={10} className="flex flex-col mb-2">
+          <div className="flex-1 flex flex-col bg-card/60 backdrop-blur-xl p-3 rounded-2xl border border-border shadow-2xl overflow-hidden">
+            <div className="flex justify-between items-center gap-4 mb-3">
+              <div className="hidden lg:block">
+                <p className="text-sm font-semibold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">Workflow Builder</p>
+                <p className="text-[11px] font-medium text-muted-foreground leading-tight max-w-[200px]">Compose your molecular system by connecting visual nodes</p>
+              </div>
+              
+              <div className="flex-1 flex gap-2 items-start justify-center overflow-hidden">
+                <div className="space-y-2 w-full max-w-4xl">
+                  <div className="flex bg-muted/80 p-1 rounded-xl flex-nowrap overflow-x-auto scrollbar-hide border border-border/50 shadow-inner">
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
+                      <FileInput className="w-3.5 h-3.5" /> Import
+                    </Button>
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("replicate")} title="Replicate">
+                      <Grid3x3 className="w-3.5 h-3.5" /> Rep
+                    </Button>
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("box")} title="Box Settings">
+                      <Box className="w-3.5 h-3.5" /> Box
+                    </Button>
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("position")} title="Position">
+                      <Target className="w-3.5 h-3.5" /> Pos
+                    </Button>
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("add")} title="Join branches">
+                      <Combine className="w-3.5 h-3.5" /> Join
+                    </Button>
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("merge")} title="Merge with overlap removal">
+                      <GitMerge className="w-3.5 h-3.5" /> Merge
+                    </Button>
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("wrap")} title="Wrap">
+                      <Maximize className="w-3.5 h-3.5" /> Wrap
+                    </Button>
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("insert")} title="Insert Molecule">
+                      <PackagePlus className="w-3.5 h-3.5" /> Insert
+                    </Button>
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("addIons")} title="Add Ions">
+                      <BadgePlus className="w-3.5 h-3.5" /> Ions
+                    </Button>
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("solvate")} title="Solvate">
+                      <Droplet className="w-3.5 h-3.5" /> Solv
+                    </Button>
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("addH")} title="Add Hydrogens">
+                      <Droplets className="w-3.5 h-3.5" /> Add H
+                    </Button>
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("forcefield")} title="Assign Forcefield">
+                      <FlaskConical className="w-3.5 h-3.5" /> FF
+                    </Button>
+                    <Button className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
+                      <FileOutput className="w-3.5 h-3.5" /> Export
+                    </Button>
 
-              <Button
-                className="gap-1"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowMoreOptions((prev) => !prev)}
-                title="More options"
-              >
-                {showMoreOptions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                More
-              </Button>
-            </div>
+                    <Button
+                      className="gap-1.5 h-8 px-2.5 text-xs font-semibold hover:bg-background hover:shadow-sm transition-all"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowMoreOptions((prev) => !prev)}
+                      title="More options"
+                    >
+                      {showMoreOptions ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      More
+                    </Button>
+                  </div>
 
-            {showMoreOptions && (
-              <div className="flex bg-muted p-1 rounded-lg flex-wrap">
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("rotate")} title="Rotate">
-                  <RotateCw className="w-4 h-4" /> Rot
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("scale")} title="Scale">
-                  <Scaling className="w-4 h-4" /> Scale
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("slice")} title="Slice">
-                  <Scissors className="w-4 h-4" /> Slice
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("substitute")} title="Substitute">
-                  <Diff className="w-4 h-4" /> Subst
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("fuse")} title="Fuse atoms">
-                  <Spline className="w-4 h-4" /> Fuse
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("resname")} title="Assign resname">
-                  <Tag className="w-4 h-4" /> Res
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("molecule")} title="Set molecule id">
-                  <Fingerprint className="w-4 h-4" /> Mol
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("bondAngle")} title="Bond and angle statistics">
-                  <Waypoints className="w-4 h-4" /> B/A
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("xrd")} title="Run XRD Simulation">
-                  <BarChart3 className="w-4 h-4" /> XRD
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("bvs")} title="Bond valence sum analysis">
-                  <Calculator className="w-4 h-4" /> BVS
+                  {showMoreOptions && (
+                    <div className="flex bg-muted/60 p-1 rounded-xl flex-wrap border border-border/30 gap-0.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <Button className="gap-1.5 h-7 px-2 text-[11px] font-medium" variant="ghost" size="sm" onClick={() => addNode("rotate")} title="Rotate">
+                        <RotateCw className="w-3 h-3" /> Rot
+                      </Button>
+                      <Button className="gap-1.5 h-7 px-2 text-[11px] font-medium" variant="ghost" size="sm" onClick={() => addNode("scale")} title="Scale">
+                        <Scaling className="w-3 h-3" /> Scale
+                      </Button>
+                      <Button className="gap-1.5 h-7 px-2 text-[11px] font-medium" variant="ghost" size="sm" onClick={() => addNode("slice")} title="Slice">
+                        <Scissors className="w-3 h-3" /> Slice
+                      </Button>
+                      <Button className="gap-1.5 h-7 px-2 text-[11px] font-medium" variant="ghost" size="sm" onClick={() => addNode("substitute")} title="Substitute">
+                        <Diff className="w-3 h-3" /> Subst
+                      </Button>
+                      <Button className="gap-1.5 h-7 px-2 text-[11px] font-medium" variant="ghost" size="sm" onClick={() => addNode("fuse")} title="Fuse atoms">
+                        <Spline className="w-3 h-3" /> Fuse
+                      </Button>
+                      <Button className="gap-1.5 h-7 px-2 text-[11px] font-medium" variant="ghost" size="sm" onClick={() => addNode("resname")} title="Assign resname">
+                        <Tag className="w-3 h-3" /> Res
+                      </Button>
+                      <Button className="gap-1.5 h-7 px-2 text-[11px] font-medium" variant="ghost" size="sm" onClick={() => addNode("molecule")} title="Set molecule id">
+                        <Fingerprint className="w-3 h-3" /> Mol
+                      </Button>
+                      <Button className="gap-1.5 h-7 px-2 text-[11px] font-medium" variant="ghost" size="sm" onClick={() => addNode("bondAngle")} title="Bond and angle statistics">
+                        <Waypoints className="w-3 h-3" /> B/A
+                      </Button>
+                      <Button className="gap-1.5 h-7 px-2 text-[11px] font-medium" variant="ghost" size="sm" onClick={() => addNode("xrd")} title="Run XRD Simulation">
+                        <BarChart3 className="w-3 h-3" /> XRD
+                      </Button>
+                      <Button className="gap-1.5 h-7 px-2 text-[11px] font-medium" variant="ghost" size="sm" onClick={() => addNode("bvs")} title="Bond valence sum analysis">
+                        <Calculator className="w-3 h-3" /> BVS
+                      </Button>
+                    </div>
+                  )}
+
+                  {showMoreOptions && (
+                    <div className="flex items-center gap-2 bg-muted/40 p-1.5 rounded-xl border border-border/20 animate-in fade-in zoom-in-95 duration-200">
+                      <select
+                        className="nodrag flex-1 min-w-[200px] text-[11px] bg-background border border-border rounded-lg px-2 py-1.5 h-8 outline-none focus:ring-1 focus:ring-primary/40 transition-all font-medium"
+                        value={selectedWorkflowKey}
+                        onChange={(e) => setSelectedWorkflowKey(e.target.value)}
+                      >
+                        <optgroup label="Built-in Templates">
+                          {templateWorkflows.map((workflow) => (
+                            <option key={workflow.id} value={`template:${workflow.id}`}>
+                              {workflow.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="My Templates">
+                          {customTemplates.length === 0 ? (
+                            <option value="custom:none" disabled>No custom templates</option>
+                          ) : (
+                            customTemplates.map((template) => (
+                              <option key={template.id} value={`custom:${template.id}`}>{template.name}</option>
+                            ))
+                          )}
+                        </optgroup>
+                        <optgroup label="Saved Workflows">
+                          {savedWorkflows.length === 0 ? (
+                            <option value="saved:none" disabled>No saved workflows</option>
+                          ) : (
+                            savedWorkflows.map((workflow) => (
+                              <option key={workflow.id} value={`saved:${workflow.id}`}>{workflow.name}</option>
+                            ))
+                          )}
+                        </optgroup>
+                      </select>
+                      <div className="flex gap-1">
+                        <Button className="h-8 px-2.5 text-[11px] font-semibold" variant="outline" size="sm" onClick={handleLoadSelectedWorkflow} title="Load workflow">
+                          <FolderOpen className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button className="h-8 px-2.5 text-[11px] font-semibold" variant="outline" size="sm" onClick={handleSaveCurrentWorkflow} title="Save current workflow">
+                          <Save className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button className="h-8 px-2.5 text-[11px] font-semibold" variant="outline" size="sm" onClick={handleSaveAsTemplate} title="Save current workflow as template">
+                          <PackagePlus className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button className="h-8 px-2.5 text-[11px] font-semibold" variant="outline" size="sm" onClick={handleExportCurrentWorkflow} title="Download workflow JSON file">
+                          <Download className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button className="h-8 px-2.5 text-[11px] font-semibold" variant="outline" size="sm" onClick={handleImportWorkflowClick} title="Upload workflow JSON file">
+                          <Upload className="w-3.5 h-3.5" />
+                        </Button>
+                        {(selectedSavedWorkflow || selectedCustomTemplate) && (
+                          <Button className="h-8 px-2.5 text-[11px] font-semibold text-destructive hover:bg-destructive/10" variant="ghost" size="sm" onClick={handleDeleteSelectedEntry} title="Delete selected workflow/template">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      <input ref={workflowImportInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportWorkflowFile} />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button className="h-10 px-6 rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 transition-all font-bold group overflow-hidden relative" onClick={handleCompileAndRun}>
+                  <div className="absolute inset-0 bg-gradient-to-r from-primary via-blue-600 to-primary bg-[length:200%_100%] animate-shimmer opacity-80 group-hover:opacity-100 transition-opacity" />
+                  <Play className="w-4 h-4 mr-2 relative z-10 animate-pulse" />
+                  <span className="relative z-10 uppercase tracking-wider text-xs">Build</span>
                 </Button>
               </div>
-            )}
-
-            {showMoreOptions && (
-              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
-              <select
-                className="nodrag min-w-[270px] text-xs bg-background border border-border rounded-md px-2 py-1.5 h-8"
-                value={selectedWorkflowKey}
-                onChange={(e) => setSelectedWorkflowKey(e.target.value)}
-              >
-                <optgroup label="Built-in Templates">
-                  {templateWorkflows.map((workflow) => (
-                    <option key={workflow.id} value={`template:${workflow.id}`}>
-                      {workflow.name}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="My Templates">
-                  {customTemplates.length === 0 ? (
-                    <option value="custom:none" disabled>
-                      No custom templates
-                    </option>
-                  ) : (
-                    customTemplates.map((template) => (
-                      <option key={template.id} value={`custom:${template.id}`}>
-                        {template.name}
-                      </option>
-                    ))
-                  )}
-                </optgroup>
-                <optgroup label="Saved">
-                  {savedWorkflows.length === 0 ? (
-                    <option value="saved:none" disabled>
-                      No saved workflows
-                    </option>
-                  ) : (
-                    savedWorkflows.map((workflow) => (
-                      <option key={workflow.id} value={`saved:${workflow.id}`}>
-                        {workflow.name}
-                      </option>
-                    ))
-                  )}
-                </optgroup>
-              </select>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={handleLoadSelectedWorkflow} title="Load workflow">
-                <FolderOpen className="w-4 h-4" /> Load
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={handleSaveCurrentWorkflow} title="Save current workflow">
-                <Save className="w-4 h-4" /> Save
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={handleSaveAsTemplate} title="Save current workflow as template">
-                <Save className="w-4 h-4" /> Save Tpl
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={handleExportCurrentWorkflow} title="Download workflow JSON file">
-                <Download className="w-4 h-4" /> Download
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={handleImportWorkflowClick} title="Upload workflow JSON file">
-                <Upload className="w-4 h-4" /> Upload
-              </Button>
-              {(selectedSavedWorkflow || selectedCustomTemplate) && (
-                <Button className="gap-1" variant="ghost" size="sm" onClick={handleDeleteSelectedEntry} title="Delete selected workflow/template">
-                  <Trash2 className="w-4 h-4" /> Delete
-                </Button>
-              )}
-              <input
-                ref={workflowImportInputRef}
-                type="file"
-                accept=".json,application/json"
-                className="hidden"
-                onChange={handleImportWorkflowFile}
-              />
             </div>
-          )}
           </div>
-          <Button className="shadow-lg shadow-primary/20 shrink-0" onClick={handleCompileAndRun}>
-            <Play className="w-4 h-4 mr-2" />
-            Build
-          </Button>
-        </div>
-      </div>
+        </Panel>
 
-      <div className="flex-1 rounded-2xl overflow-hidden border border-border bg-muted/20 relative" ref={reactFlowWrapper}>
-        <ReactFlowProvider>
-          <ReactFlow
-            nodes={nodes.map((n) => ({ ...n, data: { ...n.data, presets } }))}
-            edges={edges}
-            onNodesChange={(changes) => setNodes((nds) => applyNodeChanges(changes, nds))}
-            onEdgesChange={(changes) => setEdges((eds) => applyEdgeChanges(changes, eds))}
-            onConnect={onConnect}
-            nodeTypes={nodeTypes}
-            fitView
-            fitViewOptions={{ padding: 0.4, maxZoom: 0.8 }}
-          >
-            <Controls />
-            <Background gap={20} size={1} color="rgba(0,0,0,0.1)" />
-          </ReactFlow>
-        </ReactFlowProvider>
-      </div>
+        <PanelResizeHandle className="h-1.5 group flex items-center justify-center bg-border/20 hover:bg-primary/20 transition-colors rounded-full my-1 cursor-row-resize">
+          <div className="w-8 h-1 bg-border/40 group-hover:bg-primary/40 rounded-full flex items-center justify-center">
+            <GripHorizontal className="w-3 h-3 text-border group-hover:text-primary transition-colors" />
+          </div>
+        </PanelResizeHandle>
+
+        <Panel defaultSize={80} minSize={30} className="relative">
+          <div className="absolute inset-0 rounded-3xl overflow-hidden border border-border shadow-inner bg-muted/10" ref={reactFlowWrapper}>
+            <ReactFlowProvider>
+              <ReactFlow
+                nodes={nodes.map((n) => ({ ...n, data: { ...n.data, presets } }))}
+                edges={edges}
+                onNodesChange={(changes) => setNodes((nds) => applyNodeChanges(changes, nds))}
+                onEdgesChange={(changes) => setEdges((eds) => applyEdgeChanges(changes, eds))}
+                onConnect={onConnect}
+                nodeTypes={nodeTypes}
+                fitView
+                fitViewOptions={{ padding: 0.4, maxZoom: 0.8 }}
+                className="brightness-95 contrast-[1.02] saturate-[1.05]"
+              >
+                <Controls className="bg-card border-border shadow-xl rounded-lg overflow-hidden translate-x-1 outline-none" />
+                <Background gap={24} size={1} color="rgba(0,0,0,0.06)" variant="dots" />
+              </ReactFlow>
+            </ReactFlowProvider>
+          </div>
+        </Panel>
+      </PanelGroup>
     </section>
   );
 }
