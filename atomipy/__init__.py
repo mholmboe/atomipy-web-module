@@ -59,8 +59,9 @@ except ImportError:
     pass
 
 # ===== Structure analysis functions =====
-from .dist_matrix import dist_matrix
+from .dist_matrix import dist_matrix, get_neighbor_list
 from .cell_list_dist_matrix import cell_list_dist_matrix
+from . import config
 from .bond_angle import bond_angle, bond_angle_dihedral
 
 # ===== Cell and coordinate transformation functions =====
@@ -165,7 +166,7 @@ __all__ = [
     'write_pdb', 'write_gro', 'write_xyz', 'write_cif', 'write_auto',
     'write_itp', 'write_psf', 'write_lmp', 'import_itp_topology',
     'element', 'radius', 'mass', 'set_atomic_masses', 'com',
-    'dist_matrix', 'cell_list_dist_matrix', 'bond_angle', 'bond_angle_dihedral', 'find_H2O',
+    'dist_matrix', 'cell_list_dist_matrix', 'config', 'bond_angle', 'bond_angle_dihedral', 'find_H2O',
     'normalize_box','Box_dim2Cell', 'Cell2Box_dim',
     'cartesian_to_fractional', 'fractional_to_cartesian', 'wrap', 'wrap_coordinates',
     'triclinic_to_orthogonal', 'orthogonal_to_triclinic', 'get_orthogonal_box', 'get_cell_vectors',
