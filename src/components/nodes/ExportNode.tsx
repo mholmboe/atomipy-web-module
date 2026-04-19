@@ -226,6 +226,22 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
                 )}
               </>
             )}
+
+            <div className="border-t border-border pt-2 mt-2">
+              <label className="nodrag flex items-center justify-between text-xs text-muted-foreground font-semibold">
+                Minimalistic Python script
+                <input
+                  type="checkbox"
+                  className="nodrag"
+                  checked={data.minimalisticScript || false}
+                  onChange={(e) => updateNodeData(id, { ...data, minimalisticScript: e.target.checked })}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </label>
+              <p className="text-[10px] text-muted-foreground leading-tight mt-1">
+                Excludes web instrumentation and progress markers.
+              </p>
+            </div>
           </div>
         )}
       </div>
