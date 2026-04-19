@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 
 export function StatsNode({ data, isConnectable }: { data: any; isConnectable: boolean }) {
   const logFile = data.logFile || "output.log";
-  const ffname = data.ffname || "minff";
+  const ffname = data.ffname || "none";
 
   return (
     <Card className="w-[280px] shadow-sm transition-shadow hover:shadow-md border-primary/20 bg-card">
@@ -33,7 +33,7 @@ export function StatsNode({ data, isConnectable }: { data: any; isConnectable: b
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Forcefield Label</label>
+          <label className="text-xs font-medium text-muted-foreground">Forcefield Label (Optional)</label>
           <select
             className="nodrag w-full text-xs bg-background border border-border rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
             value={ffname}
@@ -43,11 +43,12 @@ export function StatsNode({ data, isConnectable }: { data: any; isConnectable: b
               }
             }}
           >
+            <option value="none">None / Native</option>
             <option value="minff">MINFF</option>
             <option value="clayff">CLAYFF</option>
           </select>
           <p className="text-[10px] text-muted-foreground mt-1">
-            Determines the labeling logic in the report.
+            Reports based on current atom types (Native or FF-assigned).
           </p>
         </div>
       </CardContent>
