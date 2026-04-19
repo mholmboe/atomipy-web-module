@@ -48,6 +48,7 @@ import {
   ChevronDown,
   ChevronUp,
   ArrowUpDown,
+  Activity,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -85,6 +86,7 @@ import { BondAngleNode } from "./nodes/BondAngleNode";
 import { BvsNode } from "./nodes/BvsNode";
 import { XrdNode } from "./nodes/XrdNode";
 import { ReorderNode } from "./nodes/ReorderNode";
+import { StatsNode } from "./nodes/StatsNode";
 import type { PresetOption } from "./nodes/types";
 
 const nodeTypes = {
@@ -114,6 +116,7 @@ const nodeTypes = {
   bvs: BvsNode,
   xrd: XrdNode,
   reorder: ReorderNode,
+  stats: StatsNode,
 };
 
 const initialNodes: Node[] = [
@@ -987,6 +990,9 @@ export default function VisualBuilder() {
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("forcefield")} title="Assign Forcefield">
                 <FlaskConical className="w-4 h-4" /> FF
               </Button>
+              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("stats")} title="Generate Structure Stats">
+                <Activity className="w-4 h-4" /> Stats
+              </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
                 <FileOutput className="w-4 h-4" /> Export
               </Button>
@@ -1645,6 +1651,14 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         pythonCode += `${blockOutAtoms} = __add_hydrogens_bvs__(${inAtoms}, ${inBox}, delta_threshold=${delta}, max_additions=${maxAdd})\n`;
         pythonCode += `${blockOutBox} = ${inBox}\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "stats": {
+        const logFile = pyEscape(getString(data, "logFile", "output.log"));
+        const ffname = pyEscape(getString(data, "ffname", "minff"));
+        pythonCode += `ap.get_structure_stats(${inAtoms}, Box=${inBox}, log_file='${logFile}', ffname='${ffname}')\n`;
+        // Pass atoms and box through unchanged
+        stateVars.set(id, { atoms: inAtoms, box: inBox });
         break;
       }
       case "forcefield": {
