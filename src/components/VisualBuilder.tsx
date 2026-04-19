@@ -47,6 +47,7 @@ import {
   Waypoints,
   ChevronDown,
   ChevronUp,
+  ArrowUpDown,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -83,6 +84,7 @@ import { ForcefieldNode } from "./nodes/ForcefieldNode";
 import { BondAngleNode } from "./nodes/BondAngleNode";
 import { BvsNode } from "./nodes/BvsNode";
 import { XrdNode } from "./nodes/XrdNode";
+import { ReorderNode } from "./nodes/ReorderNode";
 import type { PresetOption } from "./nodes/types";
 
 const nodeTypes = {
@@ -111,6 +113,7 @@ const nodeTypes = {
   addH: AddHNode,
   bvs: BvsNode,
   xrd: XrdNode,
+  reorder: ReorderNode,
 };
 
 const initialNodes: Node[] = [
@@ -1029,6 +1032,9 @@ export default function VisualBuilder() {
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("molecule")} title="Set molecule id">
                   <Fingerprint className="w-4 h-4" /> Mol
                 </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("reorder")} title="Reorder atoms">
+                  <ArrowUpDown className="w-4 h-4" /> Reorder
+                </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("bondAngle")} title="Bond and angle statistics">
                   <Waypoints className="w-4 h-4" /> B/A
                 </Button>
@@ -1214,10 +1220,24 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
     let inAtoms = "None";
     let inBox = "None";
 
-    if (incomingEdges.length === 1 && stateVars.has(incomingEdges[0].source)) {
-      const parentState = stateVars.get(incomingEdges[0].source)!;
-      inAtoms = parentState.atoms;
-      inBox = parentState.box;
+    const isMultiInputNode = n.type === "merge" || n.type === "add";
+
+    if (!isMultiInputNode && incomingEdges.length > 0) {
+      const validParents = incomingEdges
+        .filter((e) => stateVars.has(e.source))
+        .map((e) => stateVars.get(e.source)!);
+
+      if (validParents.length === 1) {
+        inAtoms = validParents[0].atoms;
+        inBox = validParents[0].box;
+      } else if (validParents.length > 1) {
+        const atomVars = validParents.map((p) => p.atoms).join(", ");
+        pythonCode += `\n# Auto-joining multiple standard inputs\n`;
+        const joinedVar = `auto_join_${index}`;
+        pythonCode += `${joinedVar} = ap.update(${atomVars})\n`;
+        inAtoms = joinedVar;
+        inBox = validParents.map(p => p.box).find(b => b !== "None") || "None";
+      }
     }
 
     const opType = n.type || "unknown";
@@ -1405,6 +1425,26 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
+      case "reorder": {
+        const byMode = getString(data, "byMode", "index");
+        const rawNeworder = getString(data, "neworder", "").trim();
+        const tokens = rawNeworder.split(/[;,]+/).map((t) => t.trim()).filter((t) => t.length > 0);
+        if (tokens.length === 0) {
+          pythonCode += `# Reorder node missing input values, passing unchanged\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+        } else {
+          let listExpr = "";
+          if (byMode === "index") {
+            const intTokens = tokens.filter(t => !isNaN(parseInt(t, 10)));
+            listExpr = `[${intTokens.join(", ")}]`;
+          } else {
+            listExpr = `[${tokens.map(t => `'${pyEscape(t)}'`).join(", ")}]`;
+          }
+          pythonCode += `${blockOutAtoms} = ap.reorder(${inAtoms}, ${listExpr}, by='${byMode}')\n`;
+        }
+        stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        break;
+      }
       case "slice": {
         const xlo = getNumber(data, "xlo", 0);
         const ylo = getNumber(data, "ylo", 0);
@@ -1548,7 +1588,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         const wrappedInAtoms = `wrapped_${index}`;
         const ionsVar = `ions_${index}`;
         pythonCode += `${wrappedInAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
-        pythonCode += `${ionsVar} = ap.ionize('${ion}', resname='ION', limits=${limitsExpr}, num_ions=${count}, min_distance=${dist}, solute_atoms=${wrappedInAtoms}, placement='${placement}'${directionArg})\n`;
+        pythonCode += `${ionsVar} = ap.ionize('${ion}', resname='ION', limits=${limitsExpr}, num_ions=${count}, Box=${inBox}, min_distance=${dist}, solute_atoms=${wrappedInAtoms}, placement='${placement}'${directionArg})\n`;
         pythonCode += `${blockOutAtoms} = ap.update(${inAtoms}, ${ionsVar})\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
@@ -1585,7 +1625,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         const solventVar = `solvent_${index}`;
         const includeSolutePy = includeSolute ? "True" : "False";
         pythonCode += `${wrappedInAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
-        pythonCode += `${solventVar} = ap.solvate(limits=${limitsExpr}, density=${dens}, min_distance=${sdist}, max_solvent=${maxSolventExpr}, solute_atoms=${wrappedInAtoms}, solvent_type='${model}', include_solute=${includeSolutePy})\n`;
+        pythonCode += `${solventVar} = ap.solvate(limits=${limitsExpr}, density=${dens}, min_distance=${sdist}, max_solvent=${maxSolventExpr}, solute_atoms=${wrappedInAtoms}, Box=${inBox}, solvent_type='${model}', include_solute=${includeSolutePy})\n`;
         if (includeSolute) {
           pythonCode += `${blockOutAtoms} = ${solventVar}\n`;
         } else {
@@ -1620,10 +1660,11 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
           pythonCode += `    try:\n`;
           pythonCode += `        _sol, _nosol = ap.find_H2O(${inAtoms}, ${inBox})\n`;
           pythonCode += `        _nosol = ap.assign_resname(_nosol)\n`;
+          pythonCode += `        _min = [a for a in _nosol if a.get('resname') == 'MIN']\n`;
+          pythonCode += `        _other = [a for a in _nosol if a.get('resname') not in ('ION', 'MIN')]\n`;
           pythonCode += `        _ions = [a for a in _nosol if a.get('resname') == 'ION']\n`;
-          pythonCode += `        _min = [a for a in _nosol if a.get('resname') != 'ION']\n`;
           pythonCode += `        if _min: _min = ap.molecule(_min, molid=1, resname='MIN')\n`;
-          pythonCode += `        ${inAtoms} = ap.update(_min, _ions, _sol)\n`;
+          pythonCode += `        ${inAtoms} = ap.update(_other, _min, _ions, _sol)\n`;
           pythonCode += `    except Exception as e: print(f"Warning: MolID reset failed ({e})")\n`;
         }
 

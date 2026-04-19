@@ -1721,3 +1721,100 @@ def adjust_Hw_atom(atoms, Box, water_resname='SOL', water_model='OPC3'):
             del atom['neigh']
             
     return full_list
+
+
+def reorder(atoms, neworder, by=None):
+    """
+    Reorder the atoms in an atom list. Useful for creating united-atom structures from
+    all-atom structures (by omitting non-polar H indices), or reordering the atom 
+    list with respect to residue name or atom type.
+
+    Parameters
+    ----------
+    atoms : list of dict
+        List of atom dictionaries.
+    neworder : list
+        If `by` is None, this is a list of 1-based indices (int) corresponding to the 
+        new atom order WITHIN each molecule (molid).
+        If `by` is 'resname' or 'type', this is a list of strings defining the target order.
+    by : str, optional
+        Sorting mode. Can be None (index-based), 'resname', or 'type'.
+
+    Returns
+    -------
+    list of dict
+        Reordered atoms list.
+        
+    Examples
+    --------
+    # Orders according to within-molecule indices, dropping atoms not in list
+    atoms = ap.reorder(atoms, [1, 3, 4, 5, 6])
+    
+    # Orders according to resname sequentially
+    atoms = ap.reorder(atoms, ['MMT', 'SOL', 'ION'], by='resname')
+    
+    # Orders according to atom type sequentially
+    atoms = ap.reorder(atoms, ['Na', 'Ow', 'Hw'], by='type')
+    """
+    import copy
+    from .add import update
+    
+    if not isinstance(neworder, (list, tuple)):
+        raise ValueError("neworder must be a list or tuple")
+
+    if by is None or str(by).lower() == 'index':
+        # Apply within each molecule (molid)
+        ordered_atoms = []
+        
+        # Group atoms by molid sequentially to preserve overall molecule order
+        current_molid = None
+        current_molecule = []
+        molecules = []
+        
+        for atom in atoms:
+            m = atom.get('molid', 1)
+            if m != current_molid:
+                if len(current_molecule) > 0:
+                    molecules.append(current_molecule)
+                current_molecule = []
+                current_molid = m
+            current_molecule.append(atom)
+            
+        if len(current_molecule) > 0:
+            molecules.append(current_molecule)
+            
+        for mol in molecules:
+            for idx in neworder:
+                try:
+                    py_idx = int(idx) - 1
+                    if 0 <= py_idx < len(mol):
+                        ordered_atoms.append(copy.deepcopy(mol[py_idx]))
+                    else:
+                        print(f"Warning: Index {idx} is out of bounds for molecule of size {len(mol)}.")
+                except ValueError:
+                    print(f"Warning: Cannot parse explicit index '{idx}' as integer.")
+                    
+    elif str(by).lower() in ('resname', 'resnames'):
+        ordered_atoms = []
+        for rname in neworder:
+            subset = [copy.deepcopy(a) for a in atoms if str(a.get('resname', '')).strip() == str(rname).strip()]
+            if not subset:
+                print(f"Warning: No atoms found with resname '{rname}'.")
+            ordered_atoms.extend(subset)
+            
+    elif str(by).lower() in ('type', 'atomtype'):
+        ordered_atoms = []
+        for atype in neworder:
+            subset = [copy.deepcopy(a) for a in atoms if str(a.get('type', '')).strip() == str(atype).strip()]
+            if not subset:
+                print(f"Warning: No atoms found with type '{atype}'.")
+            ordered_atoms.extend(subset)
+    else:
+        raise ValueError("Invalid 'by' parameter. Use None, 'resname', or 'type'.")
+
+    # Update indices and molids seamlessly
+    if not ordered_atoms:
+        print("Warning: Reorder operation resulted in an empty atom list.")
+        return []
+        
+    return update(ordered_atoms, force=True)

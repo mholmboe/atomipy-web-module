@@ -112,6 +112,7 @@ add_H_atom = build.add_H_atom
 adjust_H_atom = build.adjust_H_atom
 adjust_Hw_atom = build.adjust_Hw_atom
 is_centrosymmetric_along_z = build.is_centrosymmetric_along_z
+reorder = build.reorder
 
 # ===== Resname functions =====
 from .resname import assign_resname
@@ -173,7 +174,7 @@ __all__ = [
     'direct_cartesian_to_fractional', 'direct_fractional_to_cartesian',
     'replicate_system', 'translate', 'rotate', 'place', 'center', 'update', 'scale',
     'substitute', 'molecule', 'merge', 'slice', 'fuse_atoms', 'solvate', 'ionize', 'insert',
-    'add_H_atom', 'adjust_H_atom', 'adjust_Hw_atom',
+    'add_H_atom', 'adjust_H_atom', 'adjust_Hw_atom', 'reorder',
     'is_centrosymmetric_along_z',
     'assign_resname',
     'minff', 'clayff', 'write_n2t', 'get_structure_stats',
