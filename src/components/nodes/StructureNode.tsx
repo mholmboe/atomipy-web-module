@@ -93,14 +93,14 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
       ? data.source
       : data.filename
         ? "upload"
-        : "preset";
+        : "upload";
 
   const handleSetSource = (next: "preset" | "upload") => {
     updateNodeData(id, { source: next });
   };
 
   return (
-    <div className="bg-card w-[300px] shadow-lg rounded-xl border border-primary/50 overflow-hidden font-sans select-none">
+    <div className="bg-card w-[300px] shadow-lg rounded-xl border border-primary/50 overflow-hidden font-sans">
       <div className="bg-primary/10 p-3 border-b border-border flex items-center gap-2">
         <FileInput className="w-4 h-4 text-primary" />
         <h3 className="text-sm font-semibold text-foreground m-0">Import Structure</h3>
@@ -108,18 +108,6 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
 
       <div className="p-4 space-y-3 bg-secondary/20">
         <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            className={`nodrag rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
-              source === "preset"
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border bg-background text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => handleSetSource("preset")}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            Preset Slab
-          </button>
           <button
             type="button"
             className={`nodrag rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
@@ -131,6 +119,18 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
             onPointerDown={(e) => e.stopPropagation()}
           >
             Custom File
+          </button>
+          <button
+            type="button"
+            className={`nodrag rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
+              source === "preset"
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border bg-background text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => handleSetSource("preset")}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            Preset Slab
           </button>
         </div>
 

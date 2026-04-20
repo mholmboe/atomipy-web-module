@@ -46,7 +46,7 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
       ? data.source
       : data.filename
         ? "upload"
-        : "preset";
+        : "upload";
 
   const rotateMode = data.rotateMode || "random";
 
@@ -103,7 +103,7 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
   };
 
   return (
-    <div className="bg-card w-[300px] shadow-lg rounded-xl border border-sky-500/50 overflow-hidden font-sans select-none">
+    <div className="bg-card w-[300px] shadow-lg rounded-xl border border-sky-500/50 overflow-hidden font-sans">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
       <div className="bg-sky-500/10 p-3 border-b border-border flex items-center gap-2">
@@ -116,18 +116,6 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
           <button
             type="button"
             className={`nodrag rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
-              source === "preset"
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border bg-background text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => handleSetSource("preset")}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <Copy className="inline w-3 h-3 mr-1" /> Preset
-          </button>
-          <button
-            type="button"
-            className={`nodrag rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
               source === "upload"
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-border bg-background text-muted-foreground hover:text-foreground"
@@ -136,6 +124,18 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
             onPointerDown={(e) => e.stopPropagation()}
           >
             <Upload className="inline w-3 h-3 mr-1" /> Upload
+          </button>
+          <button
+            type="button"
+            className={`nodrag rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
+              source === "preset"
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border bg-background text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => handleSetSource("preset")}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <Copy className="inline w-3 h-3 mr-1" /> Preset
           </button>
         </div>
 

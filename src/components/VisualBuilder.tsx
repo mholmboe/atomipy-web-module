@@ -127,7 +127,7 @@ const initialNodes: Node[] = [
     id: "node_1",
     type: "structure",
     position: { x: 100, y: 150 },
-    data: { source: "preset", value: "Pyrophyllite_Lee_Guggenheim_1981.pdb" },
+    data: { source: "upload" },
   },
   {
     id: "node_2",
@@ -363,7 +363,7 @@ const templateWorkflows: Array<{ id: string; name: string; graph: WorkflowGraph 
           id: "tmpl2_1",
           type: "structure",
           position: { x: 40, y: 170 },
-          data: { source: "preset", value: "Pyrophyllite_Lee_Guggenheim_1981.pdb" },
+          data: { source: "upload" },
         },
         {
           id: "tmpl2_2",
@@ -426,13 +426,13 @@ const templateWorkflows: Array<{ id: string; name: string; graph: WorkflowGraph 
           id: "tmpl3_1",
           type: "structure",
           position: { x: 40, y: 120 },
-          data: { source: "preset", value: "Pyrophyllite_Lee_Guggenheim_1981.pdb" },
+          data: { source: "upload" },
         },
         {
           id: "tmpl3_2",
           type: "structure",
           position: { x: 40, y: 320 },
-          data: { source: "preset", value: "Kaolinite_GII_0.0487.pdb" },
+          data: { source: "upload" },
         },
         {
           id: "tmpl3_3",
@@ -530,6 +530,26 @@ export default function VisualBuilder() {
       .catch((err) => console.error("Failed to load presets", err));
   }, []);
 
+  // Update effect to inject presets into relevant nodes whenever library is fetched
+  useEffect(() => {
+    if (presets.length > 0) {
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (["structure", "insert", "molecule"].includes(node.type || "")) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                presets,
+              },
+            };
+          }
+          return node;
+        }),
+      );
+    }
+  }, [presets, setNodes]);
+
   useEffect(() => {
     setCustomTemplates(loadWorkflowEntriesFromStorage(WORKFLOW_TEMPLATE_STORAGE_KEY));
     setSavedWorkflows(loadWorkflowEntriesFromStorage(WORKFLOW_SAVED_STORAGE_KEY));
@@ -544,11 +564,11 @@ export default function VisualBuilder() {
     const baseData: Record<string, unknown> = {};
 
     if (type === "structure") {
-      baseData.source = "preset";
+      baseData.source = "upload";
     }
 
     if (type === "insert") {
-      baseData.source = "preset";
+      baseData.source = "upload";
       baseData.numMolecules = 1;
       baseData.minDistance = 2.0;
       baseData.rotateMode = "random";
