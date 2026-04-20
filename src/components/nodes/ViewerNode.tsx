@@ -119,11 +119,21 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
 
       viewer.zoomTo();
       viewer.render();
-      // Force a resize calculation to ensure the canvas fills the node immediately
-      viewer.resize();
+      // Use a small timeout to ensure the DOM is fully layouted before resizing
+      setTimeout(() => {
+        if (viewerInstance.current) {
+          viewerInstance.current.resize();
+          viewerInstance.current.render();
+        }
+      }, 100);
     } else {
       viewer.render();
-      viewer.resize();
+      setTimeout(() => {
+        if (viewerInstance.current) {
+          viewerInstance.current.resize();
+          viewerInstance.current.render();
+        }
+      }, 100);
     }
   }, [pdb, charges, showUnitCell, activeBg, viewStyle, showOutline, labelMode]);
 
@@ -133,7 +143,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       viewerInstance.current.resize();
       viewerInstance.current.render();
     }
-  }, [selected]); // Extra resize check when selected or resized via NodeResizer handled by the div container
+  }, [selected, labelMode]); // Add labelMode to trigger resize/re-render when toggling labels
 
   const handleResetCamera = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -187,9 +197,9 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                   <Maximize2 className="w-3.5 h-3.5" /> Label Mode
                 </DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => setLabelMode("none")}>No Labels</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLabelMode("symbol")}>Symbol (O)</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLabelMode("symbol+id")}>Symbol + ID (O1)</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLabelMode("charge")}>Symbol + Charge (O1 [-0.85412])</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLabelMode("symbol")}>Symbol</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLabelMode("symbol+id")}>Symbol + ID</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLabelMode("charge")}>Symbol + Charge</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setShowOutline(!showOutline)}>
                   {showOutline ? "❌ Disable Outlines" : "✨ Enable Outlines"}
