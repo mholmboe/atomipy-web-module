@@ -201,14 +201,16 @@ def list_presets():
     potential_dirs = [
         os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
         os.path.join(ap_data_dir, "structures", "minerals", "UC_conf"),
-        os.path.join(BASE_DIR, "UC_conf"),
     ]
     
     uc_conf_dir = None
     for d in potential_dirs:
         if os.path.exists(d):
             uc_conf_dir = d
+            print(f"Found preset structures in: {uc_conf_dir}")
             break
+    else:
+        print(f"FAILED to find preset structures. Checked: {potential_dirs}")
             
     presets = []
     if uc_conf_dir and os.path.exists(uc_conf_dir):
