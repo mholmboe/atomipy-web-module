@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { FileOutput, Download, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { Download, Save, ChevronDown, ChevronUp } from "lucide-react";
 import type { NodeComponentProps } from "./types";
 
 type ExportNodeData = {
@@ -18,6 +18,7 @@ type ExportNodeData = {
   moleculeName?: string;
   segid?: string;
   nrexcl?: number;
+  minimalisticScript?: boolean;
 };
 
 export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
@@ -247,7 +248,7 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
                   type="checkbox"
                   className="nodrag"
                   checked={data.minimalisticScript || false}
-                  onChange={(e) => updateNodeData(id, { ...data, minimalisticScript: e.target.checked })}
+                  onChange={(e) => updateNodeData(id, { minimalisticScript: e.target.checked })}
                   onPointerDown={(e) => e.stopPropagation()}
                 />
               </label>

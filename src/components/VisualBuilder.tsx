@@ -641,6 +641,7 @@ export default function VisualBuilder() {
       baseData.detectBimodal = false;
       baseData.bimodalThreshold = 30;
       baseData.nrexcl = 1;
+      baseData.minimalisticScript = false;
     }
 
     if (type === "xrd") {
