@@ -535,7 +535,7 @@ export default function VisualBuilder() {
     if (presets.length > 0) {
       setNodes((nds) =>
         nds.map((node) => {
-          if (["structure", "insert", "molecule"].includes(node.type || "")) {
+          if (["structure", "insert", "molecule", "preset", "upload"].includes(node.type || "")) {
             return {
               ...node,
               data: {
@@ -561,7 +561,9 @@ export default function VisualBuilder() {
   );
 
   const addNode = (type: string) => {
-    const baseData: Record<string, unknown> = {};
+    const baseData: Record<string, unknown> = {
+      presets: presets,
+    };
 
     if (type === "structure") {
       baseData.source = "upload";

@@ -135,13 +135,13 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
             onClick={() => handleSetSource("preset")}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <Copy className="inline w-3 h-3 mr-1" /> Preset
+            <Copy className="inline w-3 h-3 mr-1" /> Preset Structure
           </button>
         </div>
 
         {source === "preset" ? (
           <div>
-            <label className="text-xs font-semibold text-muted-foreground block mb-1">Template Preset</label>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1">Preset Structure</label>
             <select
               className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
               value={data.value || ""}

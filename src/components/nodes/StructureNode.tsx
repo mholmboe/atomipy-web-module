@@ -130,14 +130,14 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
             onClick={() => handleSetSource("preset")}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            Preset Slab
+            Preset Structure
           </button>
         </div>
 
         {source === "preset" ? (
           <div>
             <label className="text-xs font-semibold text-muted-foreground block mb-1 uppercase tracking-wider">
-              Select Mineral
+              Preset Structure
             </label>
             <select
               className="nodrag w-full text-sm bg-background border border-border rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary h-8"
