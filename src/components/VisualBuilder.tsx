@@ -1677,7 +1677,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
       }
       case "stats": {
         const logFile = pyEscape(getString(data, "logFile", "output.log"));
-        const ffname = pyEscape(getString(data, "ffname", "minff"));
+        const ffname = pyEscape(getString(data, "ffname", "none"));
         pythonCode += `ap.get_structure_stats(${inAtoms}, Box=${inBox}, log_file='${logFile}', ffname='${ffname}')\n`;
         // Pass atoms and box through unchanged
         stateVars.set(id, { atoms: inAtoms, box: inBox });
