@@ -17,7 +17,7 @@ import contextlib
 import queue
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(BASE_DIR)
+sys.path.insert(0, BASE_DIR)
 
 # Global lock to ensure only one memory-intensive build runs at a time
 BUILD_LOCK = threading.Lock()
@@ -199,9 +199,9 @@ def list_presets():
     ap = get_ap()
     ap_data_dir = os.path.dirname(ap.__file__)
     potential_dirs = [
+        os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
         os.path.join(ap_data_dir, "structures", "minerals", "UC_conf"),
         os.path.join(BASE_DIR, "UC_conf"),
-        os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
     ]
     
     uc_conf_dir = None

@@ -31,8 +31,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install atomipy from GitHub
-RUN pip install git+https://github.com/mholmboe/atomipy.git
+# Install atomipy dependencies (Note: atomipy is copied locally as a folder)
+# We rely on requirements.txt for all underlying libraries (numpy, scipy, etc.)
 
 # Copy the built frontend from the first stage
 COPY --from=frontend-build /app/dist ./dist
