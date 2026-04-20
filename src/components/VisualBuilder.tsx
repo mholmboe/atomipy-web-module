@@ -41,6 +41,7 @@ import {
   Maximize,
   FileOutput,
   Box,
+  Eye,
   GitMerge,
   BarChart3,
   Calculator,
@@ -1001,7 +1002,7 @@ export default function VisualBuilder() {
                 <Activity className="w-4 h-4" /> Stats
               </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("viewer")} title="3D Preview Structure">
-                <Box className="w-4 h-4" /> View
+                <Eye className="w-4 h-4" /> View
               </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
                 <FileOutput className="w-4 h-4" /> Export

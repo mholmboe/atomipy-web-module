@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Box as BoxIcon, Maximize2, RotateCw } from "lucide-react";
+import { Eye, RotateCw, Maximize2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { NodeComponentProps } from "./types";
 
@@ -81,11 +81,11 @@ export function ViewerNode({ id, data }: NodeComponentProps<ViewerNodeData>) {
   };
 
   return (
-    <Card className="w-[300px] shadow-lg transition-all border-indigo-500/30 bg-card/95 backdrop-blur-sm overflow-hidden nodrag">
+    <Card className="w-[300px] shadow-lg transition-all border-indigo-500/30 bg-card/95 backdrop-blur-sm overflow-hidden">
       <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500/80" />
       <CardHeader className="py-2.5 px-4 bg-indigo-500/10 border-b flex flex-row items-center justify-between">
         <CardTitle className="text-sm font-semibold flex items-center gap-2 text-indigo-700 dark:text-indigo-300">
-          <BoxIcon className="w-4 h-4" />
+          <Eye className="w-4 h-4" />
           {data.title || "Structure Viewer"}
         </CardTitle>
         <div className="flex gap-1">
@@ -98,7 +98,7 @@ export function ViewerNode({ id, data }: NodeComponentProps<ViewerNodeData>) {
           </button>
         </div>
       </CardHeader>
-      <CardContent className="p-0 relative bg-slate-950/5 aspect-square">
+      <CardContent className="p-0 relative bg-slate-950/5 aspect-square nodrag">
         <div 
           ref={viewerRef} 
           className="w-full h-full cursor-move"
