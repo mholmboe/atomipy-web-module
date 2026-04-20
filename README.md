@@ -1,8 +1,8 @@
-# Atomipy Visual Builder
+# atomipy web module
 
 A powerful, node-based visual programming environment for designing, manipulating, and analyzing molecular systems. Built on top of the **[atomipy](https://github.com/mholmboe/atomipy)** Python library, this web application allows researchers to create complex mineral-water systems through an intuitive graph interface.
 
-![Atomipy Visual Builder](public/screenshot.png) *(Note: Add actual screenshot if available)*
+![atomipy web module](public/screenshot.png) *(Note: Add actual screenshot if available)*
 
 ## 🚀 Key Features
 
@@ -84,4 +84,4 @@ docker run -p 5002:5002 atomipy-web
 - **Core Engine**: `atomipy` (Molecular geometry & topology logic).
 
 ## 📄 License
-This project is part of the Atomipy toolbox. See the main [atomipy](https://github.com/mholmboe/atomipy) repository for licensing details.
+This project is part of the atomipy web module toolbox. See the main [atomipy](https://github.com/mholmboe/atomipy) repository for licensing details.
