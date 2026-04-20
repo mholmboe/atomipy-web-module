@@ -9,6 +9,7 @@ type ExportNodeData = {
   topologyFormat?: "none" | "itp" | "lmp" | "psf";
   angleTerms?: "none" | "0" | "250" | "500" | "1500";
   writeConect?: boolean;
+  writeElement?: boolean;
   cifTitle?: string;
   topologyRmaxH?: number;
   topologyRmaxM?: number;
@@ -106,16 +107,28 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
         {showMore && (
           <div className="space-y-2 border border-border rounded-md p-2 bg-muted/30">
             {structureFormat === "pdb" && (
-              <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
-                Write CONECT records
-                <input
-                  type="checkbox"
-                  className="nodrag"
-                  checked={data.writeConect || false}
-                  onChange={(e) => updateNodeData(id, { ...data, writeConect: e.target.checked })}
-                  onPointerDown={(e) => e.stopPropagation()}
-                />
-              </label>
+              <>
+                <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
+                  Write CONECT records
+                  <input
+                    type="checkbox"
+                    className="nodrag"
+                    checked={data.writeConect || false}
+                    onChange={(e) => updateNodeData(id, { ...data, writeConect: e.target.checked })}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  />
+                </label>
+                <label className="nodrag flex items-center justify-between text-xs text-muted-foreground mt-1">
+                  Write Element symbols
+                  <input
+                    type="checkbox"
+                    className="nodrag"
+                    checked={data.writeElement ?? true}
+                    onChange={(e) => updateNodeData(id, { ...data, writeElement: e.target.checked })}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  />
+                </label>
+              </>
             )}
 
             {structureFormat === "cif" && (

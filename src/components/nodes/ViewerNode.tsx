@@ -119,7 +119,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
 
   return (
     <>
-      <Card className="w-[800px] h-[600px] shadow-2xl transition-all border-indigo-500/50 bg-card/95 backdrop-blur-md overflow-hidden flex flex-col">
+      <Card className="w-[500px] h-[500px] shadow-2xl transition-all border-indigo-500/50 bg-card/95 backdrop-blur-md overflow-hidden flex flex-col">
         <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500/80" />
         <CardHeader className="py-2.5 px-4 bg-indigo-500/10 border-b flex flex-row items-center justify-between shrink-0">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-indigo-700 dark:text-indigo-300 pointer-events-none">
