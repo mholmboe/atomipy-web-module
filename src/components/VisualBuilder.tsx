@@ -50,6 +50,7 @@ import {
   ChevronUp,
   ArrowUpDown,
   Activity,
+  Eraser,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -87,6 +88,7 @@ import { BondAngleNode } from "./nodes/BondAngleNode";
 import { BvsNode } from "./nodes/BvsNode";
 import { XrdNode } from "./nodes/XrdNode";
 import { ReorderNode } from "./nodes/ReorderNode";
+import { RemoveNode } from "./nodes/RemoveNode";
 import { StatsNode } from "./nodes/StatsNode";
 import { ViewerNode } from "./nodes/ViewerNode";
 import type { PresetOption } from "./nodes/types";
@@ -118,6 +120,7 @@ const nodeTypes = {
   bvs: BvsNode,
   xrd: XrdNode,
   reorder: ReorderNode,
+  remove: RemoveNode,
   stats: StatsNode,
   viewer: ViewerNode,
 };
@@ -277,6 +280,7 @@ const validateWorkflow = (nodes: Node[], edges: Edge[]): string[] => {
     "rotate",
     "scale",
     "slice",
+    "remove",
     "insert",
     "substitute",
     "fuse",
@@ -324,6 +328,18 @@ const validateWorkflow = (nodes: Node[], edges: Edge[]): string[] => {
       }
       if (source !== "upload" && !getString(data, "value", "").trim()) {
         errors.push(`Node "insert" (preset) has no template preset selected.`);
+      }
+    }
+
+    if (node.type === "remove") {
+      const hasAtomType = getString(data, "atomType", "").trim().length > 0;
+      const hasIndices = getString(data, "indices", "").trim().length > 0;
+      const hasMolids = getString(data, "molids", "").trim().length > 0;
+      const hasX = getBoolean(data, "xEnabled", false);
+      const hasY = getBoolean(data, "yEnabled", false);
+      const hasZ = getBoolean(data, "zEnabled", false);
+      if (!hasAtomType && !hasIndices && !hasMolids && !hasX && !hasY && !hasZ) {
+        errors.push(`Node "remove" needs at least one selection criterion.`);
       }
     }
   });
@@ -627,6 +643,22 @@ export default function VisualBuilder() {
       baseData.logFile = "bvs_summary.log";
       baseData.writeCsv = true;
       baseData.csvFile = "bvs_results.csv";
+    }
+
+    if (type === "remove") {
+      baseData.atomType = "";
+      baseData.indices = "";
+      baseData.molids = "";
+      baseData.logic = "and";
+      baseData.xEnabled = false;
+      baseData.yEnabled = false;
+      baseData.zEnabled = false;
+      baseData.xOp = "<";
+      baseData.yOp = "<";
+      baseData.zOp = "<";
+      baseData.xValue = 0;
+      baseData.yValue = 0;
+      baseData.zValue = 0;
     }
 
     if (type === "export") {
@@ -1079,6 +1111,9 @@ export default function VisualBuilder() {
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("slice")} title="Slice">
                   <Scissors className="w-4 h-4" /> Slice
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("remove")} title="Remove atom sites">
+                  <Eraser className="w-4 h-4" /> Remove
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("substitute")} title="Substitute">
                   <Diff className="w-4 h-4" /> Subst
@@ -1542,6 +1577,74 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         const removePy = removePartial ? "True" : "False";
 
         pythonCode += `${blockOutAtoms} = ap.slice(${inAtoms}, [${xlo}, ${ylo}, ${zlo}, ${xhiExpr}, ${yhiExpr}, ${zhiExpr}], remove_partial_molecules=${removePy})\n`;
+        stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        break;
+      }
+      case "remove": {
+        const atomTypeRaw = getString(data, "atomType", "").trim();
+        const indicesRaw = getString(data, "indices", "").trim();
+        const molidsRaw = getString(data, "molids", "").trim();
+        const logic = getString(data, "logic", "and").toLowerCase() === "or" ? "or" : "and";
+
+        const removeArgs: string[] = [];
+
+        if (atomTypeRaw) {
+          const atomTypeTokens = atomTypeRaw
+            .split(/[;,]+/)
+            .map((token) => token.trim())
+            .filter((token) => token.length > 0);
+          if (atomTypeTokens.length === 1) {
+            removeArgs.push(`atom_type='${pyEscape(atomTypeTokens[0])}'`);
+          } else if (atomTypeTokens.length > 1) {
+            removeArgs.push(`atom_type=[${atomTypeTokens.map((t) => `'${pyEscape(t)}'`).join(", ")}]`);
+          }
+        }
+
+        if (indicesRaw) {
+          const indexTokens = indicesRaw
+            .split(/[;,]+/)
+            .map((token) => token.trim())
+            .filter((token) => /^-?\d+$/.test(token))
+            .map((token) => parseInt(token, 10));
+          if (indexTokens.length === 1) {
+            removeArgs.push(`index=${indexTokens[0]}`);
+          } else if (indexTokens.length > 1) {
+            removeArgs.push(`index=[${indexTokens.join(", ")}]`);
+          }
+        }
+
+        if (molidsRaw) {
+          const molidTokens = molidsRaw
+            .split(/[;,]+/)
+            .map((token) => token.trim())
+            .filter((token) => /^-?\d+$/.test(token))
+            .map((token) => parseInt(token, 10));
+          if (molidTokens.length === 1) {
+            removeArgs.push(`molid=${molidTokens[0]}`);
+          } else if (molidTokens.length > 1) {
+            removeArgs.push(`molid=[${molidTokens.join(", ")}]`);
+          }
+        }
+
+        (["x", "y", "z"] as const).forEach((axis) => {
+          const enabled = getBoolean(data, `${axis}Enabled`, false);
+          if (!enabled) return;
+          const opRaw = getString(data, `${axis}Op`, "<");
+          const op = ["<", "<=", ">", ">=", "==", "!="].includes(opRaw) ? opRaw : "<";
+          const value = getNumber(data, `${axis}Value`, 0);
+          removeArgs.push(`${axis}=('${op}', ${value})`);
+        });
+
+        const removedVar = `removed_${index}`;
+        if (removeArgs.length === 0) {
+          pythonCode += `# Remove node has no valid criteria, passing unchanged\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+        } else {
+          removeArgs.push(`logic='${logic}'`);
+          removeArgs.push(`reindex=True`);
+          pythonCode += `${removedVar} = ap.remove(${inAtoms}, ${removeArgs.join(", ")})\n`;
+          pythonCode += `${blockOutAtoms} = ap.update(${removedVar}, force=True)\n`;
+        }
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
