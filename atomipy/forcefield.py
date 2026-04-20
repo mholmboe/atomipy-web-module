@@ -17,7 +17,7 @@ from .charge import charge_minff, charge_clayff, assign_formal_charges
 from .element import element  # Correct function name is 'element' not 'set_element'
 from .mass import set_atomic_masses
 
-def get_structure_stats(atoms, Box=None, total_charge=0, log_file='output.log', ffname='minff'):
+def get_structure_stats(atoms, Box=None, total_charge=None, log_file='output.log', ffname='minff'):
     """Generate statistics about atom types, coordination, and charges in the structure.
     
     This function analyzes atom types, their coordination environment, charges,
@@ -28,14 +28,29 @@ def get_structure_stats(atoms, Box=None, total_charge=0, log_file='output.log', 
         atoms: List of atom dictionaries containing 'type', 'neigh', 'charge', etc. keys.
         Box: Optional simulation cell dimensions. Accepts 1x3 (orthogonal),
              1x6 (Cell parameters), or 1x9 (triclinic GROMACS-style) arrays.
-        total_charge: Total charge of the system (default: 0). If 0, it will be calculated.
+        total_charge: Total charge of the system. If None, it will be calculated.
         log_file: Path to the output log file (default: 'output.log').
         ffname: The name of the forcefield used, e.g., 'minff' or 'clayff' (default: 'minff').
     
     Returns:
         A string containing the structure statistics.
     """
-    if total_charge == 0:
+    if Box is not None:
+        from .bond_angle import bond_angle
+        # Check if neighbor data is present by sampling the first 10 atoms
+        if atoms and not any(atoms[i].get('neigh') for i in range(min(len(atoms), 10))):
+            print(f"  No coordination data found. Auto-calculating bonds for {ffname} report...")
+            # Use bond_angle to populate neigh, bonds, and angles
+            atoms, _, _ = bond_angle(atoms, Box, calculate_coordination=True)
+
+    # Check if charges are missing or all zero
+    has_charges = atoms and any(atom.get('charge') is not None for atom in atoms)
+    if not has_charges or sum(abs(float(atom.get('charge', 0) or 0)) for atom in atoms) < 1e-10:
+        from .charge import assign_formal_charges
+        print("  No pre-defined charges found. Auto-assigning formal charges for report...")
+        atoms = assign_formal_charges(atoms)
+
+    if total_charge is None:
         total_charge = sum(float(a.get('charge', 0) or 0) for a in atoms)
     
     import numpy as np
@@ -204,7 +219,8 @@ def get_structure_stats(atoms, Box=None, total_charge=0, log_file='output.log', 
         output.append("-" * 80)
         output.append("")
     
-    output.append(f"Total charge ({ffname.upper()}): {total_charge:.7f}")
+    total_charge = float(total_charge) if total_charge is not None else 0.0
+    output.append(f"Total charge: {total_charge:.7f}\n")
     
     if abs(round(total_charge) - total_charge) > 1e-10:
         output.append("Warning: Non-integer total charge. Adjusting to nearest integer.")
@@ -224,7 +240,13 @@ def get_structure_stats(atoms, Box=None, total_charge=0, log_file='output.log', 
         
         # Find unique charge values (with some tolerance for floating point comparison)
         unique_charges = []
-        for charge in charges:
+        for raw_charge in charges:
+            # Cast to float to avoid TypeError if charges are strings
+            try:
+                charge = float(raw_charge)
+            except (ValueError, TypeError):
+                charge = 0.0
+                
             # Only add if this is a new unique charge (accounting for floating point precision)
             if not any(abs(charge - uc) < 1e-6 for uc in unique_charges):
                 unique_charges.append(charge)
