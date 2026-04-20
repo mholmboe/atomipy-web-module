@@ -39,7 +39,6 @@ COPY --from=frontend-build /app/dist ./dist
 
 # Copy the backend code and local data folders
 COPY app.py .
-COPY atomipy/ ./atomipy/
 
 # Set environment variables
 ENV PORT=5002
@@ -47,6 +46,7 @@ ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV MALLOC_ARENA_MAX=2
+ENV OMP_NUM_THREADS=1
 
 EXPOSE 5002
 

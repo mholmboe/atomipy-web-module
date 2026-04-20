@@ -22,7 +22,14 @@ sys.path.append(BASE_DIR)
 # Global lock to ensure only one memory-intensive build runs at a time
 BUILD_LOCK = threading.Lock()
 
-import atomipy as ap
+# Lazy loader for atomipy to reduce initial memory footprint
+_ap = None
+def get_ap():
+    global _ap
+    if _ap is None:
+        import atomipy
+        _ap = atomipy
+    return _ap
 
 app = Flask(__name__, static_folder="dist", static_url_path="")
 app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024  # 128 MB
@@ -43,15 +50,22 @@ def not_found(e):
 
 ALLOWED_EXTENSIONS = {"pdb", "gro", "xyz", "cif", "mmcif", "mcif"}
 
-AP_DATA_DIR = os.path.dirname(ap.__file__)
-PRESET_SLAB_FILES = {
-    "montmorillonite": os.path.join(AP_DATA_DIR, "structures/minerals/3WNaMMT.pdb"),
-    "pyrophyllite": os.path.join(AP_DATA_DIR, "structures/minerals/Pyrophyllite.pdb"),
-    "kaolinite": os.path.join(AP_DATA_DIR, "structures/minerals/UC_conf/Kaolinite_GII_0.0487.pdb"),
-    "muscovite": os.path.join(AP_DATA_DIR, "structures/minerals/UC_conf/Muscovite_Rothbauer_GII_0.142.pdb"),
-    "talc": os.path.join(AP_DATA_DIR, "structures/minerals/UC_conf/Talc_GII_0.0748.pdb"),
-    "brucite": os.path.join(AP_DATA_DIR, "structures/minerals/UC_conf/Brucite_GII_0.0027.pdb"),
-}
+# These will be initialized lazily to avoid importing atomipy at the top level
+_preset_slabs = None
+def get_preset_slabs():
+    global _preset_slabs
+    if _preset_slabs is None:
+        ap = get_ap()
+        data_dir = os.path.dirname(ap.__file__)
+        _preset_slabs = {
+            "montmorillonite": os.path.join(data_dir, "structures/minerals/3WNaMMT.pdb"),
+            "pyrophyllite": os.path.join(data_dir, "structures/minerals/Pyrophyllite.pdb"),
+            "kaolinite": os.path.join(data_dir, "structures/minerals/UC_conf/Kaolinite_GII_0.0487.pdb"),
+            "muscovite": os.path.join(data_dir, "structures/minerals/UC_conf/Muscovite_Rothbauer_GII_0.142.pdb"),
+            "talc": os.path.join(data_dir, "structures/minerals/UC_conf/Talc_GII_0.0748.pdb"),
+            "brucite": os.path.join(data_dir, "structures/minerals/UC_conf/Brucite_GII_0.0027.pdb"),
+        }
+    return _preset_slabs
 
 
 def _safe_filename(value, fallback):
@@ -77,18 +91,18 @@ def _parse_payload() -> dict[str, Any]:
 def _as_box_dim(box_like):
     if box_like is None or (hasattr(box_like, "__len__") and len(box_like) == 0):
         # Default fallback as requested by user
-        return ap.Cell2Box_dim([50.0, 50.0, 50.0, 90.0, 90.0, 90.0])
+        return get_ap().Cell2Box_dim([50.0, 50.0, 50.0, 90.0, 90.0, 90.0])
     
     vals = [float(v) for v in box_like]
     if len(vals) in (3, 9):
         return vals
     if len(vals) == 6:
-        return ap.Cell2Box_dim(vals)
+        return get_ap().Cell2Box_dim(vals)
     raise ValueError(f"Unsupported box/cell format. Expected 3, 6, or 9 numbers, got {len(vals)}.")
 
 
 def _import_structure(file_path):
-    atoms, box_or_cell = ap.import_auto(file_path)
+    atoms, box_or_cell = get_ap().import_auto(file_path)
     box_dim = _as_box_dim(box_or_cell)
     return atoms, box_dim
 
@@ -182,11 +196,10 @@ def upload_file():
 
 @app.route("/api/presets", methods=["GET"])
 def list_presets():
-    # Try multiple locations for the structure library
-    # 1. Inside the installed atomipy package
-    # 2. In the local UC_conf directory (fallback for different environments)
+    ap = get_ap()
+    ap_data_dir = os.path.dirname(ap.__file__)
     potential_dirs = [
-        os.path.join(AP_DATA_DIR, "structures", "minerals", "UC_conf"),
+        os.path.join(ap_data_dir, "structures", "minerals", "UC_conf"),
         os.path.join(BASE_DIR, "UC_conf"),
         os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
     ]
@@ -263,7 +276,7 @@ def build_system():
         auto_gamma = bool(box_cfg.get("autoGamma", False))
         
         final_box_raw = [lx, ly, lz, alpha, beta, gamma]
-        final_box = ap.Cell2Box_dim(final_box_raw)
+        final_box = get_ap().Cell2Box_dim(final_box_raw)
 
         output_name = _safe_filename(payload.get("outputName"), "atomipy_system")
         output_format = str(payload.get("outputFormat", "gromacs")).lower()
@@ -290,9 +303,9 @@ def build_system():
                         raise ValueError(f"Preset slab at index {idx} has no presetId.")
                     slab_path = os.path.join(BASE_DIR, "UC_conf", str(preset_id))
                     if not os.path.exists(slab_path):
-                        rel = PRESET_SLAB_FILES.get(str(preset_id))
+                        rel = get_preset_slabs().get(str(preset_id))
                         if rel:
-                            slab_path = os.path.join(BASE_DIR, rel)
+                            slab_path = rel
                         else:
                             raise ValueError(f"Preset file not found: {preset_id}")
 
@@ -327,7 +340,7 @@ def build_system():
                     if auto_alpha: final_box_raw[3] = slab_cell[3]
                     if auto_beta: final_box_raw[4] = slab_cell[4]
                     if auto_gamma: final_box_raw[5] = slab_cell[5]
-                    final_box = ap.Cell2Box_dim(final_box_raw)
+                    final_box = get_ap().Cell2Box_dim(final_box_raw)
 
                 resname = _safe_resname(slab.get("name", f"SLAB{idx+1}"), idx)
                 for atom in slab_atoms:
@@ -525,8 +538,10 @@ def build_stream():
         def generate():
             with tempfile.TemporaryDirectory(prefix="atomipy_stream_") as work_dir:
                 # 1. Setup Environment (Same as execute_script)
+                ap = get_ap()
+                ap_data_dir = os.path.dirname(ap.__file__)
                 potential_dirs = [
-                    os.path.join(AP_DATA_DIR, "structures", "minerals", "UC_conf"),
+                    os.path.join(ap_data_dir, "structures", "minerals", "UC_conf"),
                     os.path.join(BASE_DIR, "UC_conf"),
                     os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
                 ]
@@ -571,7 +586,7 @@ def build_stream():
                                 # Passing ap and other modules explicitly
                                 exec_globals = {
                                     "__name__": "__main__",
-                                    "ap": ap,
+                                    "ap": get_ap(),
                                     "os": os,
                                     "sys": sys,
                                     "json": json,
@@ -695,8 +710,10 @@ def execute_script():
 
         with tempfile.TemporaryDirectory(prefix="atomipy_v2_") as work_dir:
             # Create symlink to UC_conf by checking potential locations
+            ap = get_ap()
+            ap_data_dir = os.path.dirname(ap.__file__)
             potential_dirs = [
-                os.path.join(AP_DATA_DIR, "structures", "minerals", "UC_conf"),
+                os.path.join(ap_data_dir, "structures", "minerals", "UC_conf"),
                 os.path.join(BASE_DIR, "UC_conf"),
                 os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
             ]
@@ -784,6 +801,31 @@ def execute_script():
     except Exception as exc:
         return jsonify({"error": str(exc), "traceback": traceback.format_exc()}), 500
 
+
+import time
+
+def prune_cache_loop():
+    """Background thread to delete result files older than 1 hour."""
+    while True:
+        try:
+            now = time.time()
+            cutoff = now - 3600 # 1 hour
+            if os.path.exists(CACHE_DIR):
+                for f in os.listdir(CACHE_DIR):
+                    p = os.path.join(CACHE_DIR, f)
+                    if os.path.getmtime(p) < cutoff:
+                        with contextlib.suppress(Exception):
+                            if os.path.isfile(p):
+                                os.remove(p)
+                            elif os.path.isdir(p):
+                                import shutil
+                                shutil.rmtree(p)
+        except Exception as e:
+            print(f"Error in pruning thread: {e}")
+        time.sleep(1800) # Run every 30 mins
+
+# Start the pruning thread
+threading.Thread(target=prune_cache_loop, daemon=True).start()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5002, debug=True)
