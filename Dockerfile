@@ -43,13 +43,17 @@ COPY atomipy ./atomipy
 
 # Set environment variables
 ENV PORT=5002
+ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV MALLOC_ARENA_MAX=2
 ENV OMP_NUM_THREADS=1
 
+# Expose is documentation only for Cloud Run, but helpful for Render
 EXPOSE 5002
 
-# Run the app using gunicorn with threaded workers and 5-min timeout (optimized for 512MB RAM)
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-5002} --workers 1 --worker-class gthread --threads 2 --timeout 300 app:app"]
+# Run the app using gunicorn
+# Note: Cloud Run uses $PORT, Render can use $PORT or a fixed one.
+# We bind to 0.0.0.0 and the PORT environment variable.
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --workers 1 --worker-class gthread --threads 4 --timeout 300 app:app"]
