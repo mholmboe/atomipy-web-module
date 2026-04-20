@@ -87,6 +87,7 @@ import { BvsNode } from "./nodes/BvsNode";
 import { XrdNode } from "./nodes/XrdNode";
 import { ReorderNode } from "./nodes/ReorderNode";
 import { StatsNode } from "./nodes/StatsNode";
+import { ViewerNode } from "./nodes/ViewerNode";
 import type { PresetOption } from "./nodes/types";
 
 const nodeTypes = {
@@ -117,6 +118,7 @@ const nodeTypes = {
   xrd: XrdNode,
   reorder: ReorderNode,
   stats: StatsNode,
+  viewer: ViewerNode,
 };
 
 const initialNodes: Node[] = [
@@ -932,6 +934,19 @@ export default function VisualBuilder() {
                 window.location.href = `/api/download-result/${data.token}`;
               }
               return;
+            } else if (data.type === "visualize") {
+              const { nodeId, data: pdbData } = data;
+              setNodes((nds) =>
+                nds.map((node) => {
+                  if (node.id === nodeId) {
+                    return {
+                      ...node,
+                      data: { ...node.data, pdb: pdbData },
+                    };
+                  }
+                  return node;
+                })
+              );
             }
           } catch (err) {
             console.error("Error parsing stream chunk:", err);
@@ -984,6 +999,9 @@ export default function VisualBuilder() {
               </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("stats")} title="Generate Structure Stats">
                 <Activity className="w-4 h-4" /> Stats
+              </Button>
+              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("viewer")} title="3D Preview Structure">
+                <Box className="w-4 h-4" /> View
               </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
                 <FileOutput className="w-4 h-4" /> Export
@@ -1670,6 +1688,17 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
       case "stats": {
         const logFile = pyEscape(getString(data, "logFile", "output.log"));
         pythonCode += `ap.get_structure_stats(${inAtoms}, Box=${inBox}, log_file='${logFile}')\n`;
+        // Pass atoms and box through unchanged
+        stateVars.set(id, { atoms: inAtoms, box: inBox });
+        break;
+      }
+      case "viewer": {
+        // Generate PDB snapshot for the frontend viewer
+        pythonCode += `import io\n`;
+        pythonCode += `_vis_buf = io.StringIO()\n`;
+        pythonCode += `ap.write_pdb(${inAtoms}, ${inBox}, _vis_buf)\n`;
+        pythonCode += `_vis_pdb_str = _vis_buf.getvalue().replace('\\n', '\\\\n')\n`;
+        pythonCode += `print(f"__VISUALIZE_${id}__:{_vis_pdb_str}")\n`;
         // Pass atoms and box through unchanged
         stateVars.set(id, { atoms: inAtoms, box: inBox });
         break;

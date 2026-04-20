@@ -516,6 +516,8 @@ def build_stream():
             @staticmethod
             def log(line): return SSE._fmt("log", {"message": line})
             @staticmethod
+            def visualize(node_id, data): return SSE._fmt("visualize", {"nodeId": node_id, "data": data})
+            @staticmethod
             def complete(token, success): return SSE._fmt("complete", {"token": token, "success": success})
             @staticmethod
             def _fmt(t, d): return f"data: {json.dumps({'type': t, **d})}\n\n"
@@ -608,6 +610,14 @@ def build_stream():
                                             try:
                                                 parts = curr_line.strip().split(":")
                                                 yield SSE.progress(parts[1], parts[2])
+                                            except: pass
+                                        elif "__VISUALIZE_" in curr_line:
+                                            try:
+                                                # Format: __VISUALIZE_node_id__:<pdb_data_with_escaped_newlines>
+                                                parts = curr_line.strip().split("__:", 1)
+                                                node_id = parts[0].replace("__VISUALIZE_", "")
+                                                pdb_data = parts[1].replace("\\n", "\n")
+                                                yield SSE.visualize(node_id, pdb_data)
                                             except: pass
                                         else:
                                             yield SSE.log(curr_line)
