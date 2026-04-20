@@ -119,8 +119,11 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
 
       viewer.zoomTo();
       viewer.render();
+      // Force a resize calculation to ensure the canvas fills the node immediately
+      viewer.resize();
     } else {
       viewer.render();
+      viewer.resize();
     }
   }, [pdb, charges, showUnitCell, activeBg, viewStyle, showOutline, labelMode]);
 
