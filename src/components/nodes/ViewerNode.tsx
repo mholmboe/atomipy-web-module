@@ -20,6 +20,7 @@ declare global {
 
 type ViewerNodeData = {
   pdb?: string;
+  charges?: number[];
   title?: string;
   showUnitCell?: boolean;
 };
@@ -37,8 +38,10 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const [activeBg, setActiveBg] = useState<keyof typeof BACKGROUNDS>("light");
   const [viewStyle, setViewStyle] = useState<"stick" | "sphere" | "both">("both");
   const [showOutline, setShowOutline] = useState(true);
+  const [labelMode, setLabelMode] = useState<"none" | "symbol" | "symbol+id" | "charge">("none");
 
   const pdb = data.pdb || "";
+  const charges = data.charges || [];
   const showUnitCell = data.showUnitCell ?? true;
 
   useEffect(() => {
@@ -66,14 +69,47 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
         styleConfig.sphere = { scale: 0.25, colorscheme: "Jmol" };
       }
       
-      if (showOutline) {
-        // Outline helps white atoms on white background
-        viewer.setStyle({}, { ...styleConfig, outline: { color: "black", width: 0.05 } });
-      } else {
-        viewer.setStyle({}, styleConfig);
+      const globalOptions = showOutline ? { outline: { color: "black", width: 0.05 } } : {};
+      
+      // 1. Set global style
+      viewer.setStyle({}, { ...styleConfig, ...globalOptions });
+      
+      // 2. Override for Hydrogens to ensure they are visible and distinct
+      viewer.setStyle({ elem: "H" }, {
+        sphere: { scale: 0.15, colorscheme: "Jmol" },
+        stick: { radius: 0.08, colorscheme: "Jmol" },
+        ...globalOptions
+      });
+      
+      // 3. Add Labels if enabled
+      if (labelMode !== "none") {
+        const atoms = model.getAtoms();
+        atoms.forEach((atom: any, i: number) => {
+          let labelText = "";
+          if (labelMode === "symbol") {
+            labelText = atom.elem;
+          } else if (labelMode === "symbol+id") {
+            labelText = `${atom.elem}${i + 1}`;
+          } else if (labelMode === "charge") {
+            const charge = charges[i] !== undefined ? charges[i] : (atom.b || 0);
+            labelText = `${atom.elem}${i + 1} [${charge.toFixed(5)}]`;
+          }
+
+          if (labelText) {
+            viewer.addLabel(labelText, {
+              fontSize: labelMode === "charge" ? 10 : 12,
+              fontColor: "white",
+              backgroundColor: "rgba(0,0,0,0.4)",
+              backgroundOpacity: 0.6,
+              borderThickness: 0,
+              showBackground: true,
+              position: { x: atom.x, y: atom.y, z: atom.z }
+            });
+          }
+        });
       }
       
-      // Add Unit Cell if requested and available in PDB
+      // 4. Add Unit Cell if requested and available in PDB
       if (showUnitCell) {
         viewer.addUnitCell(model, {
           box: { color: "#6366f1", linewidth: 1.5 },
@@ -86,7 +122,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     } else {
       viewer.render();
     }
-  }, [pdb, showUnitCell, activeBg, viewStyle, showOutline]);
+  }, [pdb, charges, showUnitCell, activeBg, viewStyle, showOutline, labelMode]);
 
   // Handle Resize Events
   useEffect(() => {
@@ -143,6 +179,14 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                 <DropdownMenuItem onClick={() => setViewStyle("both")}>Ball & Stick</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setViewStyle("stick")}>Sticks Only</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setViewStyle("sphere")}>Spheres Only</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="flex items-center gap-2">
+                  <Maximize2 className="w-3.5 h-3.5" /> Label Mode
+                </DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => setLabelMode("none")}>No Labels</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLabelMode("symbol")}>Symbol (O)</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLabelMode("symbol+id")}>Symbol + ID (O1)</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLabelMode("charge")}>Symbol + Charge (O1 [-0.85412])</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setShowOutline(!showOutline)}>
                   {showOutline ? "❌ Disable Outlines" : "✨ Enable Outlines"}

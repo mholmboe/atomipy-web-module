@@ -619,6 +619,14 @@ def build_stream():
                                                 pdb_data = parts[1].replace("\\n", "\n")
                                                 yield SSE.visualize(node_id, pdb_data)
                                             except: pass
+                                        elif "__CHARGES_" in curr_line:
+                                            try:
+                                                # Format: __CHARGES_node_id__:[json_array]
+                                                parts = curr_line.strip().split("__:", 1)
+                                                node_id = parts[0].replace("__CHARGES_", "")
+                                                charges_json = parts[1]
+                                                yield f"data: {json.dumps({'type': 'charges', 'nodeId': node_id, 'data': json.loads(charges_json)})}\n\n"
+                                            except: pass
                                         else:
                                             yield SSE.log(curr_line)
                                     curr_line = ""

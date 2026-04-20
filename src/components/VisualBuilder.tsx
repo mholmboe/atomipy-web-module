@@ -948,6 +948,19 @@ export default function VisualBuilder() {
                   return node;
                 })
               );
+            } else if (data.type === "charges") {
+              const { nodeId, data: chargeData } = data;
+              setNodes((nds) =>
+                nds.map((node) => {
+                  if (node.id === nodeId) {
+                    return {
+                      ...node,
+                      data: { ...node.data, charges: chargeData },
+                    };
+                  }
+                  return node;
+                })
+              );
             }
           } catch (err) {
             console.error("Error parsing stream chunk:", err);
@@ -1695,12 +1708,16 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
       }
       case "viewer": {
         // Generate PDB snapshot for the frontend viewer
-        pythonCode += `import io\n`;
+        pythonCode += `import io, json\n`;
         pythonCode += `if ${inAtoms} is not None:\n`;
         pythonCode += `    _vis_buf = io.StringIO()\n`;
-        pythonCode += `    ap.write_pdb(${inAtoms}, ${inBox}, _vis_buf)\n`;
+        pythonCode += `    # Write with CONECT records to show bonds (and H's)\n`;
+        pythonCode += `    ap.write_pdb(${inAtoms}, ${inBox}, _vis_buf, write_conect=True)\n`;
         pythonCode += `    _vis_pdb_str = _vis_buf.getvalue().replace('\\n', '\\\\n')\n`;
         pythonCode += `    print(f"__VISUALIZE_${id}__:{_vis_pdb_str}")\n`;
+        pythonCode += `    # Stream raw high-precision charges for labeling\n`;
+        pythonCode += `    _vis_charges = [a.get('charge', 0) for a in ${inAtoms}]\n`;
+        pythonCode += `    print(f"__CHARGES_${id}__:{json.dumps(_vis_charges)}")\n`;
         // Pass atoms and box through unchanged
         stateVars.set(id, { atoms: inAtoms, box: inBox });
         break;
