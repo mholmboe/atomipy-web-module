@@ -1,11 +1,11 @@
 import React from "react";
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { FileText } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 export function StatsNode({ id, data, isConnectable }: { id: string; data: any; isConnectable: boolean }) {
-  const updateNodeData = data.updateNodeData;
+  const { updateNodeData } = useReactFlow();
   const logFile = data.logFile || "output.log";
   const ffname = data.ffname || "none";
   const showMore = data.showMore || false;
