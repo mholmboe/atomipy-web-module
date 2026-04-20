@@ -123,31 +123,23 @@ const initialNodes: Node[] = [
   {
     id: "node_1",
     type: "structure",
-    position: { x: 50, y: 150 },
+    position: { x: 100, y: 150 },
     data: { source: "preset", value: "Pyrophyllite_Lee_Guggenheim_1981.pdb" },
   },
   {
     id: "node_2",
-    type: "replicate",
-    position: { x: 400, y: 150 },
-    data: { x: 6, y: 4, z: 1 },
-  },
-  {
-    id: "node_3",
     type: "export",
-    position: { x: 750, y: 150 },
+    position: { x: 500, y: 150 },
     data: {
       outputName: "system",
-      structureFormat: "xyz",
+      structureFormat: "pdb",
       topologyFormat: "none",
-      angleTerms: "500",
     },
   },
 ];
 
 const initialEdges: Edge[] = [
   { id: "e1-2", source: "node_1", target: "node_2" },
-  { id: "e2-3", source: "node_2", target: "node_3" },
 ];
 
 type NodeDataMap = Record<string, unknown>;
