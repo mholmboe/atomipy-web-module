@@ -38,10 +38,8 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const [activeBg, setActiveBg] = useState<keyof typeof BACKGROUNDS>("light");
   const [viewStyle, setViewStyle] = useState<"stick" | "sphere" | "both">("both");
   const [showOutline, setShowOutline] = useState(true);
-  const [labelMode, setLabelMode] = useState<"none" | "symbol" | "symbol+id" | "charge">("none");
 
   const pdb = data.pdb || "";
-  const charges = data.charges || [];
   const showUnitCell = data.showUnitCell ?? true;
 
   useEffect(() => {
@@ -59,7 +57,8 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     viewer.clear();
 
     if (pdb) {
-      const model = viewer.addModel(pdb, "pdb");
+      // 1. Add model with keepH: true to ensure Hydrogens aren't stripped for clarity
+      const model = viewer.addModel(pdb, "pdb", { keepH: true });
       
       const styleConfig: any = {};
       if (viewStyle === "stick" || viewStyle === "both") {
@@ -70,46 +69,9 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       }
       
       const globalOptions = showOutline ? { outline: { color: "black", width: 0.05 } } : {};
-      
-      // 1. Set global style
       viewer.setStyle({}, { ...styleConfig, ...globalOptions });
       
-      // 2. Override for Hydrogens to ensure they are visible and distinct
-      viewer.setStyle({ elem: "H" }, {
-        sphere: { scale: 0.15, colorscheme: "Jmol" },
-        stick: { radius: 0.08, colorscheme: "Jmol" },
-        ...globalOptions
-      });
-      
-      // 3. Add Labels if enabled
-      if (labelMode !== "none") {
-        const atoms = model.getAtoms();
-        atoms.forEach((atom: any, i: number) => {
-          let labelText = "";
-          if (labelMode === "symbol") {
-            labelText = atom.elem;
-          } else if (labelMode === "symbol+id") {
-            labelText = `${atom.elem}${i + 1}`;
-          } else if (labelMode === "charge") {
-            const charge = charges[i] !== undefined ? charges[i] : (atom.b || 0);
-            labelText = `${atom.elem}${i + 1} [${charge.toFixed(5)}]`;
-          }
-
-          if (labelText) {
-            viewer.addLabel(labelText, {
-              fontSize: labelMode === "charge" ? 10 : 12,
-              fontColor: "white",
-              backgroundColor: "rgba(0,0,0,0.4)",
-              backgroundOpacity: 0.6,
-              borderThickness: 0,
-              showBackground: true,
-              position: { x: atom.x, y: atom.y, z: atom.z }
-            });
-          }
-        });
-      }
-      
-      // 4. Add Unit Cell if requested and available in PDB
+      // 2. Add Unit Cell if requested and available in PDB
       if (showUnitCell) {
         viewer.addUnitCell(model, {
           box: { color: "#6366f1", linewidth: 1.5 },
@@ -119,31 +81,33 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
 
       viewer.zoomTo();
       viewer.render();
-      // Use a small timeout to ensure the DOM is fully layouted before resizing
+      
+      // 3. Force multiple resize checks to ensure the canvas fills the large node immediately
       setTimeout(() => {
         if (viewerInstance.current) {
           viewerInstance.current.resize();
           viewerInstance.current.render();
         }
-      }, 100);
+      }, 50);
+      setTimeout(() => {
+        if (viewerInstance.current) {
+          viewerInstance.current.resize();
+          viewerInstance.current.render();
+        }
+      }, 250);
     } else {
       viewer.render();
-      setTimeout(() => {
-        if (viewerInstance.current) {
-          viewerInstance.current.resize();
-          viewerInstance.current.render();
-        }
-      }, 100);
+      viewer.resize();
     }
-  }, [pdb, charges, showUnitCell, activeBg, viewStyle, showOutline, labelMode]);
+  }, [pdb, showUnitCell, activeBg, viewStyle, showOutline]);
 
-  // Handle Resize Events
+  // Ensure re-render/resize when selected
   useEffect(() => {
     if (viewerInstance.current) {
       viewerInstance.current.resize();
       viewerInstance.current.render();
     }
-  }, [selected, labelMode]); // Add labelMode to trigger resize/re-render when toggling labels
+  }, [selected]);
 
   const handleResetCamera = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -155,15 +119,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
 
   return (
     <>
-      <NodeResizer 
-        minWidth={200} 
-        minHeight={200} 
-        isVisible={selected} 
-        lineClassName="border-indigo-400" 
-        handleClassName="h-3 w-3 bg-white border-2 border-indigo-500 rounded-sm"
-      />
-      
-      <Card className="w-full h-full shadow-lg transition-all border-indigo-500/30 bg-card/95 backdrop-blur-sm overflow-hidden flex flex-col min-w-[250px] min-h-[250px]">
+      <Card className="w-[800px] h-[600px] shadow-2xl transition-all border-indigo-500/50 bg-card/95 backdrop-blur-md overflow-hidden flex flex-col">
         <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500/80" />
         <CardHeader className="py-2.5 px-4 bg-indigo-500/10 border-b flex flex-row items-center justify-between shrink-0">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-indigo-700 dark:text-indigo-300 pointer-events-none">
@@ -193,14 +149,6 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                 <DropdownMenuItem onClick={() => setViewStyle("stick")}>Sticks Only</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setViewStyle("sphere")}>Spheres Only</DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel className="flex items-center gap-2">
-                  <Maximize2 className="w-3.5 h-3.5" /> Label Mode
-                </DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => setLabelMode("none")}>No Labels</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLabelMode("symbol")}>Symbol</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLabelMode("symbol+id")}>Symbol + ID</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLabelMode("charge")}>Symbol + Charge</DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setShowOutline(!showOutline)}>
                   {showOutline ? "❌ Disable Outlines" : "✨ Enable Outlines"}
                 </DropdownMenuItem>
@@ -210,7 +158,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
             <button 
               onClick={handleResetCamera}
               className="p-1 hover:bg-indigo-500/20 rounded-md transition-colors text-indigo-600"
-              title="Reset Camera"
+              title="Reset View"
             >
               <RotateCw className="w-3.5 h-3.5" />
             </button>
@@ -223,7 +171,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
           />
           {!pdb && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground bg-muted/10 pointer-events-none">
-              <Maximize2 className="w-8 h-8 opacity-20 mb-2" />
+              <Eye className="w-8 h-8 opacity-20 mb-2" />
               <p className="text-xs font-medium">Click 'Build' to view structure</p>
             </div>
           )}
