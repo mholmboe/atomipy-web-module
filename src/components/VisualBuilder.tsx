@@ -1925,18 +1925,27 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
     const nodeBlock = pythonCode.slice(nodeBlockStart);
     pythonCode = pythonCode.slice(0, nodeBlockStart);
     const trimmedNodeBlock = nodeBlock.endsWith("\n") ? nodeBlock.slice(0, -1) : nodeBlock;
-    const indentedNodeBlock = trimmedNodeBlock
-      .split("\n")
-      .map((line) => (line ? `    ${line}` : ""))
-      .join("\n");
 
-    pythonCode += `try:\n`;
-    if (indentedNodeBlock.trim().length > 0) {
-      pythonCode += `${indentedNodeBlock}\n`;
+    if (isMinimal) {
+      if (trimmedNodeBlock.trim().length > 0) {
+        pythonCode += `${trimmedNodeBlock}\n`;
+      } else {
+        pythonCode += `# Empty operation\n`;
+      }
     } else {
-      pythonCode += `    pass\n`;
+      const indentedNodeBlock = trimmedNodeBlock
+        .split("\n")
+        .map((line) => (line ? `    ${line}` : ""))
+        .join("\n");
+
+      pythonCode += `try:\n`;
+      if (indentedNodeBlock.trim().length > 0) {
+        pythonCode += `${indentedNodeBlock}\n`;
+      } else {
+        pythonCode += `    pass\n`;
+      }
+      pythonCode += `except Exception as _node_exc: __report_error__('${opTypeEscaped}', '${opIdEscaped}', _node_exc)\n`;
     }
-    pythonCode += `except Exception as _node_exc: __report_error__('${opTypeEscaped}', '${opIdEscaped}', _node_exc)\n`;
   });
 
   return pythonCode;
