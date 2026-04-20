@@ -1696,10 +1696,11 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
       case "viewer": {
         // Generate PDB snapshot for the frontend viewer
         pythonCode += `import io\n`;
-        pythonCode += `_vis_buf = io.StringIO()\n`;
-        pythonCode += `ap.write_pdb(${inAtoms}, ${inBox}, _vis_buf)\n`;
-        pythonCode += `_vis_pdb_str = _vis_buf.getvalue().replace('\\n', '\\\\n')\n`;
-        pythonCode += `print(f"__VISUALIZE_${id}__:{_vis_pdb_str}")\n`;
+        pythonCode += `if ${inAtoms} is not None:\n`;
+        pythonCode += `    _vis_buf = io.StringIO()\n`;
+        pythonCode += `    ap.write_pdb(${inAtoms}, ${inBox}, _vis_buf)\n`;
+        pythonCode += `    _vis_pdb_str = _vis_buf.getvalue().replace('\\n', '\\\\n')\n`;
+        pythonCode += `    print(f"__VISUALIZE_${id}__:{_vis_pdb_str}")\n`;
         // Pass atoms and box through unchanged
         stateVars.set(id, { atoms: inAtoms, box: inBox });
         break;
