@@ -1,6 +1,8 @@
 export type NodeComponentProps<TData extends Record<string, unknown>> = {
   id: string;
   data: TData;
+  selected?: boolean;
+  dragging?: boolean;
 };
 
 export type PresetOption = {
