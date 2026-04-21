@@ -22,7 +22,7 @@ A powerful, node-based visual programming environment for designing, manipulatin
 
 ### Online Access
 Use the hosted version directly at:  
-👉 **[atomipy web module](https://atomipy-web-module-705436360916.europe-north1.run.app/)**
+👉 **[www.atomipy.io](https://www.atomipy.io)** (also mirrored at [atomipy.io](https://atomipy.io) and [top.atomipy.io](https://top.atomipy.io))
 
 ---
 
