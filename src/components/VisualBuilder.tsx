@@ -55,6 +55,8 @@ import {
   LayoutGrid,
   Minimize,
   History,
+  Move3D,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -72,73 +74,87 @@ import { StructureNode } from "./nodes/StructureNode";
 import { ReplicateNode } from "./nodes/ReplicateNode";
 import { ExportNode } from "./nodes/ExportNode";
 import { AddIonsNode } from "./nodes/AddIonsNode";
+import { BoxNode } from "./nodes/BoxNode";
+import { MergeNode } from "./nodes/MergeNode";
+import { AddNode } from "./nodes/AddNode";
+import { InsertNode } from "./nodes/InsertNode";
+import { ForcefieldNode } from "./nodes/ForcefieldNode";
+import { BondAngleNode } from "./nodes/BondAngleNode";
+import { XrdNode } from "./nodes/XrdNode";
+import { ViewerNode } from "./nodes/ViewerNode";
+import { GridNode } from "./nodes/GridNode";
+import { TrajectoryNode } from "./nodes/TrajectoryNode";
+// New composite nodes
+import { TransformNode } from "./nodes/TransformNode";
+import { PBCNode } from "./nodes/PBCNode";
+import { EditNode } from "./nodes/EditNode";
+import { ChemistryNode } from "./nodes/ChemistryNode";
+import { SolventNode } from "./nodes/SolventNode";
+import { AnalysisNode } from "./nodes/AnalysisNode";
+// Keep old nodes registered so saved workflows still load
 import { SolvateNode } from "./nodes/SolvateNode";
 import { PositionNode } from "./nodes/PositionNode";
 import { WrapNode } from "./nodes/WrapNode";
-import { BoxNode } from "./nodes/BoxNode";
 import { AddHNode } from "./nodes/AddHNode";
-import { MergeNode } from "./nodes/MergeNode";
-import { AddNode } from "./nodes/AddNode";
 import { RotateNode } from "./nodes/RotateNode";
 import { ScaleNode } from "./nodes/ScaleNode";
 import { SliceNode } from "./nodes/SliceNode";
-import { InsertNode } from "./nodes/InsertNode";
 import { SubstituteNode } from "./nodes/SubstituteNode";
 import { FuseNode } from "./nodes/FuseNode";
 import { ResnameNode } from "./nodes/ResnameNode";
 import { MoleculeNode } from "./nodes/MoleculeNode";
-import { ForcefieldNode } from "./nodes/ForcefieldNode";
-import { BondAngleNode } from "./nodes/BondAngleNode";
 import { BvsNode } from "./nodes/BvsNode";
-import { XrdNode } from "./nodes/XrdNode";
 import { ReorderNode } from "./nodes/ReorderNode";
 import { RemoveNode } from "./nodes/RemoveNode";
 import { StatsNode } from "./nodes/StatsNode";
-import { ViewerNode } from "./nodes/ViewerNode";
 import { BendNode } from "./nodes/BendNode";
 import { CondenseNode } from "./nodes/CondenseNode";
-import { GridNode } from "./nodes/GridNode";
-import { AnalysisNode } from "./nodes/AnalysisNode";
-import { TrajectoryNode } from "./nodes/TrajectoryNode";
 import { WaterModelNode } from "./nodes/WaterModelNode";
 import type { PresetOption } from "./nodes/types";
 
 const nodeTypes = {
+  // Primary nodes (actively in toolbar)
   structure: StructureNode,
+  grid: GridNode,
+  replicate: ReplicateNode,
+  box: BoxNode,
+  transform: TransformNode,
+  pbc: PBCNode,
+  add: AddNode,
+  merge: MergeNode,
+  insert: InsertNode,
+  addIons: AddIonsNode,
+  solvent: SolventNode,
+  chemistry: ChemistryNode,
+  edit: EditNode,
+  forcefield: ForcefieldNode,
+  bondAngle: BondAngleNode,
+  analysis: AnalysisNode,
+  xrd: XrdNode,
+  viewer: ViewerNode,
+  export: ExportNode,
+  trajectory: TrajectoryNode,
+  // Legacy nodes (kept so saved workflows still load)
   preset: StructureNode,
   upload: StructureNode,
-  replicate: ReplicateNode,
-  export: ExportNode,
-  addIons: AddIonsNode,
   solvate: SolvateNode,
+  waterModel: WaterModelNode,
   position: PositionNode,
   wrap: WrapNode,
-  box: BoxNode,
-  merge: MergeNode,
-  add: AddNode,
+  addH: AddHNode,
   rotate: RotateNode,
   scale: ScaleNode,
   slice: SliceNode,
-  insert: InsertNode,
   substitute: SubstituteNode,
   fuse: FuseNode,
   resname: ResnameNode,
   molecule: MoleculeNode,
-  forcefield: ForcefieldNode,
-  bondAngle: BondAngleNode,
-  addH: AddHNode,
   bvs: BvsNode,
-  xrd: XrdNode,
   reorder: ReorderNode,
   remove: RemoveNode,
   stats: StatsNode,
-  viewer: ViewerNode,
   bend: BendNode,
   condense: CondenseNode,
-  grid: GridNode,
-  analysis: AnalysisNode,
-  trajectory: TrajectoryNode,
-  waterModel: WaterModelNode,
 };
 
 const initialNodes: Node[] = [
@@ -691,41 +707,72 @@ export default function VisualBuilder() {
       baseData.nrexcl = 1;
       baseData.minimalisticScript = false;
     }
-
-    if (type === "bend") {
+    if (type === "transform") {
+      baseData.mode = "translate";
+      baseData.translateMode = "absolute";
+      baseData.tx = 0; baseData.ty = 0; baseData.tz = 0;
+      baseData.rotateMode = "random";
+      baseData.rx = 0; baseData.ry = 0; baseData.rz = 0;
+      baseData.sx = 1.0; baseData.sy = 1.0; baseData.sz = 1.0;
       baseData.radius = 50;
     }
-
-    if (type === "grid") {
-      baseData.atomType = "Na";
-      baseData.density = 0.1;
-      baseData.xlo = 0;
-      baseData.ylo = 0;
-      baseData.zlo = 0;
-      baseData.xhi = 10;
-      baseData.yhi = 10;
-      baseData.zhi = 10;
+    if (type === "pbc") {
+      baseData.mode = "condense";
     }
-
+    if (type === "edit") {
+      baseData.mode = "slice";
+      baseData.xlo = 0; baseData.ylo = 0; baseData.zlo = 0;
+      baseData.removePartial = true;
+      baseData.logic = "and";
+      baseData.defaultResname = "MIN";
+      baseData.byMode = "index";
+    }
+    if (type === "chemistry") {
+      baseData.mode = "substitute";
+      baseData.numOct = 0; baseData.numTet = 0;
+      baseData.o1Type = "Al"; baseData.o2Type = "Mgo";
+      baseData.t1Type = "Si"; baseData.t2Type = "Alt";
+      baseData.minO2Dist = 5.5; baseData.minT2Dist = 5.5;
+      baseData.dimension = 3;
+      baseData.fuseRmax = 0.5; baseData.fuseCriteria = "average";
+      baseData.deltaThreshold = -0.5; baseData.maxAdditions = 10;
+    }
+    if (type === "solvent") {
+      baseData.mode = "solvate";
+      baseData.waterModel = "spce";
+      baseData.density = 1.0;
+      baseData.minDistance = 2.25;
+      baseData.conversion = "spc2tip4p";
+      baseData.omDist = 0.15;
+    }
     if (type === "analysis") {
       baseData.mode = "unwrap";
       baseData.atomTypeA = "Na";
       baseData.atomTypeB = "Cl";
       baseData.cutoff = 3.5;
       baseData.rmax = 12.0;
+      baseData.topN = 10; baseData.bvsLogFile = "bvs_summary.log";
+      baseData.writeCsv = true; baseData.csvFile = "bvs_results.csv";
+      baseData.statsLogFile = "output.log";
     }
-
+    if (type === "bend") {
+      baseData.radius = 50;
+    }
+    if (type === "grid") {
+      baseData.atomType = "Na";
+      baseData.density = 0.1;
+      baseData.xlo = 0; baseData.ylo = 0; baseData.zlo = 0;
+      baseData.xhi = 10; baseData.yhi = 10; baseData.zhi = 10;
+    }
     if (type === "trajectory") {
       baseData.mode = "export";
       baseData.filename = "trajectory.pdb";
       baseData.format = "pdb";
     }
-
     if (type === "waterModel") {
       baseData.conversion = "spc2tip4p";
       baseData.omDist = 0.15;
     }
-
     if (type === "condense") {
       // no specific defaults needed
     }
@@ -1109,8 +1156,8 @@ export default function VisualBuilder() {
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("box")} title="Box Settings">
                 <Box className="w-4 h-4" /> Box
               </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("position")} title="Position">
-                <Target className="w-4 h-4" /> Pos
+              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("transform")} title="Transform (Translate/Rotate/Scale/Bend)">
+                <Move3D className="w-4 h-4" /> Transform
               </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("add")} title="Join branches">
                 <Combine className="w-4 h-4" /> Join
@@ -1121,19 +1168,13 @@ export default function VisualBuilder() {
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("addIons")} title="Add Ions">
                 <BadgePlus className="w-4 h-4" /> Ions
               </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("solvate")} title="Solvate">
-                <Droplet className="w-4 h-4" /> Solv
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("addH")} title="Add Hydrogens">
-                <Droplets className="w-4 h-4" /> Add H
+              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("solvent")} title="Solvent (Solvate / Convert Water Model)">
+                <Droplet className="w-4 h-4" /> Solvent
               </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("forcefield")} title="Assign Forcefield">
                 <FlaskConical className="w-4 h-4" /> FF
               </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("stats")} title="Generate Structure Stats">
-                <Activity className="w-4 h-4" /> Stats
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("analysis")} title="Advanced Analysis (RDF, CN, Unwrap)">
+              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("analysis")} title="Analysis (RDF/CN/Unwrap/BVS/Stats)">
                 <BarChart3 className="w-4 h-4" /> Analysis
               </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("viewer")} title="3D Preview Structure">
@@ -1160,35 +1201,14 @@ export default function VisualBuilder() {
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("merge")} title="Merge with overlap removal">
                   <GitMerge className="w-4 h-4" /> Merge
                 </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("wrap")} title="Wrap">
-                  <Maximize className="w-4 h-4" /> Wrap
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("pbc")} title="PBC Tools (Condense / Wrap)">
+                  <Minimize className="w-4 h-4" /> PBC
                 </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("rotate")} title="Rotate">
-                  <RotateCw className="w-4 h-4" /> Rot
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("edit")} title="Edit Atoms (Slice/Remove/Resname/Reorder)">
+                  <SlidersHorizontal className="w-4 h-4" /> Edit
                 </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("scale")} title="Scale">
-                  <Scaling className="w-4 h-4" /> Scale
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("slice")} title="Slice">
-                  <Scissors className="w-4 h-4" /> Slice
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("remove")} title="Remove atom sites">
-                  <Eraser className="w-4 h-4" /> Remove
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("substitute")} title="Substitute">
-                  <Diff className="w-4 h-4" /> Subst
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("fuse")} title="Fuse atoms">
-                  <Spline className="w-4 h-4" /> Fuse
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("resname")} title="Assign resname">
-                  <Tag className="w-4 h-4" /> Res
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("molecule")} title="Set molecule id">
-                  <Fingerprint className="w-4 h-4" /> Mol
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("reorder")} title="Reorder atoms">
-                  <ArrowUpDown className="w-4 h-4" /> Reorder
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("chemistry")} title="Chemistry (Substitute/Fuse/AddH)">
+                  <FlaskConical className="w-4 h-4" /> Chem
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("bondAngle")} title="Bond and angle statistics">
                   <Waypoints className="w-4 h-4" /> B/A
@@ -1196,20 +1216,8 @@ export default function VisualBuilder() {
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("xrd")} title="Run XRD Simulation">
                   <BarChart3 className="w-4 h-4" /> XRD
                 </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("bvs")} title="Bond valence sum analysis">
-                  <Calculator className="w-4 h-4" /> BVS
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("condense")} title="Condense Box">
-                  <Minimize className="w-4 h-4" /> Condense
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("bend")} title="Bend Structure">
-                  <Orbit className="w-4 h-4" /> Bend
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("trajectory")} title="Trajectory Info">
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("trajectory")} title="Trajectory">
                   <History className="w-4 h-4" /> Traj
-                </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("waterModel")} title="Convert Water Model">
-                  <Droplet className="w-4 h-4" /> Water
                 </Button>
               </div>
             )}
@@ -1945,8 +1953,9 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
           const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
           const typeB = pyEscape(getString(data, "atomTypeB", "Cl"));
           const rmax = getNumber(data, "rmax", 12.0);
+          const rdfId = id.replace(/[^a-zA-Z0-9_]/g, "_");
           pythonCode += `r_rdf, g_r = ap.calculate_rdf(${inAtoms}, ${inBox}, typeA='${typeA}', typeB='${typeB}', rmax=${rmax})\n`;
-          pythonCode += `with open('rdf_${id}.json', 'w') as f: json.dump({"bins": r_rdf.tolist(), "rdf": g_r.tolist()}, f)\n`;
+          pythonCode += `with open('rdf_${rdfId}.json', 'w') as f: json.dump({"bins": r_rdf.tolist(), "rdf": g_r.tolist()}, f)\n`;
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (amode === "cn") {
@@ -1958,6 +1967,20 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (amode === "closest") {
           pythonCode += `closest_data = ap.closest_atom(${inAtoms}, ${inBox})\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
+        } else if (amode === "bvs") {
+          const topN = Math.round(getNumber(data, "topN", 10));
+          const bvsLog = pyEscape(getString(data, "bvsLogFile", "bvs_summary.log"));
+          const writeCsv = getBoolean(data, "writeCsv", true);
+          const csvFile = pyEscape(getString(data, "csvFile", "bvs_results.csv"));
+          const csvArg = writeCsv ? `, write_csv=True, csv_file='${csvFile}'` : "";
+          pythonCode += `ap.bvs(${inAtoms}, ${inBox}, top_n=${topN}, log_file='${bvsLog}'${csvArg})\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
+        } else if (amode === "stats") {
+          const statsLog = pyEscape(getString(data, "statsLogFile", "output.log"));
+          pythonCode += `ap.get_structure_stats(${inAtoms}, Box=${inBox}, log_file='${statsLog}')\n`;
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         }
@@ -1987,6 +2010,193 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
           pythonCode += `${blockOutAtoms} = ap.tip3p2tip4p(${inAtoms}, Box=${inBox})\n`;
         }
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        break;
+      }
+      case "transform": {
+        const tmode = getString(data, "mode", "translate");
+        if (tmode === "translate") {
+          const transMode = getString(data, "translateMode", "absolute");
+          const tx = getNumber(data, "tx", 0);
+          const ty = getNumber(data, "ty", 0);
+          const tz = getNumber(data, "tz", 0);
+          const transResname = getString(data, "translateResname", "").trim();
+          const resnameArg = transResname ? `, resname='${pyEscape(transResname)}'` : "";
+          if (transMode === "absolute") {
+            pythonCode += `${blockOutAtoms} = ap.center(${inAtoms}, [${tx}, ${ty}, ${tz}])\\n`;
+          } else {
+            pythonCode += `${blockOutAtoms} = ap.translate(${inAtoms}, [${tx}, ${ty}, ${tz}]${resnameArg})\\n`;
+          }
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        } else if (tmode === "rotate") {
+          const rotMode = getString(data, "rotateMode", "random");
+          if (rotMode === "random") {
+            pythonCode += `${blockOutAtoms} = ap.rotate_atom(${inAtoms}, ${inBox})\\n`;
+          } else {
+            const rx = getNumber(data, "rx", 0);
+            const ry = getNumber(data, "ry", 0);
+            const rz = getNumber(data, "rz", 0);
+            pythonCode += `${blockOutAtoms} = ap.rotate_atom(${inAtoms}, ${inBox}, Euler=[${rx}, ${ry}, ${rz}])\\n`;
+          }
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        } else if (tmode === "scale") {
+          const sx = getNumber(data, "sx", 1.0);
+          const sy = getNumber(data, "sy", 1.0);
+          const sz = getNumber(data, "sz", 1.0);
+          const scaleRes = getString(data, "scaleResname", "").trim();
+          const scaleResArg = scaleRes ? `, resname='${pyEscape(scaleRes)}'` : "";
+          pythonCode += `${blockOutAtoms} = ap.scale(${inAtoms}, ${sx}, ${sy}, ${sz}${scaleResArg})\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        } else if (tmode === "bend") {
+          const radius = getNumber(data, "radius", 50);
+          pythonCode += `${blockOutAtoms} = ap.bend(${inAtoms}, ${radius})\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        }
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "pbc": {
+        const pbcMode = getString(data, "mode", "condense");
+        if (pbcMode === "condense") {
+          pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.condense(${inAtoms}, ${inBox})\\n`;
+        } else {
+          pythonCode += `${blockOutAtoms} = ap.wrap(${inAtoms}, ${inBox})\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        }
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "edit": {
+        const editMode = getString(data, "mode", "slice");
+        if (editMode === "slice") {
+          const exlo = getNumber(data, "xlo", 0); const eylo = getNumber(data, "ylo", 0); const ezlo = getNumber(data, "zlo", 0);
+          const exhi = data.xhi != null ? getNumber(data, "xhi", 0) : null;
+          const eyhi = data.yhi != null ? getNumber(data, "yhi", 0) : null;
+          const ezhi = data.zhi != null ? getNumber(data, "zhi", 0) : null;
+          const rmPartial = getBoolean(data, "removePartial", true) ? "True" : "False";
+          const xhiExpr = exhi !== null ? String(exhi) : "None";
+          const yhiExpr = eyhi !== null ? String(eyhi) : "None";
+          const zhiExpr = ezhi !== null ? String(ezhi) : "None";
+          pythonCode += `${blockOutAtoms} = ap.slice_atoms(${inAtoms}, ${inBox}, xlo=${exlo}, ylo=${eylo}, zlo=${ezlo}, xhi=${xhiExpr}, yhi=${yhiExpr}, zhi=${zhiExpr}, remove_partial_molecules=${rmPartial})\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        } else if (editMode === "remove") {
+          const atomType = getString(data, "atomType", "").trim();
+          const indices = getString(data, "indices", "").trim();
+          const molids = getString(data, "molids", "").trim();
+          const logic = getString(data, "logic", "and");
+          const atomTypeArg = atomType ? `, atomtype='${pyEscape(atomType)}'` : "";
+          const indicesArg = indices ? `, indices=[${indices}]` : "";
+          const molidsArg = molids ? `, molids=[${molids}]` : "";
+          const axes: string[] = [];
+          (["x", "y", "z"] as const).forEach((axis) => {
+            if (data[`${axis}Enabled`]) {
+              const op = data[`${axis}Op`] || "<";
+              const val = data[`${axis}Value`] ?? 0;
+              axes.push(`${axis}_op='${op}', ${axis}_val=${val}`);
+            }
+          });
+          const axesArg = axes.length > 0 ? `, ${axes.join(", ")}` : "";
+          pythonCode += `${blockOutAtoms} = ap.remove(${inAtoms}${atomTypeArg}${indicesArg}${molidsArg}, logic='${logic}'${axesArg})\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        } else if (editMode === "molecule") {
+          const molid = Math.max(1, Math.round(getNumber(data, "molid", 1)));
+          const molRes = getString(data, "moleculeResname", "").trim();
+          const molResArg = molRes ? `, resname='${pyEscape(molRes)}'` : "";
+          pythonCode += `${blockOutAtoms} = ap.molecule(${inAtoms}, molid=${molid}${molResArg})\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        } else if (editMode === "resname") {
+          const defResname = pyEscape(getString(data, "defaultResname", "MIN"));
+          pythonCode += `${blockOutAtoms} = ap.assign_resname(${inAtoms}, default_resname='${defResname}')\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        } else if (editMode === "reorder") {
+          const byMode = getString(data, "byMode", "index");
+          const neworder = getString(data, "neworder", "");
+          const orderList = neworder.split(",").map((v) => v.trim()).filter(Boolean);
+          const orderExpr = byMode === "index"
+            ? `[${orderList.map((v) => parseInt(v) || 0).join(", ")}]`
+            : `['${orderList.map(pyEscape).join("', '")}']`;
+          pythonCode += `${blockOutAtoms} = ap.reorder(${inAtoms}, by='${byMode}', order=${orderExpr})\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        }
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "chemistry": {
+        const chemMode = getString(data, "mode", "substitute");
+        if (chemMode === "substitute") {
+          const numOct = Math.round(getNumber(data, "numOct", 0));
+          const numTet = Math.round(getNumber(data, "numTet", 0));
+          const o1 = pyEscape(getString(data, "o1Type", "Al"));
+          const o2 = pyEscape(getString(data, "o2Type", "Mgo"));
+          const t1 = pyEscape(getString(data, "t1Type", "Si"));
+          const t2 = pyEscape(getString(data, "t2Type", "Alt"));
+          const mo2 = getNumber(data, "minO2Dist", 5.5);
+          const mt2 = getNumber(data, "minT2Dist", 5.5);
+          const loLim = data.loLimit != null ? String(getNumber(data, "loLimit", 0)) : "None";
+          const hiLim = data.hiLimit != null ? String(getNumber(data, "hiLimit", 1)) : "None";
+          const dim = Math.round(getNumber(data, "dimension", 3));
+          pythonCode += `${blockOutAtoms} = ap.substitute(${inAtoms}, ${inBox}, numOct=${numOct}, o1_type='${o1}', o2_type='${o2}', min_o2_dist=${mo2}, numTet=${numTet}, t1_type='${t1}', t2_type='${t2}', min_t2_dist=${mt2}, lo_limit=${loLim}, hi_limit=${hiLim}, dim=${dim})\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        } else if (chemMode === "fuse") {
+          const fuseR = getNumber(data, "fuseRmax", 0.5);
+          const fuseCrit = pyEscape(getString(data, "fuseCriteria", "average"));
+          pythonCode += `${blockOutAtoms} = ap.fuse(${inAtoms}, rmax=${fuseR}, criteria='${fuseCrit}')\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        } else if (chemMode === "addH") {
+          const delta = getNumber(data, "deltaThreshold", -0.5);
+          const maxAdd = getNumber(data, "maxAdditions", 10);
+          pythonCode += `${blockOutAtoms} = __add_hydrogens_bvs__(${inAtoms}, ${inBox}, delta_threshold=${delta}, max_additions=${maxAdd})\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        }
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "solvent": {
+        const solMode = getString(data, "mode", "solvate");
+        if (solMode === "solvate") {
+          // Re-use the existing solvate code generation logic
+          const model = pyEscape(getString(data, "waterModel", "spce"));
+          const dens = getNumber(data, "density", 1.0);
+          const sdist = getNumber(data, "minDistance", 2.25);
+          const maxSolventMode = getString(data, "maxSolventMode", "max");
+          const includeSolute = getBoolean(data, "includeSolute", true);
+          const includeSolutePy = includeSolute ? "True" : "False";
+          let maxSolventExpr = "'max'";
+          if (maxSolventMode === "count") {
+            maxSolventExpr = String(Math.round(getNumber(data, "maxSolventCount", 100)));
+          } else if (maxSolventMode === "shell") {
+            maxSolventExpr = `{'shell': ${getNumber(data, "shellThickness", 5.0)}}`;
+          }
+          const sxlo = data.xlo != null ? getNumber(data, "xlo", 0) : null;
+          const sylo = data.ylo != null ? getNumber(data, "ylo", 0) : null;
+          const szlo = data.zlo != null ? getNumber(data, "zlo", 0) : null;
+          const sxhi = data.xhi != null ? getNumber(data, "xhi", 0) : null;
+          const syhi = data.yhi != null ? getNumber(data, "yhi", 0) : null;
+          const szhi = data.zhi != null ? getNumber(data, "zhi", 0) : null;
+          const limitsExpr = (sxlo !== null || sxhi !== null)
+            ? `[${sxlo ?? 0}, ${sylo ?? 0}, ${szlo ?? 0}, ${sxhi ?? `${inBox}[0]`}, ${syhi ?? `${inBox}[1]`}, ${szhi ?? `${inBox}[2]`}]`
+            : inBox;
+          const wrappedInAtomsSolv = `wrapped_${blockOutAtoms}`;
+          const solventVarS = `solvent_${index}`;
+          pythonCode += `${wrappedInAtomsSolv} = ap.wrap(${inAtoms}, ${inBox})\\n`;
+          pythonCode += `${solventVarS} = ap.solvate(limits=${limitsExpr}, density=${dens}, min_distance=${sdist}, max_solvent=${maxSolventExpr}, solute_atoms=${wrappedInAtomsSolv}, Box=${inBox}, solvent_type='${model}', include_solute=${includeSolutePy})\\n`;
+          if (includeSolute) {
+            pythonCode += `${blockOutAtoms} = ${solventVarS}\\n`;
+          } else {
+            pythonCode += `${blockOutAtoms} = ap.update(${inAtoms}, ${solventVarS})\\n`;
+          }
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        } else {
+          // waterModel conversion
+          const conv = getString(data, "conversion", "spc2tip4p");
+          if (conv === "spc2tip4p") {
+            const omDist = getNumber(data, "omDist", 0.15);
+            pythonCode += `${blockOutAtoms} = ap.spc2tip4p(${inAtoms}, Box=${inBox}, om_dist=${omDist})\\n`;
+          } else {
+            pythonCode += `${blockOutAtoms} = ap.tip3p2tip4p(${inAtoms}, Box=${inBox})\\n`;
+          }
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        }
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
 
