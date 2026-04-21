@@ -1374,29 +1374,8 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
     pythonCode += `        _err.write(traceback.format_exc() + '\\n')\n`;
     pythonCode += `    raise\n\n`;
   }
-  const usesAddH = nodes.some(n => n.type === "addH");
   if (usesAddH) {
-    pythonCode += `def __add_hydrogens_bvs__(atoms, box_dim, delta_threshold=-0.5, max_additions=10):\n`;
-    if (!isMinimal) {
-      pythonCode += `    \"\"\"Helper to protonate underbonded oxygen sites (BVS).\"\"\"\n`;
-    }
-    pythonCode += `    if max_additions <= 0: return atoms\n`;
-    pythonCode += `    bvs_report = ap.analyze_bvs(atoms[:], box_dim, top_n=max_additions)\n`;
-    pythonCode += `    candidates = []\n`;
-    pythonCode += `    for row in bvs_report.get("results", []):\n`;
-    pythonCode += `        el = (row.get("element") or "").upper()\n`;
-    pythonCode += `        delta = row.get("delta")\n`;
-    pythonCode += `        if el != "O" or delta is None or delta >= delta_threshold: continue\n`;
-    pythonCode += `        idx0 = int(row.get("index", 1)) - 1\n`;
-    pythonCode += `        if any((atoms[int(n)-1].get("element") or "").upper() == "H" for n, *_ in row.get("bonds", [])): continue\n`;
-    pythonCode += `        candidates.append((delta, idx0))\n`;
-    pythonCode += `    candidates.sort(key=lambda x: x[0])\n`;
-    pythonCode += `    for _, idx0 in candidates[:max_additions]:\n`;
-    pythonCode += `        mt = f"__BVS_TARGET_{idx0}__"; orig = atoms[idx0].get("type", "O")\n`;
-    pythonCode += `        atoms[idx0]["type"] = mt\n`;
-    pythonCode += `        atoms = ap.add_H_atom(atoms, box_dim, target_type=mt, h_type="H", bond_length=0.98, coordination=2, max_h_per_atom=1)\n`;
-    pythonCode += `        if idx0 < len(atoms): atoms[idx0]["type"] = orig\n`;
-    pythonCode += `    return atoms\n\n`;
+    // Note: __add_hydrogens_bvs__ has been moved to the library as ap.add_hydrogens_bvs
   }
 
   if (!isMinimal) {
@@ -1939,7 +1918,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
       case "addH": {
         const delta = getNumber(data, "deltaThreshold", -0.5);
         const maxAdd = getNumber(data, "maxAdditions", 10);
-        pythonCode += `${blockOutAtoms} = __add_hydrogens_bvs__(${inAtoms}, ${inBox}, delta_threshold=${delta}, max_additions=${maxAdd})\n`;
+        pythonCode += `${blockOutAtoms} = ap.add_hydrogens_bvs(${inAtoms}, ${inBox}, delta_threshold=${delta}, max_additions=${maxAdd})\n`;
         pythonCode += `${blockOutBox} = ${inBox}\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
@@ -2024,9 +2003,9 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         const tfilename = pyEscape(getString(data, "filename", "trajectory.pdb"));
         const tformat = pyEscape(getString(data, "format", "pdb"));
         if (tmode === "import") {
-           pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_trajectory('${tfilename}', format='${tformat}', start=0, stop=1)[0]\n`;
+           pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_traj('${tfilename}', format='${tformat}', start=0, stop=1)[0]\n`;
         } else {
-           pythonCode += `ap.write_trajectory(${inAtoms}, ${inBox}, '${tfilename}', format='${tformat}', append=True)\n`;
+           pythonCode += `ap.write_traj(${inAtoms}, ${inBox}, '${tfilename}', format='${tformat}', append=True)\n`;
            pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
            pythonCode += `${blockOutBox} = ${inBox}\n`;
         }
@@ -2062,12 +2041,12 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         } else if (tmode === "rotate") {
           const rotMode = getString(data, "rotateMode", "random");
           if (rotMode === "random") {
-            pythonCode += `${blockOutAtoms} = ap.rotate_atom(${inAtoms}, ${inBox})\\n`;
+            pythonCode += `${blockOutAtoms} = ap.rotate(${inAtoms}, ${inBox})\\n`;
           } else {
             const rx = getNumber(data, "rx", 0);
             const ry = getNumber(data, "ry", 0);
             const rz = getNumber(data, "rz", 0);
-            pythonCode += `${blockOutAtoms} = ap.rotate_atom(${inAtoms}, ${inBox}, Euler=[${rx}, ${ry}, ${rz}])\\n`;
+            pythonCode += `${blockOutAtoms} = ap.rotate(${inAtoms}, ${inBox}, angles=[${rx}, ${ry}, ${rz}])\\n`;
           }
           pythonCode += `${blockOutBox} = ${inBox}\\n`;
         } else if (tmode === "scale") {
@@ -2108,7 +2087,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
           const xhiExpr = exhi !== null ? String(exhi) : "None";
           const yhiExpr = eyhi !== null ? String(eyhi) : "None";
           const zhiExpr = ezhi !== null ? String(ezhi) : "None";
-          pythonCode += `${blockOutAtoms} = ap.slice_atoms(${inAtoms}, ${inBox}, xlo=${exlo}, ylo=${eylo}, zlo=${ezlo}, xhi=${xhiExpr}, yhi=${yhiExpr}, zhi=${zhiExpr}, remove_partial_molecules=${rmPartial})\\n`;
+          pythonCode += `${blockOutAtoms} = ap.slice(${inAtoms}, ${inBox}, xlo=${exlo}, ylo=${eylo}, zlo=${ezlo}, xhi=${xhiExpr}, yhi=${yhiExpr}, zhi=${zhiExpr}, remove_partial_molecules=${rmPartial})\\n`;
           pythonCode += `${blockOutBox} = ${inBox}\\n`;
         } else if (editMode === "remove") {
           const atomType = getString(data, "atomType", "").trim();
@@ -2171,12 +2150,18 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         } else if (chemMode === "fuse") {
           const fuseR = getNumber(data, "fuseRmax", 0.5);
           const fuseCrit = pyEscape(getString(data, "fuseCriteria", "average"));
-          pythonCode += `${blockOutAtoms} = ap.fuse(${inAtoms}, rmax=${fuseR}, criteria='${fuseCrit}')\\n`;
+          pythonCode += `${blockOutAtoms} = ap.fuse_atoms(${inAtoms}, rmax=${fuseR}, criteria='${fuseCrit}')\\n`;
           pythonCode += `${blockOutBox} = ${inBox}\\n`;
         } else if (chemMode === "addH") {
           const delta = getNumber(data, "deltaThreshold", -0.5);
           const maxAdd = getNumber(data, "maxAdditions", 10);
-          pythonCode += `${blockOutAtoms} = __add_hydrogens_bvs__(${inAtoms}, ${inBox}, delta_threshold=${delta}, max_additions=${maxAdd})\\n`;
+          const bondLen = getNumber(data, "bondLength", 0.96);
+          pythonCode += `${blockOutAtoms} = ap.add_hydrogens_bvs(${inAtoms}, ${inBox}, delta_threshold=${delta}, max_additions=${maxAdd}, bond_length=${bondLen})\\n`;
+          const adjustH = getBoolean(data, "adjustH", false);
+          if (adjustH) {
+            const hDist = getNumber(data, "hDistance", 0.96);
+            pythonCode += `${blockOutAtoms} = ap.adjust_H_atom(${blockOutAtoms}, ${inBox}, distance=${hDist})\\n`;
+          }
           pythonCode += `${blockOutBox} = ${inBox}\\n`;
         }
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
@@ -2215,6 +2200,10 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
             pythonCode += `${blockOutAtoms} = ${solventVarS}\\n`;
           } else {
             pythonCode += `${blockOutAtoms} = ap.update(${inAtoms}, ${solventVarS})\\n`;
+          }
+          const repairW = getBoolean(data, "repairGeometry", false);
+          if (repairW) {
+            pythonCode += `${blockOutAtoms} = ap.adjust_Hw_atom(${blockOutAtoms}, ${inBox})\\n`;
           }
           pythonCode += `${blockOutBox} = ${inBox}\\n`;
         } else {
