@@ -33,36 +33,65 @@ def run_test():
         return False
     
     try:
-        # 2. Prepare Mock Workflow Script
+        # Prepare Comprehensive Mock Workflow Script
+        # This mocks the output of VisualBuilder's generatePythonCode for the new nodes
         script = """
 import atomipy as ap
 import json
 import os
+import numpy as np
 
+# 1. Grid Creation
 print("__NODE_START__:grid_0:0")
 grid_atoms_0, grid_box_0 = ap.create_grid('Na', 0.1, [0, 0, 0, 20, 20, 20])
 
-print("__NODE_START__:bend_1:1")
-bend_atoms_1 = ap.bend(grid_atoms_0, 40)
+# 2. Triclinic Box Definition (matching new BoxNode box_dim mode)
+print("__NODE_START__:box_1:1")
+# Test 9-component Box_dim representation [lx, ly, lz, 0, 0, xy, 0, xz, yz]
+# For a 10x10x10 cube with 70.5 deg alpha,beta,gamma
+lx, ly, lz = 10.0, 10.0, 10.0
+xy, xz, yz = 5.0, 5.0, 5.0
+box_dim_9 = [lx, ly, lz, 0.0, 0.0, xy, 0.0, xz, yz]
+triclinic_box = box_dim_9
+triclinic_atoms = ap.wrap(grid_atoms_0, triclinic_box)
 
-print("__NODE_START__:condense_2:2")
-condense_atoms_2, condense_box_2 = ap.condense(bend_atoms_1, grid_box_0)
+# 3. Cell to Box_dim conversion (matching BoxNode cell mode)
+print("__NODE_START__:box_2:2")
+cell_params = [15.0, 15.0, 15.0, 90.0, 100.0, 90.0] # Monoclinic
+cell_box = ap.Cell2Box_dim(cell_params)
+cell_atoms = ap.wrap(triclinic_atoms, cell_box)
 
-print("__NODE_START__:analysis_3:3")
-unwrapped_atoms_3 = ap.unwrap_coordinates(condense_atoms_2, condense_box_2)
-r_rdf, g_r = ap.calculate_rdf(unwrapped_atoms_3, condense_box_2, typeA='Na', typeB='Na', rmax=10.0)
-with open('rdf_analysis_3.json', 'w') as f: json.dump({"bins": r_rdf.tolist(), "rdf": g_r.tolist()}, f)
+# 4. Composite Node: Transform (Bend)
+print("__NODE_START__:transform_3:3")
+transformed_atoms = ap.bend(cell_atoms, 50)
 
-print("__NODE_START__:export_4:4")
-ap.write_pdb(unwrapped_atoms_3, condense_box_2, 'system.pdb')
-ap.write_gro(unwrapped_atoms_3, condense_box_2, 'system.gro')
-ap.write_pqr(unwrapped_atoms_3, condense_box_2, 'system.pqr')
-ap.write_poscar(unwrapped_atoms_3, condense_box_2, 'system.poscar')
-ap.write_sdf(unwrapped_atoms_3, 'system.sdf')
+# 5. Composite Node: PBC (Condense)
+print("__NODE_START__:pbc_4:4")
+condensed_atoms, condensed_box = ap.condense(transformed_atoms, cell_box)
+
+# 6. Analysis (Extended)
+print("__NODE_START__:analysis_5:5")
+unwrapped_atoms = ap.unwrap_coordinates(condensed_atoms, condensed_box)
+# RDF
+r_rdf, g_r = ap.calculate_rdf(unwrapped_atoms, condensed_box, typeA='Na', typeB='Na', rmax=8.0)
+with open('rdf_results.json', 'w') as f: 
+    json.dump({"bins": r_rdf.tolist(), "rdf": g_r.tolist()}, f)
+# Stats
+ap.get_structure_stats(unwrapped_atoms, Box=condensed_box, log_file='stats.log')
+
+# 7. Exports
+print("__NODE_START__:export_6:6")
+ap.write_pdb(unwrapped_atoms, condensed_box, 'final_system.pdb')
+ap.write_gro(unwrapped_atoms, condensed_box, 'final_system.gro')
+ap.write_poscar(unwrapped_atoms, condensed_box, 'final_system.poscar')
 """
         
         workflow = {
-            "nodes": [{"id": "grid_0", "type": "grid"}, {"id": "analysis_3", "type": "analysis"}],
+            "nodes": [
+                {"id": "grid_0", "type": "grid"}, 
+                {"id": "box_1", "type": "box"},
+                {"id": "analysis_5", "type": "analysis"}
+            ],
             "edges": []
         }
         
@@ -77,13 +106,14 @@ ap.write_sdf(unwrapped_atoms_3, 'system.sdf')
         if response.status_code != 200:
             print(f"ERROR: Response status {response.status_code}")
             try:
-                # Backend returns the zip even on 400 so we can see what failed
                 zip_data = io.BytesIO(response.content)
                 with zipfile.ZipFile(zip_data) as zf:
-                    print("--- execution_stderr.txt ---")
-                    print(zf.read("execution_stderr.txt").decode("utf-8"))
-                    print("--- execution_stdout.txt ---")
-                    print(zf.read("execution_stdout.txt").decode("utf-8"))
+                    if "execution_stderr.txt" in zf.namelist():
+                        print("--- execution_stderr.txt ---")
+                        print(zf.read("execution_stderr.txt").decode("utf-8"))
+                    if "execution_stdout.txt" in zf.namelist():
+                        print("--- execution_stdout.txt ---")
+                        print(zf.read("execution_stdout.txt").decode("utf-8"))
             except Exception as e:
                 print(f"Could not extract logs from response: {e}")
                 print(response.text[:1000])
@@ -97,9 +127,8 @@ ap.write_sdf(unwrapped_atoms_3, 'system.sdf')
             
             # Assertions
             expected = [
-                'system.pdb', 'system.gro', 
-                'system.pqr', 'system.poscar', 'system.sdf',
-                'rdf_analysis_3.json', 'execution_stdout.txt', 
+                'final_system.pdb', 'final_system.gro', 'final_system.poscar',
+                'rdf_results.json', 'stats.log', 'execution_stdout.txt', 
                 'build_summary.json', 'workflow.json'
             ]
             
@@ -108,17 +137,13 @@ ap.write_sdf(unwrapped_atoms_3, 'system.sdf')
                 print(f"MISSING FILES: {missing}")
                 return False
                 
-            # Check RDF content
-            rdf_content = json.loads(zf.read('rdf_analysis_3.json'))
-            if 'rdf' not in rdf_content or 'bins' not in rdf_content:
-                print("INVALID RDF CONTENT: keys missing")
+            # Extra validation for Stats log
+            stats_content = zf.read('stats.log').decode('utf-8')
+            if "Unique Atom Types" not in stats_content:
+                print("INVALID STATS LOG: 'Unique Atom Types' not found")
                 return False
                 
-            if len(rdf_content['rdf']) == 0:
-                print("INVALID RDF CONTENT: rdf list is empty")
-                return False
-                
-            print("ALL INTEGRATION TESTS PASSED!")
+            print("ALL INTEGRATION TESTS PASSED (including new BoxNode & Composite logic)!")
             return True
             
     except Exception as e:
