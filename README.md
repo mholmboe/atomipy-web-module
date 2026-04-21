@@ -2,7 +2,7 @@
 
 A powerful, node-based visual programming environment for designing, manipulating, and analyzing molecular systems. Built on top of the **[atomipy](https://github.com/mholmboe/atomipy)** Python library, this web application allows researchers to create complex mineral-water systems through an intuitive graph interface.
 
-![atomipy web module](public/screenshot.png) *(Note: Add actual screenshot if available)*
+![atomipy web module](screenshot.png)
 
 ## 🚀 Key Features
 

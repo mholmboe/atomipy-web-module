@@ -13,7 +13,7 @@ const Navbar = () => {
           </div>
         </Link>
         <div className="flex items-center gap-6 text-sm">
-          <a href="https://www.atomipy.io" className="flex items-center gap-1 text-nav-foreground/80 transition-colors hover:text-primary">
+          <a href="https://atomipy-topology-generator-1000562662604.europe-north2.run.app" className="flex items-center gap-1 text-nav-foreground/80 transition-colors hover:text-primary">
             <ExternalLink className="h-3.5 w-3.5" />
             atomipy topology generator
           </a>
