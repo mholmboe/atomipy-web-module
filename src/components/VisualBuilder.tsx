@@ -1374,9 +1374,6 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
     pythonCode += `        _err.write(traceback.format_exc() + '\\n')\n`;
     pythonCode += `    raise\n\n`;
   }
-  if (usesAddH) {
-    // Note: __add_hydrogens_bvs__ has been moved to the library as ap.add_hydrogens_bvs
-  }
 
   if (!isMinimal) {
     pythonCode += `open('build_errors.log', 'w', encoding='utf-8').close()\n`;
