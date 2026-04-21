@@ -1539,26 +1539,58 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         break;
       }
       case "box": {
-        const a = getOptionalNumber(data, "a");
-        const b = getOptionalNumber(data, "b");
-        const c = getOptionalNumber(data, "c");
-        const alpha = getOptionalNumber(data, "alpha");
-        const beta = getOptionalNumber(data, "beta");
-        const gamma = getOptionalNumber(data, "gamma");
-        const inCell = `cell_${index}`;
+        const inputMode = getString(data, "inputMode", "cell");
 
-        if (inBox !== "None") {
-          pythonCode += `${inCell} = ap.Box_dim2Cell(${inBox})\n`;
+        if (inputMode === "box_dim") {
+          // Box_dim mode: lx, ly, lz, xy, xz, yz
+          const lx = getOptionalNumber(data, "lx");
+          const ly = getOptionalNumber(data, "ly");
+          const lz = getOptionalNumber(data, "lz");
+          const xy = getOptionalNumber(data, "xy");
+          const xz = getOptionalNumber(data, "xz");
+          const yz = getOptionalNumber(data, "yz");
+
+          // Fallback to upstream components at runtime if fields are empty
+          const lxExpr = lx !== null ? `${lx}` : (inBox !== "None" ? `(float(${inBox}[0]) if len(${inBox}) >= 1 else 50.0)` : "50.0");
+          const lyExpr = ly !== null ? `${ly}` : (inBox !== "None" ? `(float(${inBox}[1]) if len(${inBox}) >= 2 else 50.0)` : "50.0");
+          const lzExpr = lz !== null ? `${lz}` : (inBox !== "None" ? `(float(${inBox}[2]) if len(${inBox}) >= 3 else 50.0)` : "50.0");
+          const xyExpr = xy !== null ? `${xy}` : (inBox !== "None" ? `(float(${inBox}[5]) if len(${inBox}) >= 9 else (float(${inBox}[3]) if len(${inBox}) == 6 else 0.0))` : "0.0");
+          const xzExpr = xz !== null ? `${xz}` : (inBox !== "None" ? `(float(${inBox}[7]) if len(${inBox}) >= 9 else (float(${inBox}[4]) if len(${inBox}) == 6 else 0.0))` : "0.0");
+          const yzExpr = yz !== null ? `${yz}` : (inBox !== "None" ? `(float(${inBox}[8]) if len(${inBox}) >= 9 else (float(${inBox}[5]) if len(${inBox}) == 6 else 0.0))` : "0.0");
+
+          // Emit Box_dim directly
+          // If tilts are zero, use compact [lx,ly,lz]
+          const definitelyOrtho = (xy === 0 && xz === 0 && yz === 0);
+          if (definitelyOrtho) {
+            pythonCode += `${blockOutBox} = [${lxExpr}, ${lyExpr}, ${lzExpr}]\n`;
+          } else {
+            // Use 9-component representation for maximum compatibility with atomipy.cell_utils
+            pythonCode += `${blockOutBox} = [${lxExpr}, ${lyExpr}, ${lzExpr}, 0.0, 0.0, ${xyExpr}, 0.0, ${xzExpr}, ${yzExpr}]\n`;
+          }
+        } else {
+          // Cell mode: a, b, c, alpha, beta, gamma
+          const a = getOptionalNumber(data, "a");
+          const b = getOptionalNumber(data, "b");
+          const c = getOptionalNumber(data, "c");
+          const alpha = getOptionalNumber(data, "alpha");
+          const beta = getOptionalNumber(data, "beta");
+          const gamma = getOptionalNumber(data, "gamma");
+          const inCell = `cell_${index}`;
+
+          if (inBox !== "None") {
+            pythonCode += `${inCell} = ap.Box_dim2Cell(${inBox})\n`;
+          }
+
+          const aExpr     = a     !== null ? `${a}`     : (inBox !== "None" ? `${inCell}[0]` : "50.0");
+          const bExpr     = b     !== null ? `${b}`     : (inBox !== "None" ? `${inCell}[1]` : "50.0");
+          const cExpr     = c     !== null ? `${c}`     : (inBox !== "None" ? `${inCell}[2]` : "50.0");
+          const alphaExpr = alpha !== null ? `${alpha}` : (inBox !== "None" ? `${inCell}[3]` : "90.0");
+          const betaExpr  = beta  !== null ? `${beta}`  : (inBox !== "None" ? `${inCell}[4]` : "90.0");
+          const gammaExpr = gamma !== null ? `${gamma}` : (inBox !== "None" ? `${inCell}[5]` : "90.0");
+
+          pythonCode += `${blockOutBox} = ap.Cell2Box_dim([${aExpr}, ${bExpr}, ${cExpr}, ${alphaExpr}, ${betaExpr}, ${gammaExpr}])\n`;
         }
 
-        const aExpr = a !== null ? `${a}` : inBox !== "None" ? `${inCell}[0]` : "50.0";
-        const bExpr = b !== null ? `${b}` : inBox !== "None" ? `${inCell}[1]` : "50.0";
-        const cExpr = c !== null ? `${c}` : inBox !== "None" ? `${inCell}[2]` : "50.0";
-        const alphaExpr = alpha !== null ? `${alpha}` : inBox !== "None" ? `${inCell}[3]` : "90.0";
-        const betaExpr = beta !== null ? `${beta}` : inBox !== "None" ? `${inCell}[4]` : "90.0";
-        const gammaExpr = gamma !== null ? `${gamma}` : inBox !== "None" ? `${inCell}[5]` : "90.0";
-
-        pythonCode += `${blockOutBox} = ap.Cell2Box_dim([${aExpr}, ${bExpr}, ${cExpr}, ${alphaExpr}, ${betaExpr}, ${gammaExpr}])\n`;
         if (inAtoms !== "None") {
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
         } else {
