@@ -1,3 +1,4 @@
+import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import VisualBuilder from "@/components/VisualBuilder";
 import Footer from "@/components/Footer";
