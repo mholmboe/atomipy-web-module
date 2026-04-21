@@ -51,6 +51,10 @@ import {
   ArrowUpDown,
   Activity,
   Eraser,
+  Orbit,
+  LayoutGrid,
+  Minimize,
+  History,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -91,6 +95,12 @@ import { ReorderNode } from "./nodes/ReorderNode";
 import { RemoveNode } from "./nodes/RemoveNode";
 import { StatsNode } from "./nodes/StatsNode";
 import { ViewerNode } from "./nodes/ViewerNode";
+import { BendNode } from "./nodes/BendNode";
+import { CondenseNode } from "./nodes/CondenseNode";
+import { GridNode } from "./nodes/GridNode";
+import { AnalysisNode } from "./nodes/AnalysisNode";
+import { TrajectoryNode } from "./nodes/TrajectoryNode";
+import { WaterModelNode } from "./nodes/WaterModelNode";
 import type { PresetOption } from "./nodes/types";
 
 const nodeTypes = {
@@ -123,6 +133,12 @@ const nodeTypes = {
   remove: RemoveNode,
   stats: StatsNode,
   viewer: ViewerNode,
+  bend: BendNode,
+  condense: CondenseNode,
+  grid: GridNode,
+  analysis: AnalysisNode,
+  trajectory: TrajectoryNode,
+  waterModel: WaterModelNode,
 };
 
 const initialNodes: Node[] = [
@@ -676,6 +692,44 @@ export default function VisualBuilder() {
       baseData.minimalisticScript = false;
     }
 
+    if (type === "bend") {
+      baseData.radius = 50;
+    }
+
+    if (type === "grid") {
+      baseData.atomType = "Na";
+      baseData.density = 0.1;
+      baseData.xlo = 0;
+      baseData.ylo = 0;
+      baseData.zlo = 0;
+      baseData.xhi = 10;
+      baseData.yhi = 10;
+      baseData.zhi = 10;
+    }
+
+    if (type === "analysis") {
+      baseData.mode = "unwrap";
+      baseData.atomTypeA = "Na";
+      baseData.atomTypeB = "Cl";
+      baseData.cutoff = 3.5;
+      baseData.rmax = 12.0;
+    }
+
+    if (type === "trajectory") {
+      baseData.mode = "export";
+      baseData.filename = "trajectory.pdb";
+      baseData.format = "pdb";
+    }
+
+    if (type === "waterModel") {
+      baseData.conversion = "spc2tip4p";
+      baseData.omDist = 0.15;
+    }
+
+    if (type === "condense") {
+      // no specific defaults needed
+    }
+
     if (type === "xrd") {
       baseData.wavelength = 1.54187;
       baseData.angleStep = 0.02;
@@ -1046,6 +1100,9 @@ export default function VisualBuilder() {
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
                 <FileInput className="w-4 h-4" /> Import
               </Button>
+              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("grid")} title="Create Procedural Grid">
+                <LayoutGrid className="w-4 h-4" /> Grid
+              </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("replicate")} title="Replicate">
                 <Grid3x3 className="w-4 h-4" /> Rep
               </Button>
@@ -1075,6 +1132,9 @@ export default function VisualBuilder() {
               </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("stats")} title="Generate Structure Stats">
                 <Activity className="w-4 h-4" /> Stats
+              </Button>
+              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("analysis")} title="Advanced Analysis (RDF, CN, Unwrap)">
+                <BarChart3 className="w-4 h-4" /> Analysis
               </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("viewer")} title="3D Preview Structure">
                 <Eye className="w-4 h-4" /> View
@@ -1138,6 +1198,18 @@ export default function VisualBuilder() {
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("bvs")} title="Bond valence sum analysis">
                   <Calculator className="w-4 h-4" /> BVS
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("condense")} title="Condense Box">
+                  <Minimize className="w-4 h-4" /> Condense
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("bend")} title="Bend Structure">
+                  <Orbit className="w-4 h-4" /> Bend
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("trajectory")} title="Trajectory Info">
+                  <History className="w-4 h-4" /> Traj
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("waterModel")} title="Convert Water Model">
+                  <Droplet className="w-4 h-4" /> Water
                 </Button>
               </div>
             )}
@@ -1839,6 +1911,86 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
         stateVars.set(id, { atoms: inAtoms, box: inBox });
         break;
       }
+      case "bend": {
+        const radius = getNumber(data, "radius", 50);
+        pythonCode += `${blockOutAtoms} = ap.bend(${inAtoms}, ${radius})\n`;
+        pythonCode += `${blockOutBox} = ${inBox}\n`;
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "condense": {
+        pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.condense(${inAtoms}, ${inBox})\n`;
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "grid": {
+        const atomType = getString(data, "atomType", "Na");
+        const density = getNumber(data, "density", 0.1);
+        const gxlo = getNumber(data, "xlo", 0);
+        const gylo = getNumber(data, "ylo", 0);
+        const gzlo = getNumber(data, "zlo", 0);
+        const gxhi = getNumber(data, "xhi", 10);
+        const gyhi = getNumber(data, "yhi", 10);
+        const gzhi = getNumber(data, "zhi", 10);
+        pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.create_grid('${pyEscape(atomType)}', ${density}, [${gxlo}, ${gylo}, ${gzlo}, ${gxhi}, ${gyhi}, ${gzhi}])\n`;
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "analysis": {
+        const amode = getString(data, "mode", "unwrap");
+        if (amode === "unwrap") {
+          pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox})\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
+        } else if (amode === "rdf") {
+          const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
+          const typeB = pyEscape(getString(data, "atomTypeB", "Cl"));
+          const rmax = getNumber(data, "rmax", 12.0);
+          pythonCode += `r_rdf, g_r = ap.calculate_rdf(${inAtoms}, ${inBox}, typeA='${typeA}', typeB='${typeB}', rmax=${rmax})\n`;
+          pythonCode += `with open('rdf_${id}.json', 'w') as f: json.dump({"bins": r_rdf.tolist(), "rdf": g_r.tolist()}, f)\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
+        } else if (amode === "cn") {
+          const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
+          const cutoff = getNumber(data, "cutoff", 3.5);
+          pythonCode += `cn_data = ap.coordination_number(${inAtoms}, ${inBox}, typeA='${typeA}', cutoff=${cutoff})\n`;
+          pythonCode += `print(f"Node ${id} CN summary: {cn_data}")\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
+        } else if (amode === "closest") {
+          pythonCode += `closest_data = ap.closest_atom(${inAtoms}, ${inBox})\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
+        }
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "trajectory": {
+        const tmode = getString(data, "mode", "export");
+        const tfilename = pyEscape(getString(data, "filename", "trajectory.pdb"));
+        const tformat = pyEscape(getString(data, "format", "pdb"));
+        if (tmode === "import") {
+           pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_trajectory('${tfilename}', format='${tformat}', start=0, stop=1)[0]\n`;
+        } else {
+           pythonCode += `ap.write_trajectory(${inAtoms}, ${inBox}, '${tfilename}', format='${tformat}', append=True)\n`;
+           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+           pythonCode += `${blockOutBox} = ${inBox}\n`;
+        }
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "waterModel": {
+        const conv = getString(data, "conversion", "spc2tip4p");
+        if (conv === "spc2tip4p") {
+          const omDist = getNumber(data, "omDist", 0.15);
+          pythonCode += `${blockOutAtoms} = ap.spc2tip4p(${inAtoms}, Box=${inBox}, om_dist=${omDist})\n`;
+        } else {
+          pythonCode += `${blockOutAtoms} = ap.tip3p2tip4p(${inAtoms}, Box=${inBox})\n`;
+        }
+        stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        break;
+      }
+
+
       case "viewer": {
         // Generate PDB snapshot for the frontend viewer
         pythonCode += `import io, json\n`;
@@ -2076,6 +2228,12 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
           pythonCode += `ap.write_pdb(${inAtoms}, ${inBox}, '${outName}.pdb', write_conect=${writeConect}, write_element=${writeElement})\n`;
         } else if (structureFormat === "cif") {
           pythonCode += `ap.write_cif(${inAtoms}, ${inBox}, '${outName}.cif', title='${cifTitle}')\n`;
+        } else if (structureFormat === "pqr") {
+          pythonCode += `ap.write_pqr(${inAtoms}, ${inBox}, '${outName}.pqr')\n`;
+        } else if (structureFormat === "poscar") {
+          pythonCode += `ap.write_poscar(${inAtoms}, ${inBox}, '${outName}.poscar')\n`;
+        } else if (structureFormat === "sdf") {
+          pythonCode += `ap.write_sdf(${inAtoms}, '${outName}.sdf')\n`;
         } else {
           pythonCode += `ap.write_xyz(${inAtoms}, ${inBox}, '${outName}.xyz')\n`;
         }

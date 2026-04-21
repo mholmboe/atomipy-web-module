@@ -79,7 +79,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
     const file = e.dataTransfer.files?.[0];
     if (file) {
       const ext = file.name.split(".").pop()?.toLowerCase();
-      const validExts = ["pdb", "gro", "cif", "xyz"];
+      const validExts = ["pdb", "gro", "cif", "xyz", "pqr", "poscar"];
       if (ext && validExts.includes(ext)) {
         uploadFile(file);
       } else {
@@ -159,7 +159,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
               type="file"
               className="hidden"
               id={`file-upload-${id}`}
-              accept=".pdb,.gro,.cif,.xyz"
+              accept=".pdb,.gro,.cif,.xyz,.pqr,.poscar"
               onChange={handleFileChange}
               disabled={uploading}
             />
@@ -186,7 +186,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
                 <div className="flex flex-col items-center text-center">
                   <Upload className="w-6 h-6 text-muted-foreground mb-2" />
                   <span className="text-[10px] text-muted-foreground">
-                    Click to upload .pdb, .gro, .cif, or .xyz
+                    Click to upload .pdb, .gro, .cif, .xyz, .pqr, or .poscar
                   </span>
                 </div>
               )}

@@ -5,7 +5,7 @@ import type { NodeComponentProps } from "./types";
 
 type ExportNodeData = {
   outputName?: string;
-  structureFormat?: "xyz" | "gro" | "pdb" | "cif";
+  structureFormat?: "xyz" | "gro" | "pdb" | "cif" | "pqr" | "poscar" | "sdf";
   topologyFormat?: "none" | "itp" | "lmp" | "psf";
   angleTerms?: "none" | "0" | "250" | "500" | "1500";
   writeConect?: boolean;
@@ -59,6 +59,9 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
             <option value="gro">GROMACS structure (.gro)</option>
             <option value="pdb">PDB (.pdb)</option>
             <option value="cif">CIF (.cif)</option>
+            <option value="pqr">PQR (.pqr)</option>
+            <option value="poscar">POSCAR (.poscar)</option>
+            <option value="sdf">SDF (.sdf)</option>
           </select>
         </div>
 

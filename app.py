@@ -48,7 +48,7 @@ def not_found(e):
     # This ensures that React Router works by redirecting 404s to index.html
     return send_file(os.path.join(app.static_folder, "index.html"))
 
-ALLOWED_EXTENSIONS = {"pdb", "gro", "xyz", "cif", "mmcif", "mcif"}
+ALLOWED_EXTENSIONS = {"pdb", "gro", "xyz", "cif", "mmcif", "mcif", "pqr", "poscar", "contcar", "sdf"}
 
 # These will be initialized lazily to avoid importing atomipy at the top level
 _preset_slabs = None
@@ -744,7 +744,7 @@ def execute_script():
             if workflow_data:
                 workflow_path = os.path.join(work_dir, "workflow.json")
                 with open(workflow_path, "w", encoding="utf-8") as f:
-                    json_orig.dump(workflow_data, f, indent=2)
+                    json.dump(workflow_data, f, indent=2)
 
             import subprocess
             # Execute script in work_dir with the current python environment
@@ -787,7 +787,7 @@ def execute_script():
                 if "build_errors.log" not in included_files:
                     zf.writestr("build_errors.log", "")
                 summary["included_files"] = sorted(included_files)
-                zf.writestr("build_summary.json", json_orig.dumps(summary, indent=2))
+                zf.writestr("build_summary.json", json.dumps(summary, indent=2))
 
             memory_file.seek(0)
             status_code = 200 if success else 400

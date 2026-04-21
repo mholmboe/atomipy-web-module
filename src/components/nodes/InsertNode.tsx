@@ -162,7 +162,7 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
               type="file"
               className="hidden"
               id={`insert-upload-${id}`}
-              accept=".pdb,.gro,.cif,.xyz"
+              accept=".pdb,.gro,.cif,.xyz,.pqr,.poscar"
               onChange={handleFileChange}
               disabled={uploading}
             />
@@ -181,7 +181,7 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
               ) : (
                 <div className="flex flex-col items-center text-center">
                   <Upload className="w-5 h-5 text-muted-foreground mb-1" />
-                  <span className="text-[10px] text-muted-foreground">Click to upload template molecule</span>
+                  <span className="text-[10px] text-muted-foreground">Click to upload template (.pdb, .gro, .cif, .xyz, .pqr, .poscar)</span>
                 </div>
               )}
             </label>
