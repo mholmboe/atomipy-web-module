@@ -22,7 +22,7 @@ A powerful, node-based visual programming environment for designing, manipulatin
 
 ### Online Access
 Use the hosted version directly at:  
-👉 **[atomipy web module](https://atomipy-topology-generator-1000562662604.europe-north2.run.app)**
+👉 **[atomipy web module](https://atomipy-web-module-705436360916.europe-north1.run.app/)**
 
 ---
 
