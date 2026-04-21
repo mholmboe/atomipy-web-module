@@ -1,6 +1,6 @@
-import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import VisualBuilder from "@/components/VisualBuilder";
+import Footer from "@/components/Footer";
 
 const Index = () => {
   return (
@@ -8,9 +8,7 @@ const Index = () => {
       <Navbar />
       <HeroSection />
       <VisualBuilder />
-      <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
-        Based on <a href="https://github.com/mholmboe/atomipy" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">atomipy</a> — Mineral-based MD simulation tools
-      </footer>
+      <Footer />
     </div>
   );
 };

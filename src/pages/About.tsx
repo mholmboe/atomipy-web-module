@@ -1,5 +1,6 @@
 import { Atom, ExternalLink, ArrowRight, BookOpen, Layers, BarChart3, Zap } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
@@ -148,11 +149,7 @@ const About = () => {
         </div>
       </main>
 
-      <footer className="py-12 border-t mt-12">
-        <div className="container mx-auto px-6 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} atomipy project. Open source and science-first.
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 };
