@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Handle, Position, useReactFlow, useEdges } from "@xyflow/react";
-import { Box } from "lucide-react";
+import { Box, X } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps, PresetOption } from "./types";
 
 type BoxMode = "cell" | "box_dim";
@@ -274,10 +275,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
     <div className="bg-card w-[270px] shadow-lg rounded-xl border border-indigo-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <div className="bg-indigo-500/10 p-3 border-b border-border flex items-center gap-2">
-        <Box className="w-4 h-4 text-indigo-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Set System Box</h3>
-      </div>
+      <NodeHeader id={id} title="Set System Box" Icon={Box} colorClass="text-indigo-500" className="bg-indigo-500/10" />
 
       <div className="p-4 space-y-3 bg-background">
         {/* Mode Toggle */}

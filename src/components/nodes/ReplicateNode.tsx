@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { ChevronDown, ChevronUp, Grid3x3 } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
 type ReplicateNodeData = {
@@ -29,10 +30,7 @@ export function ReplicateNode({ id, data }: NodeComponentProps<ReplicateNodeData
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
       
-      <div className="bg-secondary/40 p-3 border-b border-border flex items-center gap-2">
-        <Grid3x3 className="w-4 h-4 text-foreground" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Replicate System</h3>
-      </div>
+      <NodeHeader id={id} title="Replicate" Icon={Grid3x3} colorClass="text-purple-500" className="bg-purple-500/10" />
       <div className="p-4 space-y-3 bg-background">
         <div className="grid grid-cols-3 gap-2">
           <div>

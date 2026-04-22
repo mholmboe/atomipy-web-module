@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Handle, NodeResizer, Position, useReactFlow } from "@xyflow/react";
-import { Eye, RotateCw, Settings2, Palette, Box as BoxIcon } from "lucide-react";
+import { Eye, RotateCw, Settings2, Palette, Box as BoxIcon, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -330,6 +330,16 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
               title="Reset View"
             >
               <RotateCw className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteElements({ nodes: [{ id }] });
+              }}
+              className="p-1 hover:bg-red-500/20 rounded-md transition-colors text-muted-foreground hover:text-destructive"
+              title="Delete Node"
+            >
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </CardHeader>

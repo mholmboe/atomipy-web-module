@@ -1,6 +1,7 @@
 import React from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { Activity } from "lucide-react";
+import { History } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
 type TrajectoryNodeData = {
@@ -21,10 +22,7 @@ export function TrajectoryNode({ id, data }: NodeComponentProps<TrajectoryNodeDa
     <div className="bg-card w-[260px] shadow-lg rounded-xl border border-slate-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <div className="bg-slate-500/10 p-3 border-b border-border flex items-center gap-2">
-        <Activity className="w-4 h-4 text-slate-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Trajectory I/O</h3>
-      </div>
+      <NodeHeader id={id} title="Trajectory Processing" Icon={History} colorClass="text-purple-500" className="bg-purple-500/10" />
 
       <div className="p-4 space-y-3 bg-background">
         <div>

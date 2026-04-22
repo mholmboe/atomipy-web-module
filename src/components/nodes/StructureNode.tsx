@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { FileInput, Upload, File, Loader2 } from "lucide-react";
+import { FileInput, Upload, File, Loader2, X } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import { toast } from "sonner";
 import { formatPresetLabel } from "./types";
 import type { NodeComponentProps, PresetOption } from "./types";
@@ -101,10 +102,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
 
   return (
     <div className="bg-card w-[300px] shadow-lg rounded-xl border border-primary/50 overflow-hidden font-sans">
-      <div className="bg-primary/10 p-3 border-b border-border flex items-center gap-2">
-        <FileInput className="w-4 h-4 text-primary" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Import Structure</h3>
-      </div>
+      <NodeHeader id={id} title="Import Structure" Icon={FileInput} colorClass="text-primary" className="bg-primary/10" />
 
       <div className="p-4 space-y-3 bg-secondary/20">
         <div className="grid grid-cols-2 gap-2">

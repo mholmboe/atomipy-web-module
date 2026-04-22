@@ -1,6 +1,7 @@
 import React from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, X } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
 type ChemMode = "substitute" | "fuse" | "addH";
@@ -32,10 +33,7 @@ export function ChemistryNode({ id, data }: NodeComponentProps<ChemistryNodeData
     <div className="bg-card w-[300px] shadow-lg rounded-xl border border-violet-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <div className="bg-violet-500/10 p-3 border-b border-border flex items-center gap-2">
-        <FlaskConical className="w-4 h-4 text-violet-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Chemistry</h3>
-      </div>
+      <NodeHeader id={id} title="Chemistry Ops" Icon={FlaskConical} colorClass="text-amber-500" className="bg-amber-500/10" />
 
       <div className="p-4 space-y-3 bg-background">
         <div>

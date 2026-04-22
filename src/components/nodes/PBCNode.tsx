@@ -1,6 +1,7 @@
 import React from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { BoxSelect } from "lucide-react";
+import { Minimize } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
 type PBCMode = "wrap" | "unwrap" | "condense";
@@ -24,10 +25,7 @@ export function PBCNode({ id, data }: NodeComponentProps<PBCNodeData>) {
     <div className="bg-card w-[240px] shadow-lg rounded-xl border border-purple-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <div className="bg-purple-500/10 p-3 border-b border-border flex items-center gap-2">
-        <BoxSelect className="w-4 h-4 text-purple-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">PBC Tools</h3>
-      </div>
+      <NodeHeader id={id} title="PBC Ops" Icon={Minimize} colorClass="text-cyan-500" className="bg-cyan-500/10" />
 
       <div className="p-4 space-y-3 bg-background">
         <div>

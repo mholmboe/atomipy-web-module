@@ -1,6 +1,7 @@
 import React from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronUp, X } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
 type AnalysisMode = "rdf" | "cn" | "closest" | "occupancy" | "bvs" | "stats";
@@ -54,10 +55,7 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
     <div className="bg-card w-[300px] shadow-lg rounded-xl border border-fuchsia-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <div className="bg-fuchsia-500/10 p-3 border-b border-border flex items-center gap-2">
-        <BarChart3 className="w-4 h-4 text-fuchsia-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Structure Analysis</h3>
-      </div>
+      <NodeHeader id={id} title="Analysis Ops" Icon={BarChart3} colorClass="text-blue-500" className="bg-blue-500/10" />
 
       <div className="p-4 space-y-3 bg-background">
         <div>

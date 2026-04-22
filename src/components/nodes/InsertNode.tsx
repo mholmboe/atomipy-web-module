@@ -4,6 +4,7 @@ import { PackagePlus, Upload, File, Loader2, Copy, ChevronDown, ChevronUp } from
 import { toast } from "sonner";
 import { formatPresetLabel } from "./types";
 import type { NodeComponentProps, PresetOption } from "./types";
+import { NodeHeader } from "./NodeHeader";
 
 type InsertNodeData = {
   source?: "preset" | "upload";
@@ -106,10 +107,7 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
     <div className="bg-card w-[300px] shadow-lg rounded-xl border border-sky-500/50 overflow-hidden font-sans">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <div className="bg-sky-500/10 p-3 border-b border-border flex items-center gap-2">
-        <PackagePlus className="w-4 h-4 text-sky-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Insert Molecule</h3>
-      </div>
+      <NodeHeader id={id} title="Insert Molecules" Icon={PackagePlus} colorClass="text-indigo-500" className="bg-indigo-500/10" />
 
       <div className="p-4 space-y-3 bg-background">
         <div className="grid grid-cols-2 gap-2">

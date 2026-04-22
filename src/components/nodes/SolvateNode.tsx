@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { ChevronDown, ChevronUp, Droplet, HelpCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, Droplets } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
 type SolvateNodeData = {
@@ -17,6 +18,7 @@ type SolvateNodeData = {
   xhi?: number;
   yhi?: number;
   zhi?: number;
+  status?: string;
 };
 
 export function SolvateNode({ id, data }: NodeComponentProps<SolvateNodeData>) {
@@ -39,14 +41,10 @@ export function SolvateNode({ id, data }: NodeComponentProps<SolvateNodeData>) {
 
   return (
     <div className="bg-card w-[300px] shadow-lg rounded-xl border border-primary/50 overflow-hidden font-sans select-none relative">
-      <NodeStatus status={data.status} />
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
       
-      <div className="bg-cyan-500/10 p-3 border-b border-border flex items-center gap-2">
-        <Droplet className="w-4 h-4 text-cyan-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Solvate System</h3>
-      </div>
+      <NodeHeader id={id} title="Solvation" Icon={Droplets} colorClass="text-sky-500" className="bg-sky-500/10" />
       
       <div className="p-4 space-y-3 bg-background">
         <div>

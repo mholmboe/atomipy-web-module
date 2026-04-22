@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { ChevronDown, ChevronUp, FlaskConical } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
 type ForcefieldNodeData = {
@@ -26,10 +27,7 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
     <div className="bg-card w-[250px] shadow-lg rounded-xl border border-amber-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <div className="bg-amber-500/10 p-3 border-b border-border flex items-center gap-2">
-        <FlaskConical className="w-4 h-4 text-amber-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Assign Forcefield</h3>
-      </div>
+      <NodeHeader id={id} title="Forcefield" Icon={FlaskConical} colorClass="text-yellow-600" className="bg-yellow-500/10" />
 
       <div className="p-4 space-y-3 bg-background">
         <div>

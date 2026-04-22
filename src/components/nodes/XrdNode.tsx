@@ -1,6 +1,7 @@
 import React from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, X } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
 export type XrdNodeData = {
@@ -31,10 +32,7 @@ export function XrdNode({ id, data }: NodeComponentProps<XrdNodeData>) {
     <div className="bg-card w-[280px] shadow-lg rounded-xl border border-blue-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <div className="bg-blue-500/10 p-3 border-b border-border flex items-center gap-2">
-        <BarChart3 className="w-4 h-4 text-blue-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">XRD Simulation</h3>
-      </div>
+      <NodeHeader id={id} title="XRD Simulation" Icon={BarChart3} colorClass="text-blue-500" className="bg-blue-500/10" />
 
       <div className="p-4 space-y-4 bg-background">
         {/* Instrument Parameters */}

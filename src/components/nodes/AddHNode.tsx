@@ -1,6 +1,7 @@
 import React from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { Droplets } from "lucide-react";
+import { Droplets, X } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
 type AddHNodeData = {
@@ -19,10 +20,7 @@ export function AddHNode({ id, data }: NodeComponentProps<AddHNodeData>) {
     <div className="bg-card w-[240px] shadow-lg rounded-xl border border-blue-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <div className="bg-blue-500/10 p-3 border-b border-border flex items-center gap-2">
-        <Droplets className="w-4 h-4 text-blue-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Add Hydrogens</h3>
-      </div>
+      <NodeHeader id={id} title="Add Hydrogens" Icon={Droplets} colorClass="text-blue-500" className="bg-blue-500/10" />
 
       <div className="p-4 space-y-3 bg-background">
         <div>

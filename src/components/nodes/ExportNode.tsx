@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { Download, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { FileOutput, Download, Save, Target, ChevronDown, ChevronUp, X } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
 type ExportNodeData = {
@@ -33,10 +34,7 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
     <div className="bg-card w-[300px] shadow-lg rounded-xl border border-destructive/50 overflow-hidden font-sans select-none relative">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <div className="bg-destructive/10 p-3 border-b border-border flex items-center gap-2">
-        <Download className="w-4 h-4 text-destructive" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Export System</h3>
-      </div>
+      <NodeHeader id={id} title="Export Settings" Icon={FileOutput} colorClass="text-indigo-500" className="bg-indigo-500/10" />
       <div className="p-4 space-y-3 bg-background">
         <div>
           <label className="text-xs font-semibold text-muted-foreground block mb-1">Output Name</label>

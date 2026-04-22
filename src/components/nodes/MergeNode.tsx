@@ -1,6 +1,7 @@
 import React from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { GitMerge } from "lucide-react";
+import { GitMerge, X } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
 type MergeNodeData = {
@@ -28,10 +29,7 @@ export function MergeNode({ id, data }: NodeComponentProps<MergeNodeData>) {
 
   return (
     <div className="bg-card w-[280px] shadow-lg rounded-xl border border-teal-500/50 overflow-hidden font-sans select-none">
-      <div className="bg-teal-500/10 p-3 border-b border-border flex items-center gap-2">
-        <GitMerge className="w-4 h-4 text-teal-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Merge (Overlap-Aware)</h3>
-      </div>
+      <NodeHeader id={id} title="Merge (Overlap Filter)" Icon={GitMerge} colorClass="text-orange-500" className="bg-orange-500/10" />
 
       <div className="p-4 space-y-3 bg-background relative min-h-[120px]">
         <div className="grid grid-cols-2 gap-2">

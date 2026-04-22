@@ -1,6 +1,7 @@
 import React from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { Atom } from "lucide-react";
+import { Tag } from "lucide-react";
+import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
 type AtomPropertiesNodeData = {
@@ -33,10 +34,7 @@ export function AtomPropertiesNode({ id, data }: NodeComponentProps<AtomProperti
     <div className="bg-card w-[280px] shadow-lg rounded-xl border border-cyan-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <div className="bg-cyan-500/10 p-3 border-b border-border flex items-center gap-2">
-        <Atom className="w-4 h-4 text-cyan-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Atom Properties</h3>
-      </div>
+      <NodeHeader id={id} title="Atom Properties" Icon={Tag} colorClass="text-rose-500" className="bg-rose-500/10" />
 
       <div className="p-4 space-y-3 bg-background">
         {checkbox("applyElement", "Set element/type labels", true)}
