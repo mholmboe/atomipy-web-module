@@ -1399,6 +1399,20 @@ export default function VisualBuilder() {
     toast.success(`Deleted template: ${target.name}`);
   }, [customTemplates, savedWorkflows, selectedWorkflowKey, storeCustomTemplates, storeSavedWorkflows]);
 
+  const handleResetWorkflow = useCallback(() => {
+    if (window.confirm("Are you sure you want to entirely empty and remove all nodes? This cannot be undone.")) {
+      setNodes([]);
+      setEdges([]);
+      setTrackedNodeOrder([]);
+      setNodeRunStatus({});
+      setBuildLogs([]);
+      setBuildProgress(0);
+      setBuildStatus("");
+      setShowStatusWindow(false);
+      setSelectedWorkflowKey(DEFAULT_WORKFLOW_SELECTION);
+    }
+  }, [setNodes, setEdges]);
+
   const handleExportCurrentWorkflow = useCallback(() => {
     const defaultName = `workflow_${makeTimestampSuffix()}`;
     const rawName = window.prompt("Export workflow filename:", defaultName);
@@ -1813,10 +1827,23 @@ export default function VisualBuilder() {
             </div>
           )}
           </div>
-          <Button className="shadow-lg shadow-primary/20 shrink-0" onClick={handleCompileAndRun}>
-            <Play className="w-4 h-4 mr-2" />
-            Run
-          </Button>
+          <div className="flex flex-col gap-2 shrink-0">
+            <Button className="shadow-lg shadow-primary/20" onClick={handleCompileAndRun}>
+              <Play className="w-4 h-4 mr-2" />
+              Run
+            </Button>
+            {showMoreOptions && (
+              <Button 
+                variant="destructive" 
+                className="shadow-lg shadow-destructive/20 h-8 text-xs font-bold uppercase tracking-wider" 
+                onClick={handleResetWorkflow}
+                title="Clear all nodes and reset workflow"
+              >
+                <Eraser className="w-3.5 h-3.5 mr-2" />
+                Reset
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
