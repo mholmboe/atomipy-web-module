@@ -86,13 +86,10 @@ export function MergeNode({ id, data }: NodeComponentProps<MergeNodeData>) {
         <div className="text-[10px] text-muted-foreground italic text-center">
           Removes overlapping atoms/molecules from input B before merging into input A.
         </div>
-
-        <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-around py-4">
-          <Handle type="target" position={Position.Left} id="inA" className="w-3 h-3 bg-teal-400 -left-1.5" />
-          <Handle type="target" position={Position.Left} id="inB" className="w-3 h-3 bg-teal-600 -left-1.5" />
-        </div>
       </div>
 
+      <Handle type="target" position={Position.Left} id="inA" style={{ top: '35%' }} className="w-3 h-3 bg-teal-400 -left-1.5 border-2 border-background" />
+      <Handle type="target" position={Position.Left} id="inB" style={{ top: '65%' }} className="w-3 h-3 bg-teal-600 -left-1.5 border-2 border-background" />
       <Handle type="source" position={Position.Right} id="out" className="w-3 h-3 bg-primary" />
     </div>
   );
