@@ -56,7 +56,7 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
             onPointerDown={(e) => e.stopPropagation()}
           >
             <option value="xyz">XYZ (.xyz)</option>
-            <option value="gro">GROMACS structure (.gro)</option>
+            <option value="gro">GROMACS (.gro)</option>
             <option value="pdb">PDB (.pdb)</option>
             <option value="cif">CIF (.cif)</option>
             <option value="pqr">PQR (.pqr)</option>
