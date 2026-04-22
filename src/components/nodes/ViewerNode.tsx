@@ -208,22 +208,23 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const compactLabelClass = "text-[11px] py-1 text-muted-foreground uppercase tracking-wide";
 
   return (
-    <>
+    <div className="relative" style={{ width: nodeWidth, height: nodeHeight }}>
+      <NodeResizer
+        isVisible={Boolean(selected)}
+        minWidth={360}
+        minHeight={320}
+        lineClassName="border-indigo-400/70"
+        handleClassName="w-2.5 h-2.5 bg-indigo-500 border border-white rounded-sm"
+        onResizeEnd={(_, params) =>
+          setViewerOption({ width: Math.round(params.width), height: Math.round(params.height) })
+        }
+      />
+      <Handle type="target" position={Position.Left} className="w-3.5 h-3.5 bg-indigo-500 border-2 border-background z-50" />
+      <Handle type="source" position={Position.Right} className="w-3.5 h-3.5 bg-indigo-500 border-2 border-background z-50" />
+      
       <Card
-        className="w-full h-full shadow-2xl transition-all border-indigo-500/50 bg-card/95 backdrop-blur-md overflow-hidden flex flex-col min-w-[360px] min-h-[320px]"
-        style={{ width: nodeWidth, height: nodeHeight }}
+        className="w-full h-full shadow-2xl transition-all border-indigo-500/50 bg-card/95 backdrop-blur-md overflow-hidden flex flex-col"
       >
-        <NodeResizer
-          isVisible={Boolean(selected)}
-          minWidth={360}
-          minHeight={320}
-          lineClassName="border-indigo-400/70"
-          handleClassName="w-2.5 h-2.5 bg-indigo-500 border border-white rounded-sm"
-          onResizeEnd={(_, params) =>
-            setViewerOption({ width: Math.round(params.width), height: Math.round(params.height) })
-          }
-        />
-        <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500/80" />
         <CardHeader className="py-2.5 px-4 bg-indigo-500/10 border-b flex flex-row items-center justify-between shrink-0">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-indigo-700 dark:text-indigo-300 pointer-events-none">
             <Eye className="w-4 h-4" />
@@ -344,8 +345,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
             </div>
           )}
         </CardContent>
-        <Handle type="source" position={Position.Right} className="w-3 h-3 bg-indigo-500/80" />
       </Card>
-    </>
+    </div>
   );
 }

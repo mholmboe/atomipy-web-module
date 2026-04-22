@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Handle, Position, useReactFlow } from "@xyflow/react";
+import { Handle, Position, useReactFlow, useEdges } from "@xyflow/react";
 import { Box } from "lucide-react";
 import type { NodeComponentProps, PresetOption } from "./types";
 
@@ -62,7 +62,8 @@ function fmt(v: number) {
 // ----------------------------------------------------------------
 
 export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
-  const { updateNodeData, getEdges, getNode } = useReactFlow();
+  const { updateNodeData, getNode } = useReactFlow();
+  const edges = useEdges();
   const mode = data.inputMode ?? "cell";
 
   // ------- Auto-seed from upstream structure/replicate/scale --------
@@ -119,8 +120,8 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
     };
 
     const getPrimary = (nodeId: string) => {
-      const edges = getEdges().filter((e) => e.target === nodeId);
-      if (!edges.length) return null;
+      const incoming = edges.filter((e) => e.target === nodeId);
+      if (!incoming.length) return null;
       const inA = edges.find((e) => e.targetHandle === "inA");
       return (inA ?? edges[0]).source;
     };
@@ -186,7 +187,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
         return res;
       }
 
-      const passthroughTypes = new Set(["position", "rotate", "wrap", "addIons", "solvate", "bondAngle", "bvs", "slice", "insert", "substitute", "fuse", "resname", "molecule", "merge", "add", "transform", "pbc", "edit", "chemistry", "solvent", "analysis"]);
+      const passthroughTypes = new Set(["position", "rotate", "wrap", "addIons", "ions", "solvate", "bondAngle", "bvs", "slice", "insert", "substitute", "fuse", "resname", "molecule", "merge", "add", "transform", "pbc", "edit", "chemistry", "solvent", "analysis"]);
       if (passthroughTypes.has(node.type ?? "")) {
         const up = getPrimary(node.id);
         return up ? inferSeed(up, visited) : null;
@@ -201,7 +202,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
 
     if (!isMissing) return;
 
-    const edge = getEdges().find((e) => e.target === id);
+    const edge = edges.find((e) => e.target === id);
     if (!edge) return;
     const seed = inferSeed(edge.source);
     if (!seed) return;
@@ -225,7 +226,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
 
     const changed = Object.keys(next).some((k) => (next as any)[k] !== (data as any)[k]);
     if (changed) updateNodeData(id, next);
-  }, [data, getEdges, getNode, id, mode, updateNodeData]);
+  }, [data, edges, getNode, id, mode, updateNodeData]);
 
   // ------- Mode switch with live conversion --------
   const switchMode = (newMode: BoxMode) => {
