@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Handle, Position, useReactFlow } from "@xyflow/react";
+import { Handle, NodeResizer, Position, useReactFlow } from "@xyflow/react";
 import { Eye, RotateCw, Settings2, Palette, Box as BoxIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -25,13 +25,15 @@ type ViewerNodeData = {
   pdb?: string;
   charges?: number[];
   title?: string;
+  width?: number;
+  height?: number;
   showUnitCell?: boolean;
   background?: keyof typeof BACKGROUNDS;
   viewStyle?: "stick" | "sphere" | "both" | "line";
   showOutline?: boolean;
   showHydrogens?: boolean;
   showAtomLabels?: boolean;
-  colorScheme?: "Jmol" | "greenCarbon" | "cyanCarbon" | "magentaCarbon" | "chain";
+  labelMode?: "none" | "element" | "charge";
   spin?: boolean;
   projection?: "perspective" | "orthographic";
   stickRadius?: number;
@@ -46,17 +48,6 @@ const BACKGROUNDS = {
   black: "#000000",
 };
 
-const COLOR_SCHEME_LABELS: Record<
-  NonNullable<ViewerNodeData["colorScheme"]>,
-  string
-> = {
-  Jmol: "Jmol",
-  greenCarbon: "Green Carbon",
-  cyanCarbon: "Cyan Carbon",
-  magentaCarbon: "Magenta Carbon",
-  chain: "Chain",
-};
-
 export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNodeData>) {
   const { updateNodeData } = useReactFlow();
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -68,13 +59,17 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const showOutline = data.showOutline ?? true;
   const showUnitCell = data.showUnitCell ?? true;
   const showHydrogens = data.showHydrogens ?? true;
-  const showAtomLabels = data.showAtomLabels ?? false;
-  const colorScheme = data.colorScheme ?? "Jmol";
+  const labelMode = data.labelMode ?? ((data.showAtomLabels ?? false) ? "element" : "none");
+  const showAtomLabels = labelMode !== "none";
+  const labelIsCharge = labelMode === "charge";
   const spin = data.spin ?? false;
   const projection = data.projection ?? "perspective";
   const stickRadius = data.stickRadius ?? 0.15;
   const sphereScale = data.sphereScale ?? 0.25;
   const lineWidth = data.lineWidth ?? 1.2;
+  const nodeWidth = Math.max(360, Number.isFinite(data.width) ? Number(data.width) : 500);
+  const nodeHeight = Math.max(320, Number.isFinite(data.height) ? Number(data.height) : 500);
+  const chargeValues = Array.isArray(data.charges) ? data.charges : [];
 
   const setViewerOption = (patch: Partial<ViewerNodeData>) => {
     updateNodeData(id, { ...data, ...patch });
@@ -102,13 +97,13 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       
       const styleConfig: any = {};
       if (viewStyle === "stick" || viewStyle === "both") {
-        styleConfig.stick = { radius: stickRadius, colorscheme: colorScheme };
+        styleConfig.stick = { radius: stickRadius, colorscheme: "Jmol" };
       }
       if (viewStyle === "sphere" || viewStyle === "both") {
-        styleConfig.sphere = { scale: sphereScale, colorscheme: colorScheme };
+        styleConfig.sphere = { scale: sphereScale, colorscheme: "Jmol" };
       }
       if (viewStyle === "line") {
-        styleConfig.line = { linewidth: lineWidth, colorscheme: colorScheme };
+        styleConfig.line = { linewidth: lineWidth, colorscheme: "Jmol" };
       }
       
       const outlineColor = background === "dark" || background === "black" ? "white" : "black";
@@ -130,12 +125,26 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       }
 
       if (showAtomLabels && viewer.addPropertyLabels) {
-        viewer.addPropertyLabels("elem", showHydrogens ? {} : { not: { elem: "H" } }, {
+        const labelOptions = {
           fontSize: 10,
           fontColor: background === "dark" || background === "black" ? "#e2e8f0" : "#0f172a",
           backgroundOpacity: 0.45,
           inFront: true,
-        });
+        };
+        if (labelIsCharge && viewer.addLabel && model?.selectedAtoms) {
+          const modelAtoms = model.selectedAtoms({});
+          modelAtoms.forEach((atom: any, index: number) => {
+            if (!showHydrogens && atom?.elem === "H") return;
+            const rawCharge = chargeValues[index] ?? atom?.charge;
+            if (typeof rawCharge !== "number" || !Number.isFinite(rawCharge)) return;
+            viewer.addLabel(rawCharge.toFixed(3), {
+              ...labelOptions,
+              position: { x: atom.x, y: atom.y, z: atom.z },
+            });
+          });
+        } else {
+          viewer.addPropertyLabels("elem", showHydrogens ? {} : { not: { elem: "H" } }, labelOptions);
+        }
       }
 
       if (spin && viewer.spin) {
@@ -172,7 +181,8 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     showOutline,
     showHydrogens,
     showAtomLabels,
-    colorScheme,
+    labelIsCharge,
+    chargeValues,
     spin,
     projection,
     stickRadius,
@@ -194,10 +204,25 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       viewerInstance.current.render();
     }
   };
+  const compactItemClass = "text-xs py-1";
+  const compactLabelClass = "text-[11px] py-1 text-muted-foreground uppercase tracking-wide";
 
   return (
     <>
-      <Card className="w-[500px] h-[500px] shadow-2xl transition-all border-indigo-500/50 bg-card/95 backdrop-blur-md overflow-hidden flex flex-col">
+      <Card
+        className="w-full h-full shadow-2xl transition-all border-indigo-500/50 bg-card/95 backdrop-blur-md overflow-hidden flex flex-col min-w-[360px] min-h-[320px]"
+        style={{ width: nodeWidth, height: nodeHeight }}
+      >
+        <NodeResizer
+          isVisible={Boolean(selected)}
+          minWidth={360}
+          minHeight={320}
+          lineClassName="border-indigo-400/70"
+          handleClassName="w-2.5 h-2.5 bg-indigo-500 border border-white rounded-sm"
+          onResizeEnd={(_, params) =>
+            setViewerOption({ width: Math.round(params.width), height: Math.round(params.height) })
+          }
+        />
         <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500/80" />
         <CardHeader className="py-2.5 px-4 bg-indigo-500/10 border-b flex flex-row items-center justify-between shrink-0">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-indigo-700 dark:text-indigo-300 pointer-events-none">
@@ -211,93 +236,88 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                   <Settings2 className="w-3.5 h-3.5" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel className="flex items-center gap-2">
+              <DropdownMenuContent align="end" className="w-44 max-h-[320px] overflow-y-auto">
+                <DropdownMenuLabel className={`flex items-center gap-2 ${compactLabelClass}`}>
                   <Palette className="w-3.5 h-3.5" /> Background
                 </DropdownMenuLabel>
                 <DropdownMenuRadioGroup
                   value={background}
                   onValueChange={(value) => setViewerOption({ background: value as keyof typeof BACKGROUNDS })}
                 >
-                  <DropdownMenuRadioItem value="white">White</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="light">Light Slate</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="dark">Dark Slate</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="black">Black</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="white">White</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="light">Light Slate</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="dark">Dark Slate</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="black">Black</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel className="flex items-center gap-2">
+                <DropdownMenuLabel className={`flex items-center gap-2 ${compactLabelClass}`}>
                   <BoxIcon className="w-3.5 h-3.5" /> Representation
                 </DropdownMenuLabel>
                 <DropdownMenuRadioGroup
                   value={viewStyle}
                   onValueChange={(value) => setViewerOption({ viewStyle: value as ViewerNodeData["viewStyle"] })}
                 >
-                  <DropdownMenuRadioItem value="both">Ball & Stick</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="stick">Sticks</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="sphere">Spheres</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="line">Lines</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="both">Ball & Stick</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="stick">Sticks</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="sphere">Spheres</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="line">Lines</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel>Colors</DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={colorScheme}
-                  onValueChange={(value) => setViewerOption({ colorScheme: value as ViewerNodeData["colorScheme"] })}
-                >
-                  {Object.entries(COLOR_SCHEME_LABELS).map(([key, label]) => (
-                    <DropdownMenuRadioItem key={key} value={key}>
-                      {label}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Projection</DropdownMenuLabel>
+                <DropdownMenuLabel className={compactLabelClass}>Projection</DropdownMenuLabel>
                 <DropdownMenuRadioGroup
                   value={projection}
                   onValueChange={(value) => setViewerOption({ projection: value as ViewerNodeData["projection"] })}
                 >
-                  <DropdownMenuRadioItem value="perspective">Perspective</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="orthographic">Orthographic</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="perspective">Perspective</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="orthographic">Orthographic</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuCheckboxItem
+                  className={compactItemClass}
                   checked={showUnitCell}
                   onCheckedChange={(checked) => setViewerOption({ showUnitCell: Boolean(checked) })}
                 >
-                  Show Unit Cell
+                  Unit Cell
                 </DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem
+                  className={compactItemClass}
                   checked={showHydrogens}
                   onCheckedChange={(checked) => setViewerOption({ showHydrogens: Boolean(checked) })}
                 >
-                  Show Hydrogens
+                  Hydrogens
                 </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem
-                  checked={showAtomLabels}
-                  onCheckedChange={(checked) => setViewerOption({ showAtomLabels: Boolean(checked) })}
+                <DropdownMenuLabel className={compactLabelClass}>Labels</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={labelMode}
+                  onValueChange={(value) => setViewerOption({ labelMode: value as ViewerNodeData["labelMode"] })}
                 >
-                  Show Atom Labels
-                </DropdownMenuCheckboxItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="none">None</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="element">Element</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className={compactItemClass} value="charge">Charge</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
                 <DropdownMenuCheckboxItem
+                  className={compactItemClass}
                   checked={showOutline}
                   onCheckedChange={(checked) => setViewerOption({ showOutline: Boolean(checked) })}
                 >
-                  Show Outline
+                  Outline
                 </DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem
+                  className={compactItemClass}
                   checked={spin}
                   onCheckedChange={(checked) => setViewerOption({ spin: Boolean(checked) })}
                 >
-                  Spin Model
+                  Spin
                 </DropdownMenuCheckboxItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel>Style Presets</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => setViewerOption({ stickRadius: 0.1, sphereScale: 0.2, lineWidth: 0.9 })}>
+                <DropdownMenuLabel className={compactLabelClass}>Style Presets</DropdownMenuLabel>
+                <DropdownMenuItem className={compactItemClass} onClick={() => setViewerOption({ stickRadius: 0.1, sphereScale: 0.2, lineWidth: 0.9 })}>
                   Thin
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setViewerOption({ stickRadius: 0.15, sphereScale: 0.25, lineWidth: 1.2 })}>
+                <DropdownMenuItem className={compactItemClass} onClick={() => setViewerOption({ stickRadius: 0.15, sphereScale: 0.25, lineWidth: 1.2 })}>
                   Default
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setViewerOption({ stickRadius: 0.22, sphereScale: 0.34, lineWidth: 1.7 })}>
+                <DropdownMenuItem className={compactItemClass} onClick={() => setViewerOption({ stickRadius: 0.22, sphereScale: 0.34, lineWidth: 1.7 })}>
                   Bold
                 </DropdownMenuItem>
               </DropdownMenuContent>

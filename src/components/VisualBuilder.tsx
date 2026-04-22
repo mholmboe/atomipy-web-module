@@ -1159,13 +1159,14 @@ export default function VisualBuilder() {
     }
     if (type === "viewer") {
       baseData.title = "Structure Viewer";
+      baseData.width = 500;
+      baseData.height = 500;
       baseData.background = "light";
       baseData.viewStyle = "both";
       baseData.showOutline = true;
       baseData.showHydrogens = true;
       baseData.showUnitCell = true;
-      baseData.showAtomLabels = false;
-      baseData.colorScheme = "Jmol";
+      baseData.labelMode = "none";
       baseData.spin = false;
       baseData.projection = "perspective";
       baseData.stickRadius = 0.15;
