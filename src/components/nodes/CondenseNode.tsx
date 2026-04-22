@@ -1,13 +1,11 @@
 import React from "react";
-import { Handle, Position, useReactFlow } from "@xyflow/react";
+import { Handle, Position } from "@xyflow/react";
 import { Minimize } from "lucide-react";
 import type { NodeComponentProps } from "./types";
 
-type CondenseNodeData = {
-  // No specific options for now as ap.condense takes atoms and box
-};
+type CondenseNodeData = Record<string, never>;
 
-export function CondenseNode({ id, data }: NodeComponentProps<CondenseNodeData>) {
+export function CondenseNode(_: NodeComponentProps<CondenseNodeData>) {
   return (
     <div className="bg-card w-[220px] shadow-lg rounded-xl border border-emerald-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />

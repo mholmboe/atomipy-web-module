@@ -3,8 +3,17 @@ import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { FileText } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import type { NodeComponentProps } from "./types";
 
-export function StatsNode({ id, data, isConnectable }: { id: string; data: any; isConnectable: boolean }) {
+type StatsNodeData = {
+  logFile?: string;
+};
+
+type StatsNodeProps = NodeComponentProps<StatsNodeData> & {
+  isConnectable?: boolean;
+};
+
+export function StatsNode({ id, data, isConnectable = true }: StatsNodeProps) {
   const { updateNodeData } = useReactFlow();
   const logFile = data.logFile || "output.log";
 

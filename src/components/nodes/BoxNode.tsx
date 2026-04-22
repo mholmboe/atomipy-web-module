@@ -225,7 +225,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
       if (missing(data.yz)) next.yz = seed.yz;
     }
 
-    const changed = Object.keys(next).some((k) => (next as any)[k] !== (data as any)[k]);
+    const changed = (Object.keys(next) as Array<keyof BoxNodeData>).some((k) => next[k] !== data[k]);
     if (changed) updateNodeData(id, next);
   }, [data, edges, getNode, id, mode, updateNodeData]);
 

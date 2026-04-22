@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Handle, NodeResizer, Position, useReactFlow } from "@xyflow/react";
 import { Eye, RotateCw, Settings2, Palette, Box as BoxIcon, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,9 +17,49 @@ import type { NodeComponentProps } from "./types";
 
 declare global {
   interface Window {
-    $3Dmol: any;
+    $3Dmol?: {
+      createViewer: (element: HTMLDivElement, options: { backgroundColor: string }) => ViewerApi;
+    };
   }
 }
+
+type ViewerProjection = "perspective" | "orthographic";
+
+type ViewerAtom = {
+  elem?: string;
+  charge?: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+type ViewerSelection = Record<string, unknown>;
+
+type ViewerStyle = {
+  stick?: { radius?: number; colorscheme?: string; hidden?: boolean };
+  sphere?: { scale?: number; colorscheme?: string; hidden?: boolean };
+  line?: { linewidth?: number; colorscheme?: string; hidden?: boolean };
+  outline?: { color: string; width: number };
+};
+
+type ViewerModel = {
+  selectedAtoms?: (selection: ViewerSelection) => ViewerAtom[];
+};
+
+type ViewerApi = {
+  setBackgroundColor: (color: string) => void;
+  clear: () => void;
+  setProjection?: (projection: ViewerProjection) => void;
+  addModel: (pdb: string, format: string, options?: { keepH?: boolean }) => ViewerModel;
+  setStyle: (selection: ViewerSelection, style: ViewerStyle) => void;
+  addUnitCell: (model: ViewerModel, options: Record<string, unknown>) => void;
+  addPropertyLabels?: (property: string, selection: ViewerSelection, options: Record<string, unknown>) => void;
+  addLabel?: (text: string, options: Record<string, unknown>) => void;
+  spin?: (...args: [false] | ["x" | "y" | "z", number?]) => void;
+  zoomTo: () => void;
+  render: () => void;
+  resize: () => void;
+};
 
 type ViewerNodeData = {
   pdb?: string;
@@ -35,7 +75,7 @@ type ViewerNodeData = {
   showAtomLabels?: boolean;
   labelMode?: "none" | "element" | "charge";
   spin?: boolean;
-  projection?: "perspective" | "orthographic";
+  projection?: ViewerProjection;
   stickRadius?: number;
   sphereScale?: number;
   lineWidth?: number;
@@ -49,9 +89,9 @@ const BACKGROUNDS = {
 };
 
 export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNodeData>) {
-  const { updateNodeData } = useReactFlow();
+  const { updateNodeData, deleteElements } = useReactFlow();
   const viewerRef = useRef<HTMLDivElement>(null);
-  const viewerInstance = useRef<any>(null);
+  const viewerInstance = useRef<ViewerApi | null>(null);
 
   const pdb = data.pdb || "";
   const background = data.background ?? "light";
@@ -69,7 +109,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const lineWidth = data.lineWidth ?? 1.2;
   const nodeWidth = Math.max(360, Number.isFinite(data.width) ? Number(data.width) : 500);
   const nodeHeight = Math.max(320, Number.isFinite(data.height) ? Number(data.height) : 500);
-  const chargeValues = Array.isArray(data.charges) ? data.charges : [];
+  const chargeValues = useMemo(() => (Array.isArray(data.charges) ? data.charges : []), [data.charges]);
 
   const setViewerOption = (patch: Partial<ViewerNodeData>) => {
     updateNodeData(id, { ...data, ...patch });
@@ -95,7 +135,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     if (pdb) {
       const model = viewer.addModel(pdb, "pdb", { keepH: true });
       
-      const styleConfig: any = {};
+      const styleConfig: ViewerStyle = {};
       if (viewStyle === "stick" || viewStyle === "both") {
         styleConfig.stick = { radius: stickRadius, colorscheme: "Jmol" };
       }
@@ -133,7 +173,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
         };
         if (labelIsCharge && viewer.addLabel && model?.selectedAtoms) {
           const modelAtoms = model.selectedAtoms({});
-          modelAtoms.forEach((atom: any, index: number) => {
+          modelAtoms.forEach((atom, index: number) => {
             if (!showHydrogens && atom?.elem === "H") return;
             const rawCharge = chargeValues[index] ?? atom?.charge;
             if (typeof rawCharge !== "number" || !Number.isFinite(rawCharge)) return;

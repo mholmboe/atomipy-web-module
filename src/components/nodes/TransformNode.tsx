@@ -28,11 +28,29 @@ type TransformNodeData = {
   radius?: number;
 };
 
+const TRANSLATE_AXES: ReadonlyArray<{ key: "tx" | "ty" | "tz"; label: string }> = [
+  { key: "tx", label: "X" },
+  { key: "ty", label: "Y" },
+  { key: "tz", label: "Z" },
+];
+
+const ROTATE_AXES: ReadonlyArray<{ key: "rx" | "ry" | "rz"; label: string }> = [
+  { key: "rx", label: "X°" },
+  { key: "ry", label: "Y°" },
+  { key: "rz", label: "Z°" },
+];
+
+const SCALE_AXES: ReadonlyArray<{ key: "sx" | "sy" | "sz"; label: string }> = [
+  { key: "sx", label: "SX" },
+  { key: "sy", label: "SY" },
+  { key: "sz", label: "SZ" },
+];
+
 export function TransformNode({ id, data }: NodeComponentProps<TransformNodeData>) {
   const { updateNodeData } = useReactFlow();
   const mode = data.mode ?? "translate";
 
-  const set = (field: keyof TransformNodeData, value: string | number) =>
+  const set = <K extends keyof TransformNodeData>(field: K, value: TransformNodeData[K]) =>
     updateNodeData(id, { ...data, [field]: value });
 
   const inputCls = "nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1";
@@ -48,7 +66,7 @@ export function TransformNode({ id, data }: NodeComponentProps<TransformNodeData
         {/* Mode selector */}
         <div>
           <label className="text-xs font-semibold text-muted-foreground block mb-1">Operation</label>
-          <select className={selectCls} value={mode} onChange={(e) => set("mode", e.target.value)} onPointerDown={(e) => e.stopPropagation()}>
+          <select className={selectCls} value={mode} onChange={(e) => set("mode", e.target.value as TransformMode)} onPointerDown={(e) => e.stopPropagation()}>
             <option value="translate">Translate / Position</option>
             <option value="rotate">Rotate</option>
             <option value="scale">Scale</option>
@@ -61,18 +79,18 @@ export function TransformNode({ id, data }: NodeComponentProps<TransformNodeData
           <>
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">Mode</label>
-              <select className={selectCls} value={data.translateMode ?? "absolute"} onChange={(e) => set("translateMode", e.target.value)} onPointerDown={(e) => e.stopPropagation()}>
+              <select className={selectCls} value={data.translateMode ?? "absolute"} onChange={(e) => set("translateMode", e.target.value as "absolute" | "relative")} onPointerDown={(e) => e.stopPropagation()}>
                 <option value="absolute">Absolute (COM)</option>
                 <option value="relative">Relative (Translate)</option>
               </select>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              {["tx", "ty", "tz"].map((ax, i) => (
-                <div key={ax}>
-                  <label className="text-xs text-muted-foreground block text-center mb-1">{["X", "Y", "Z"][i]}</label>
+              {TRANSLATE_AXES.map((axis) => (
+                <div key={axis.key}>
+                  <label className="text-xs text-muted-foreground block text-center mb-1">{axis.label}</label>
                   <input type="number" step="0.1" className="nodrag w-full text-center text-xs bg-muted border border-border rounded-md py-1"
-                    value={(data as any)[ax] ?? 0}
-                    onChange={(e) => set(ax as keyof TransformNodeData, parseFloat(e.target.value) || 0)}
+                    value={data[axis.key] ?? 0}
+                    onChange={(e) => set(axis.key, parseFloat(e.target.value) || 0)}
                     onPointerDown={(e) => e.stopPropagation()} />
                 </div>
               ))}
@@ -94,19 +112,19 @@ export function TransformNode({ id, data }: NodeComponentProps<TransformNodeData
           <>
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">Mode</label>
-              <select className={selectCls} value={data.rotateMode ?? "random"} onChange={(e) => set("rotateMode", e.target.value)} onPointerDown={(e) => e.stopPropagation()}>
+              <select className={selectCls} value={data.rotateMode ?? "random"} onChange={(e) => set("rotateMode", e.target.value as "random" | "manual")} onPointerDown={(e) => e.stopPropagation()}>
                 <option value="random">Random</option>
                 <option value="manual">Manual Angles</option>
               </select>
             </div>
             {(data.rotateMode ?? "random") === "manual" && (
               <div className="grid grid-cols-3 gap-2">
-                {["rx", "ry", "rz"].map((ax, i) => (
-                  <div key={ax}>
-                    <label className="text-xs text-muted-foreground block text-center mb-1">{["X°", "Y°", "Z°"][i]}</label>
+                {ROTATE_AXES.map((axis) => (
+                  <div key={axis.key}>
+                    <label className="text-xs text-muted-foreground block text-center mb-1">{axis.label}</label>
                     <input type="number" step="0.1" className="nodrag w-full text-center text-xs bg-muted border border-border rounded-md py-1"
-                      value={(data as any)[ax] ?? 0}
-                      onChange={(e) => set(ax as keyof TransformNodeData, parseFloat(e.target.value) || 0)}
+                      value={data[axis.key] ?? 0}
+                      onChange={(e) => set(axis.key, parseFloat(e.target.value) || 0)}
                       onPointerDown={(e) => e.stopPropagation()} />
                   </div>
                 ))}
@@ -119,12 +137,12 @@ export function TransformNode({ id, data }: NodeComponentProps<TransformNodeData
         {mode === "scale" && (
           <>
             <div className="grid grid-cols-3 gap-2">
-              {["sx", "sy", "sz"].map((ax, i) => (
-                <div key={ax}>
-                  <label className="text-xs text-muted-foreground block text-center mb-1">{["SX", "SY", "SZ"][i]}</label>
+              {SCALE_AXES.map((axis) => (
+                <div key={axis.key}>
+                  <label className="text-xs text-muted-foreground block text-center mb-1">{axis.label}</label>
                   <input type="number" step="0.01" className="nodrag w-full text-center text-xs bg-muted border border-border rounded-md py-1"
-                    value={(data as any)[ax] ?? 1.0}
-                    onChange={(e) => set(ax as keyof TransformNodeData, parseFloat(e.target.value) || 1.0)}
+                    value={data[axis.key] ?? 1.0}
+                    onChange={(e) => set(axis.key, parseFloat(e.target.value) || 1.0)}
                     onPointerDown={(e) => e.stopPropagation()} />
                 </div>
               ))}

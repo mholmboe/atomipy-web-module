@@ -3,9 +3,22 @@ import { Handle, Position } from "@xyflow/react";
 import { ArrowUpDown } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import type { NodeComponentProps } from "./types";
 
-export function ReorderNode({ data, isConnectable }: { data: any; isConnectable: boolean }) {
-  const byMode = data.byMode || "index";
+type ReorderMode = "index" | "resname" | "type";
+
+type ReorderNodeData = {
+  byMode?: ReorderMode;
+  neworder?: string;
+  onChange?: (next: ReorderNodeData) => void;
+};
+
+type ReorderNodeProps = NodeComponentProps<ReorderNodeData> & {
+  isConnectable?: boolean;
+};
+
+export function ReorderNode({ data, isConnectable = true }: ReorderNodeProps) {
+  const byMode: ReorderMode = data.byMode ?? "index";
   const neworder = data.neworder || "";
 
   return (
@@ -25,7 +38,7 @@ export function ReorderNode({ data, isConnectable }: { data: any; isConnectable:
             value={byMode}
             onChange={(e) => {
               if (data.onChange) {
-                data.onChange({ ...data, byMode: e.target.value });
+                data.onChange({ ...data, byMode: e.target.value as ReorderMode });
               }
             }}
           >

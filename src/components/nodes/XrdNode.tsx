@@ -24,7 +24,7 @@ export type XrdNodeData = {
 export function XrdNode({ id, data }: NodeComponentProps<XrdNodeData>) {
   const { updateNodeData } = useReactFlow();
 
-  const handleChange = (field: keyof XrdNodeData, value: any) => {
+  const handleChange = <K extends keyof XrdNodeData>(field: K, value: XrdNodeData[K]) => {
     updateNodeData(id, { ...data, [field]: value });
   };
 

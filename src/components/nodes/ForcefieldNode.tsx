@@ -4,10 +4,12 @@ import { ChevronDown, ChevronUp, FlaskConical } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
+type ForcefieldType = "minff" | "clayff";
+
 type ForcefieldNodeData = {
-  ffScheme?: string;
-  writeLog?: boolean;
-  logFilename?: string;
+  forcefield?: ForcefieldType;
+  log?: boolean;
+  logFile?: string;
   resetMolid?: boolean;
   status?: string;
   rmaxLong?: number;
@@ -18,9 +20,9 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
   const { updateNodeData } = useReactFlow();
   const [showMore, setShowMore] = useState(false);
 
-  const ffScheme = data.ffScheme || "minff";
-  const writeLog = data.writeLog ?? false;
-  const logFilename = data.logFilename || "minff.log";
+  const forcefield = data.forcefield ?? "minff";
+  const log = data.log ?? false;
+  const logFile = data.logFile ?? `${forcefield}.log`;
   const resetMolid = data.resetMolid ?? true;
 
   return (
@@ -34,11 +36,11 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
           <label className="text-xs font-semibold text-muted-foreground block mb-1">Atomtype Scheme</label>
           <select
             className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
-            value={data.forcefield || "minff"}
+            value={forcefield}
             onChange={(e) => {
-              const newValue = e.target.value as "minff" | "clayff";
+              const newValue = e.target.value as ForcefieldType;
               const updates: Partial<ForcefieldNodeData> = { forcefield: newValue };
-              if (data.log && (!data.logFile || data.logFile === `${data.forcefield || "minff"}.log`)) {
+              if (log && (!data.logFile || data.logFile === `${forcefield}.log`)) {
                 updates.logFile = `${newValue}.log`;
               }
               updateNodeData(id, { ...data, ...updates });
@@ -103,12 +105,12 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
               <input
                 type="checkbox"
                 className="nodrag"
-                checked={data.log || false}
+                checked={log}
                 onChange={(e) => {
                   const isChecked = e.target.checked;
                   const updates: Partial<ForcefieldNodeData> = { log: isChecked };
                   if (isChecked && !data.logFile) {
-                    updates.logFile = `${data.forcefield || "minff"}.log`;
+                    updates.logFile = `${forcefield}.log`;
                   }
                   updateNodeData(id, { ...data, ...updates });
                 }}
@@ -116,14 +118,14 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
               />
             </label>
 
-            {(data.log || false) && (
+            {log && (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1">Log filename</label>
                 <input
                   type="text"
                   className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
                   placeholder="e.g. forcefield.log"
-                  value={data.logFile || ""}
+                  value={logFile}
                   onChange={(e) => updateNodeData(id, { ...data, logFile: e.target.value })}
                   onPointerDown={(e) => e.stopPropagation()}
                 />
