@@ -67,13 +67,15 @@ def run_test() -> bool:
         return False
 
     try:
-        # Exercises new/extended capabilities:
-        # - atomProps-style calls (element / formal charge / mass / COM)
-        # - coordFrame-style calls (cart<->frac + cell vectors)
-        # - pbc unwrap with molid
-        # - analysis outputs (rdf/cn/closest/occupancy JSON+CSV)
-        # - bondAngle advanced kwargs (neighbor_element, dm_method)
-        # - export + n2t
+        # Exercises new/extended capabilities with consolidated nodes:
+        # - transform: Spatial Ops (Translate/Rotate)
+        # - edit: Structural Edit (Molecule/Resname)
+        # - chemistry: Chemistry Ops (BVS H-addition)
+        # - solvent: Solvent Ops (Solvate)
+        # - forcefield: MinFF typing
+        # - xrd: XRD simulation
+        # - analysis: RDF/CN/BVS summaries
+        # - export: Final PDB/ITP/N2T
         script = textwrap.dedent(
             """
             import atomipy as ap
@@ -82,105 +84,68 @@ def run_test() -> bool:
             print("__NODE_START__:grid_0:0")
             atoms_0, box_0 = ap.create_grid('Na', 0.5, [0, 0, 0, 6, 6, 6])
 
-            print("__NODE_START__:atomProps_1:1")
-            atoms_1 = ap.element(atoms_0)
-            atoms_1 = ap.assign_formal_charges(atoms_1)
-            atoms_1 = ap.set_atomic_masses(atoms_1)
-            com_1 = ap.com(atoms_1, add_to_atoms=True)
-            with open("com_report.json", "w") as fh:
-                json.dump({"com": [float(com_1[0]), float(com_1[1]), float(com_1[2])]}, fh)
+            print("__NODE_START__:transform_1:1")
+            atoms_1 = ap.center(atoms_0, [3.0, 3.0, 3.0])
+            atoms_1 = ap.rotate(atoms_1, box_0, angles=[45, 0, 0])
+            box_1 = box_0
 
-            print("__NODE_START__:coordFrame_2:2")
-            _, atoms_2 = ap.cartesian_to_fractional(atoms=atoms_1, Box=box_0, add_to_atoms=True)
-            _, atoms_3 = ap.fractional_to_cartesian(atoms=atoms_2, Box=box_0, add_to_atoms=True)
-            cell_vectors = ap.get_cell_vectors(ap.Box_dim2Cell(box_0))
-            with open("cell_vectors.json", "w") as fh:
-                json.dump({"cell_vectors": cell_vectors.tolist()}, fh)
+            print("__NODE_START__:edit_2:2")
+            atoms_2 = ap.molecule(atoms_1, molid=1, resname='MIN')
+            atoms_2 = ap.assign_resname(atoms_2, default_resname='MIN')
+            box_2 = box_1
 
-            print("__NODE_START__:pbc_3:3")
-            atoms_3 = ap.molecule(atoms_3, molid=1, resname="MIN")
-            atoms_4 = ap.unwrap_coordinates(atoms_3, box_0, molid=1)
-            atoms_4 = ap.wrap(atoms_4, box_0)
+            print("__NODE_START__:chemistry_3:3")
+            # Testing BVS addition (even if it adds 0 atoms to a simple Na grid, the call should work)
+            atoms_3 = ap.add_hydrogens_bvs(atoms_2, box_2, delta_threshold=-0.5, max_additions=5)
+            box_3 = box_2
 
-            print("__NODE_START__:analysis_4:4")
-            r_rdf, g_r = ap.calculate_rdf(atoms_4, box_0, typeA="Na", typeB="Na", rmax=4.0, dr=0.2)
-            with open("rdf_results.json", "w") as fh:
+            print("__NODE_START__:solvent_4:4")
+            wrapped_4 = ap.wrap(atoms_3, box_3)
+            solvent_4 = ap.solvate(limits=box_3, density=1000.0, min_distance=2.25, max_solvent='max', solute_atoms=wrapped_4, Box=box_3, solvent_type='spce', include_solute=False)
+            atoms_4 = ap.update(atoms_3, solvent_4)
+            box_4 = box_3
+
+            print("__NODE_START__:forcefield_5:5")
+            # MinFF typing
+            atoms_5 = ap.forcefield.minff(atoms_4, Box=box_4, rmaxlong=2.45, rmaxH=1.2)
+            box_5 = box_4
+
+            print("__NODE_START__:analysis_6:6")
+            # RDF
+            r_rdf, g_r = ap.calculate_rdf(atoms_5, box_5, typeA='Na', typeB='OW', rmax=5.0, dr=0.1)
+            with open('rdf_results.json', 'w') as fh:
                 json.dump({"bins": r_rdf.tolist(), "rdf": g_r.tolist()}, fh)
-            with open("rdf_results.csv", "w") as fh:
-                fh.write("r,rdf\\n")
-                for r_i, g_i in zip(r_rdf.tolist(), g_r.tolist()):
-                    fh.write(f"{float(r_i):.6f},{float(g_i):.6f}\\n")
 
-            cn_data = ap.coordination_number(atoms_4, box_0, typeA="Na", typeB="Na", cutoff=2.4)
-            with open("cn_results.json", "w") as fh:
-                json.dump({"coordination_number": cn_data}, fh)
-            with open("cn_results.csv", "w") as fh:
-                fh.write("index,coordination_number\\n")
-                for i, cn_val in enumerate(cn_data, start=1):
-                    fh.write(f"{i},{int(cn_val)}\\n")
+            # BVS
+            bvs_report = ap.analyze_bvs(atoms_5, box_5, csv_path='bvs_results.csv', top_n=10)
+            with open('bvs_summary.log', 'w') as fh:
+                fh.write(f"GII: {bvs_report.get('gii', 0.0):.6f}\\n")
 
-            closest_data = ap.closest_atom(atoms_4, [0.0, 0.0, 0.0], Box=box_0)
-            with open("closest_results.json", "w") as fh:
-                json.dump({"closest_atom": closest_data}, fh)
-            with open("closest_results.csv", "w") as fh:
-                fh.write("index,type,element,x,y,z,charge\\n")
-                if closest_data:
-                    fh.write(
-                        f"{closest_data.get('index', '')},{closest_data.get('type', '')},{closest_data.get('element', '')},"
-                        f"{closest_data.get('x', '')},{closest_data.get('y', '')},{closest_data.get('z', '')},{closest_data.get('charge', '')}\\n"
-                    )
+            # Stats
+            ap.get_structure_stats(atoms_5, Box=box_5, log_file='output.log')
 
-            if hasattr(ap, "occupancy_atom"):
-                atoms_5, occ = ap.occupancy_atom(atoms_4, box_0, rmax=1.1)
-                occ_values = occ.tolist() if hasattr(occ, "tolist") else list(occ)
-            else:
-                dist, _, _, _ = ap.dist_matrix(atoms_4, box_0)
-                occ_values = []
-                for i in range(len(atoms_4)):
-                    neigh = [d for d in dist[:, i] if d < 1.1]
-                    occ_val = (1.0 / len(neigh)) if len(neigh) > 0 else 0.0
-                    atoms_4[i]["occupancy"] = occ_val
-                    occ_values.append(occ_val)
-                atoms_5 = atoms_4
-            with open("occupancy_results.json", "w") as fh:
-                json.dump({"occupancy": occ_values}, fh)
-            with open("occupancy_results.csv", "w") as fh:
-                fh.write("index,occupancy\\n")
-                for i, occ_val in enumerate(occ_values, start=1):
-                    fh.write(f"{i},{float(occ_val):.6f}\\n")
+            print("__NODE_START__:xrd_7:7")
+            # XRD Simulation (lightweight settings for speed)
+            ap.xrd(atoms_5, box_5, wavelength=1.54187, two_theta_range=(20.0, 40.0), angle_step=0.5, save_output=True, plot=False)
 
-            ap.get_structure_stats(atoms_5, Box=box_0, log_file="stats.log")
-
-            print("__NODE_START__:bondAngle_5:5")
-            bonded_atoms, bond_idx, angle_idx = ap.bond_angle(
-                atoms_5,
-                box_0,
-                rmaxH=1.2,
-                rmaxM=2.45,
-                same_element_bonds=True,
-                same_molecule_only=True,
-                neighbor_element="Na",
-                dm_method="direct",
-            )
-            with open("bonded_terms.log", "w") as fh:
-                fh.write("Bonded Terms Report\\n")
-                fh.write(f"bonds={len(bond_idx)} angles={len(angle_idx)}\\n")
-
-            print("__NODE_START__:export_6:6")
-            ap.write_pdb(bonded_atoms, box_0, "final_system.pdb", write_conect=True, write_element=True)
-            ap.write_n2t(bonded_atoms, Box=box_0, n2t_file="final_system.n2t")
+            print("__NODE_START__:export_8:8")
+            ap.write_pdb(atoms_5, box_5, 'final_system.pdb', write_conect=True, write_element=True)
+            ap.write_itp(atoms_5, box_5, 'final_system.itp', KANGLE=500)
+            ap.write_n2t(atoms_5, Box=box_5, n2t_file='final_system.n2t')
             """
         ).strip()
 
         workflow = {
             "nodes": [
                 {"id": "grid_0", "type": "grid"},
-                {"id": "atomProps_1", "type": "atomProps"},
-                {"id": "coordFrame_2", "type": "coordFrame"},
-                {"id": "pbc_3", "type": "pbc"},
-                {"id": "analysis_4", "type": "analysis"},
-                {"id": "bondAngle_5", "type": "bondAngle"},
-                {"id": "export_6", "type": "export"},
+                {"id": "transform_1", "type": "transform"},
+                {"id": "edit_2", "type": "edit"},
+                {"id": "chemistry_3", "type": "chemistry"},
+                {"id": "solvent_4", "type": "solvent"},
+                {"id": "forcefield_5", "type": "forcefield"},
+                {"id": "analysis_6", "type": "analysis"},
+                {"id": "xrd_7", "type": "xrd"},
+                {"id": "export_8", "type": "export"},
             ],
             "edges": [],
         }
@@ -189,8 +154,8 @@ def run_test() -> bool:
             "script": script,
             "workflow": workflow,
             "artifacts": {
-                "build_script_full.py": "# full script placeholder\n",
-                "build_script_strict_minimal.py": "# strict minimal placeholder\n",
+                "build_script_full.py": "# full script placeholder\\n",
+                "build_script_strict_minimal.py": "# strict minimal placeholder\\n",
                 "build_script_notebook.ipynb": json.dumps(
                     {
                         "cells": [],
@@ -217,26 +182,16 @@ def run_test() -> bool:
 
             expected_files = [
                 "build_script.py",
-                "build_script_full.py",
-                "build_script_notebook.ipynb",
-                "build_script_strict_minimal.py",
                 "build_summary.json",
                 "execution_stderr.txt",
                 "execution_stdout.txt",
                 "workflow.json",
-                "com_report.json",
-                "cell_vectors.json",
                 "rdf_results.json",
-                "rdf_results.csv",
-                "cn_results.json",
-                "cn_results.csv",
-                "closest_results.json",
-                "closest_results.csv",
-                "occupancy_results.json",
-                "occupancy_results.csv",
-                "stats.log",
-                "bonded_terms.log",
+                "bvs_results.csv",
+                "bvs_summary.log",
+                "output.log",
                 "final_system.pdb",
+                "final_system.itp",
                 "final_system.n2t",
             ]
 
@@ -245,23 +200,18 @@ def run_test() -> bool:
                 print("MISSING FILES:", missing)
                 return False
 
-            stats_text = zf.read("stats.log").decode("utf-8", errors="replace")
+            stats_text = zf.read("output.log").decode("utf-8", errors="replace")
             if "Unique Atom Types" not in stats_text:
-                print("INVALID stats.log: missing 'Unique Atom Types'")
+                print("INVALID output.log: missing 'Unique Atom Types'")
                 return False
 
-            n2t_text = zf.read("final_system.n2t").decode("utf-8", errors="replace").strip()
-            if not n2t_text:
-                print("INVALID final_system.n2t: file is empty")
+            itp_text = zf.read("final_system.itp").decode("utf-8", errors="replace").strip()
+            if "[ moleculetype ]" not in itp_text:
+                print("INVALID final_system.itp: missing '[ moleculetype ]'")
                 return False
 
             for json_name in [
-                "com_report.json",
-                "cell_vectors.json",
                 "rdf_results.json",
-                "cn_results.json",
-                "closest_results.json",
-                "occupancy_results.json",
             ]:
                 try:
                     json.loads(zf.read(json_name).decode("utf-8"))
