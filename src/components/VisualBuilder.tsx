@@ -74,7 +74,7 @@ import { toast } from "sonner";
 import { StructureNode } from "./nodes/StructureNode";
 import { ReplicateNode } from "./nodes/ReplicateNode";
 import { ExportNode } from "./nodes/ExportNode";
-import { AddIonsNode } from "./nodes/AddIonsNode";
+import { IonsNode } from "./nodes/IonsNode";
 import { BoxNode } from "./nodes/BoxNode";
 import { MergeNode } from "./nodes/MergeNode";
 import { AddNode } from "./nodes/AddNode";
@@ -83,7 +83,6 @@ import { ForcefieldNode } from "./nodes/ForcefieldNode";
 import { BondAngleNode } from "./nodes/BondAngleNode";
 import { XrdNode } from "./nodes/XrdNode";
 import { ViewerNode } from "./nodes/ViewerNode";
-import { GridNode } from "./nodes/GridNode";
 import { TrajectoryNode } from "./nodes/TrajectoryNode";
 // New composite nodes
 import { TransformNode } from "./nodes/TransformNode";
@@ -118,7 +117,7 @@ import type { PresetOption } from "./nodes/types";
 const nodeTypes = {
   // Primary nodes (actively in toolbar)
   structure: StructureNode,
-  grid: GridNode,
+  ions: IonsNode,
   replicate: ReplicateNode,
   box: BoxNode,
   transform: TransformNode,
@@ -126,7 +125,6 @@ const nodeTypes = {
   add: AddNode,
   merge: MergeNode,
   insert: InsertNode,
-  addIons: AddIonsNode,
   solvent: SolventNode,
   chemistry: ChemistryNode,
   edit: EditNode,
@@ -140,6 +138,8 @@ const nodeTypes = {
   export: ExportNode,
   trajectory: TrajectoryNode,
   // Legacy nodes (kept so saved workflows still load)
+  addIons: IonsNode,
+  grid: IonsNode,
   preset: StructureNode,
   upload: StructureNode,
   solvate: SolvateNode,
@@ -1661,9 +1661,6 @@ export default function VisualBuilder() {
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
                 <FileInput className="w-4 h-4" /> Import
               </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("grid")} title="Create Procedural Grid">
-                <LayoutGrid className="w-4 h-4" /> Grid
-              </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("replicate")} title="Replicate">
                 <Grid3x3 className="w-4 h-4" /> Rep
               </Button>
@@ -1679,7 +1676,7 @@ export default function VisualBuilder() {
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("insert")} title="Insert Molecule">
                 <PackagePlus className="w-4 h-4" /> Insert
               </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("addIons")} title="Add Ions">
+              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("ions")} title="Add Ions (Random or Grid)">
                 <BadgePlus className="w-4 h-4" /> Ions
               </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("solvent")} title="Solvent (Solvate / Convert Water Model)">
@@ -2401,13 +2398,11 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
+      case "ions":
       case "addIons": {
+        const method = getString(data, "method", "random");
         const ion = pyEscape(getString(data, "ionType", "Na"));
-        const count = getNumber(data, "count", 0);
-        const dist = getNumber(data, "minDistance", 3.0);
-        const placement = pyEscape(getString(data, "placement", "random"));
-        const direction = getString(data, "direction", "").toLowerCase();
-        const directionValue = getOptionalNumber(data, "directionValue");
+        
         const xlo = getOptionalNumber(data, "xlo");
         const ylo = getOptionalNumber(data, "ylo");
         const zlo = getOptionalNumber(data, "zlo");
@@ -2418,18 +2413,36 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         const boxXExpr = inBox !== "None" ? `${inBox}[0]` : "50.0";
         const boxYExpr = inBox !== "None" ? `${inBox}[1]` : "50.0";
         const boxZExpr = inBox !== "None" ? `${inBox}[2]` : "50.0";
+        
         const limitsExpr = hasCustomLimits
           ? `[${xlo !== null ? xlo : 0.0}, ${ylo !== null ? ylo : 0.0}, ${zlo !== null ? zlo : 0.0}, ${xhi !== null ? xhi : boxXExpr}, ${yhi !== null ? yhi : boxYExpr}, ${zhi !== null ? zhi : boxZExpr}]`
-          : `${inBox}`;
-        const directionArg =
-          (direction === "x" || direction === "y" || direction === "z") && directionValue !== null
-            ? `, direction='${direction}', direction_value=${directionValue}`
-            : "";
-        const wrappedInAtoms = `wrapped_${index}`;
+          : (inBox !== "None" ? `${inBox}` : "[0, 0, 0, 50, 50, 50]");
+
         const ionsVar = `ions_${index}`;
-        pythonCode += `${wrappedInAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
-        pythonCode += `${ionsVar} = ap.ionize('${ion}', resname='ION', limits=${limitsExpr}, num_ions=${count}, Box=${inBox}, min_distance=${dist}, solute_atoms=${wrappedInAtoms}, placement='${placement}'${directionArg})\n`;
-        pythonCode += `${blockOutAtoms} = ap.update(${inAtoms}, ${ionsVar})\n`;
+
+        if (method === "grid") {
+          const density = getNumber(data, "density", 0.1);
+          pythonCode += `${ionsVar}, _ = ap.create_grid('${ion}', ${density}, ${limitsExpr})\n`;
+          pythonCode += `${blockOutAtoms} = ap.update(${inAtoms}, ${ionsVar})\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
+        } else {
+          // Random mode (ap.ionize)
+          const count = getNumber(data, "count", 0);
+          const dist = getNumber(data, "minDistance", 3.0);
+          const placement = pyEscape(getString(data, "placement", "random"));
+          const direction = getString(data, "direction", "").toLowerCase();
+          const directionValue = getOptionalNumber(data, "directionValue");
+          
+          const directionArg =
+            (direction === "x" || direction === "y" || direction === "z") && directionValue !== null
+              ? `, direction='${direction}', direction_value=${directionValue}`
+              : "";
+          
+          const wrappedInAtoms = `wrapped_${index}`;
+          pythonCode += `${wrappedInAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
+          pythonCode += `${ionsVar} = ap.ionize('${ion}', resname='ION', limits=${limitsExpr}, num_ions=${count}, Box=${inBox}, min_distance=${dist}, solute_atoms=${wrappedInAtoms}, placement='${placement}'${directionArg})\n`;
+          pythonCode += `${blockOutAtoms} = ap.update(${inAtoms}, ${ionsVar})\n`;
+        }
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
@@ -2516,6 +2529,8 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         const gyhi = getNumber(data, "yhi", 10);
         const gzhi = getNumber(data, "zhi", 10);
         pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.create_grid('${pyEscape(atomType)}', ${density}, [${gxlo}, ${gylo}, ${gzlo}, ${gxhi}, ${gyhi}, ${gzhi}])\n`;
+        pythonCode += `if ${inAtoms} is not None and len(${inAtoms}) > 0:\n`;
+        pythonCode += `    ${blockOutAtoms} = ap.update(${inAtoms}, ${blockOutAtoms})\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }

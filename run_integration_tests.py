@@ -81,7 +81,7 @@ def run_test() -> bool:
             import atomipy as ap
             import json
 
-            print("__NODE_START__:grid_0:0")
+            print("__NODE_START__:ions_0:0")
             atoms_0, box_0 = ap.create_grid('Na', 0.5, [0, 0, 0, 6, 6, 6])
 
             print("__NODE_START__:transform_1:1")
@@ -137,7 +137,7 @@ def run_test() -> bool:
 
         workflow = {
             "nodes": [
-                {"id": "grid_0", "type": "grid"},
+                {"id": "ions_0", "type": "ions"},
                 {"id": "transform_1", "type": "transform"},
                 {"id": "edit_2", "type": "edit"},
                 {"id": "chemistry_3", "type": "chemistry"},
