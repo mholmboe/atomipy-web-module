@@ -2106,17 +2106,35 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         break;
       }
       case "add": {
-        const edgeA = incomingEdges.find((e) => e.targetHandle === "inA");
-        const edgeB = incomingEdges.find((e) => e.targetHandle === "inB");
-        const stateA = edgeA ? stateVars.get(edgeA.source) : null;
-        const stateB = edgeB ? stateVars.get(edgeB.source) : null;
+        // Collect all incoming edges and sort them by handle ID to ensure predictable join order
+        // 1. Check explicit handles in order: inA, inB, then in1, in2, in3, in4, in5, in6
+        const orderedHandles = ["inA", "inB", "in1", "in2", "in3", "in4", "in5", "in6"];
+        const gatheredStates: { atoms: string; box: string }[] = [];
 
-        if (stateA && stateB) {
-          pythonCode += `${blockOutAtoms} = ap.update(${stateA.atoms}, ${stateB.atoms})\n`;
-          pythonCode += `${blockOutBox} = ${stateA.box}\n`;
+        orderedHandles.forEach((h) => {
+          incomingEdges
+            .filter((e) => e.targetHandle === h)
+            .forEach((e) => {
+              const s = stateVars.get(e.source);
+              if (s) gatheredStates.push(s);
+            });
+        });
+
+        // 2. Also catch any edges that might have no targetHandle or unknown handle (safety)
+        incomingEdges.forEach((e) => {
+          if (!e.targetHandle || !orderedHandles.includes(e.targetHandle)) {
+            const s = stateVars.get(e.source);
+            if (s && !gatheredStates.includes(s)) gatheredStates.push(s);
+          }
+        });
+
+        if (gatheredStates.length > 0) {
+          const atomArgs = gatheredStates.map((s) => s.atoms).join(", ");
+          pythonCode += `${blockOutAtoms} = ap.update(${atomArgs})\n`;
+          pythonCode += `${blockOutBox} = ${gatheredStates[0].box}\n`;
           stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         } else {
-          pythonCode += `# Error: Join node missing input A or B\n`;
+          pythonCode += `# Error: Join node has no valid inputs connected\n`;
         }
         break;
       }
