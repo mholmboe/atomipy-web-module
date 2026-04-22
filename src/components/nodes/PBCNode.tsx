@@ -3,19 +3,21 @@ import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { BoxSelect } from "lucide-react";
 import type { NodeComponentProps } from "./types";
 
-type PBCMode = "condense" | "wrap";
+type PBCMode = "wrap" | "unwrap" | "condense";
 
 type PBCNodeData = {
   mode?: PBCMode;
+  unwrapMolid?: string;
 };
 
 export function PBCNode({ id, data }: NodeComponentProps<PBCNodeData>) {
   const { updateNodeData } = useReactFlow();
-  const mode = data.mode ?? "condense";
+  const mode = data.mode ?? "wrap";
 
   const descriptions: Record<PBCMode, string> = {
-    condense: "Automatically tightens the simulation box to fit the atomic boundaries, removing unnecessary vacuum.",
     wrap: "Applies ap.wrap() to ensure all atoms are within the simulation box using periodic boundary conditions.",
+    unwrap: "Applies ap.unwrap_coordinates() to reconnect molecules that are split across periodic boundaries.",
+    condense: "Automatically tightens the simulation box to fit the atomic boundaries, removing unnecessary vacuum.",
   };
 
   return (
@@ -36,13 +38,28 @@ export function PBCNode({ id, data }: NodeComponentProps<PBCNodeData>) {
             onChange={(e) => updateNodeData(id, { ...data, mode: e.target.value as PBCMode })}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <option value="condense">Condense Box</option>
             <option value="wrap">Wrap Coordinates</option>
+            <option value="unwrap">Unwrap Coordinates</option>
+            <option value="condense">Condense Box</option>
           </select>
         </div>
         <p className="text-[11px] text-muted-foreground leading-relaxed">
           {descriptions[mode]}
         </p>
+        {mode === "unwrap" && (
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1">Target molid(s) (optional)</label>
+            <input
+              type="text"
+              className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+              placeholder="e.g. 1 or 1,2,3"
+              value={data.unwrapMolid ?? ""}
+              onChange={(e) => updateNodeData(id, { ...data, unwrapMolid: e.target.value })}
+              onPointerDown={(e) => e.stopPropagation()}
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">Leave blank to unwrap all molecules.</p>
+          </div>
+        )}
       </div>
 
       <Handle type="source" position={Position.Right} id="out" className="w-3 h-3 bg-primary" />

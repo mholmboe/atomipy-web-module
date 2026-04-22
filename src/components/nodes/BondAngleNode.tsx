@@ -8,6 +8,8 @@ type BondAngleNodeData = {
   rmaxM?: number;
   sameElementBonds?: boolean;
   sameMoleculeOnly?: boolean;
+  neighborElement?: string;
+  dmMethod?: "auto" | "direct" | "sparse" | "fast_cl";
   calcBonds?: boolean;
   calcAngles?: boolean;
   calcDihedrals?: boolean;
@@ -110,6 +112,39 @@ export function BondAngleNode({ id, data }: NodeComponentProps<BondAngleNodeData
             onPointerDown={(e) => e.stopPropagation()}
           />
         </label>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1">Neighbor element</label>
+            <input
+              type="text"
+              className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+              placeholder="optional, e.g. O"
+              value={data.neighborElement || ""}
+              onChange={(e) => handleChange("neighborElement", e.target.value)}
+              onPointerDown={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1">Distance method</label>
+            <select
+              className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
+              value={data.dmMethod || "auto"}
+              onChange={(e) => handleChange("dmMethod", e.target.value as BondAngleNodeData["dmMethod"])}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <option value="auto">Auto</option>
+              <option value="direct">Direct</option>
+              <option value="sparse">Sparse</option>
+              <option value="fast_cl">Fast Cell List</option>
+            </select>
+          </div>
+        </div>
+        {(data.calcDihedrals || false) && data.dmMethod && data.dmMethod !== "auto" && (
+          <p className="text-[10px] text-muted-foreground">
+            Distance method is currently applied to bond/angle mode; dihedral mode uses the default internal strategy.
+          </p>
+        )}
 
         <div>
           <label className="text-xs font-semibold text-muted-foreground block mb-1">Terms log file</label>

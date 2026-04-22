@@ -18,6 +18,8 @@ type ExportNodeData = {
   moleculeName?: string;
   segid?: string;
   nrexcl?: number;
+  writeN2T?: boolean;
+  n2tFilename?: string;
   minimalisticScript?: boolean;
 };
 
@@ -243,6 +245,32 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
                 )}
               </>
             )}
+
+            <div className="border-t border-border pt-2 mt-2 space-y-2">
+              <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
+                Write n2t file (GROMACS x2top helper)
+                <input
+                  type="checkbox"
+                  className="nodrag"
+                  checked={data.writeN2T || false}
+                  onChange={(e) => updateNodeData(id, { ...data, writeN2T: e.target.checked })}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </label>
+              {(data.writeN2T || false) && (
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">n2t filename</label>
+                  <input
+                    type="text"
+                    className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+                    placeholder="system.n2t"
+                    value={data.n2tFilename || ""}
+                    onChange={(e) => updateNodeData(id, { ...data, n2tFilename: e.target.value })}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  />
+                </div>
+              )}
+            </div>
 
             <div className="border-t border-border pt-2 mt-2">
               <label className="nodrag flex items-center justify-between text-xs text-muted-foreground font-semibold">

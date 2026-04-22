@@ -57,6 +57,7 @@ import {
   History,
   Move3D,
   SlidersHorizontal,
+  Atom,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -91,6 +92,8 @@ import { EditNode } from "./nodes/EditNode";
 import { ChemistryNode } from "./nodes/ChemistryNode";
 import { SolventNode } from "./nodes/SolventNode";
 import { AnalysisNode } from "./nodes/AnalysisNode";
+import { AtomPropertiesNode } from "./nodes/AtomPropertiesNode";
+import { CoordinateFrameNode } from "./nodes/CoordinateFrameNode";
 // Keep old nodes registered so saved workflows still load
 import { SolvateNode } from "./nodes/SolvateNode";
 import { PositionNode } from "./nodes/PositionNode";
@@ -130,6 +133,8 @@ const nodeTypes = {
   forcefield: ForcefieldNode,
   bondAngle: BondAngleNode,
   analysis: AnalysisNode,
+  atomProps: AtomPropertiesNode,
+  coordFrame: CoordinateFrameNode,
   xrd: XrdNode,
   viewer: ViewerNode,
   export: ExportNode,
@@ -324,6 +329,8 @@ const validateWorkflow = (nodes: Node[], edges: Edge[]): string[] => {
     "forcefield",
     "bondAngle",
     "bvs",
+    "atomProps",
+    "coordFrame",
     "export",
   ]);
 
@@ -540,6 +547,7 @@ const pyEscape = (value: string) => value.replace(/\\/g, "\\\\").replace(/'/g, "
 
 type PythonScriptMode = "full" | "minimal" | "strict";
 type ScriptSection = { nodeType: string; nodeId: string; code: string };
+type RunNodeStatus = "queued" | "running" | "done" | "error" | "skipped";
 
 const NODE_PURPOSE_DOCS: Record<string, string> = {
   structure: "Imports a starting structure from upload or preset files.",
@@ -569,10 +577,12 @@ const NODE_PURPOSE_DOCS: Record<string, string> = {
   condense: "Condenses periodic images into a compact representation.",
   grid: "Generates a grid of atoms in a defined region.",
   analysis: "Runs analysis operations like RDF/CN/BVS/unwrap.",
+  atomProps: "Applies element/charge/mass annotations and optional COM reporting.",
+  coordFrame: "Runs coordinate-frame conversions and cell-vector reporting tools.",
   trajectory: "Imports or writes trajectory frames.",
   waterModel: "Converts/adjusts water model representations.",
   transform: "Runs translate/rotate/scale/bend transformations.",
-  pbc: "Applies periodic-boundary operations (wrap/condense).",
+  pbc: "Applies periodic-boundary operations (wrap/unwrap/condense).",
   edit: "Runs structural editing operations on current atoms.",
   chemistry: "Runs chemistry operations like substitution/fusion/H-addition.",
   solvent: "Runs solvent/water-model operations.",
@@ -585,6 +595,82 @@ const NODE_PURPOSE_DOCS: Record<string, string> = {
 };
 
 const compactBlankLines = (text: string): string => text.replace(/\n{3,}/g, "\n\n");
+
+const NODE_STATUS_EXCLUDED_TYPES = new Set(["structure", "preset", "upload", "export", "viewer"]);
+
+const shouldTrackNodeStatus = (nodeType: string | null | undefined): boolean => {
+  if (!nodeType) return false;
+  return !NODE_STATUS_EXCLUDED_TYPES.has(nodeType);
+};
+
+const topologicalSortNodeIds = (nodes: Node[], edges: Edge[]): string[] => {
+  const adj = new Map<string, string[]>();
+  const inDegree = new Map<string, number>();
+  nodes.forEach((node) => {
+    adj.set(node.id, []);
+    inDegree.set(node.id, 0);
+  });
+
+  edges.forEach((edge) => {
+    if (!adj.has(edge.source) || !inDegree.has(edge.target)) return;
+    adj.get(edge.source)!.push(edge.target);
+    inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
+  });
+
+  const queue: string[] = [];
+  inDegree.forEach((degree, id) => {
+    if (degree === 0) queue.push(id);
+  });
+
+  const sorted: string[] = [];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    sorted.push(current);
+    adj.get(current)?.forEach((neighbor) => {
+      inDegree.set(neighbor, (inDegree.get(neighbor) || 0) - 1);
+      if ((inDegree.get(neighbor) || 0) === 0) queue.push(neighbor);
+    });
+  }
+
+  return sorted.length === nodes.length ? sorted : nodes.map((node) => node.id);
+};
+
+const getNodeStatusStyle = (status: RunNodeStatus | undefined): React.CSSProperties => {
+  if (status === "running") {
+    return { boxShadow: "0 0 0 2px rgba(14, 165, 233, 0.95)", borderRadius: 12 };
+  }
+  if (status === "done") {
+    return { boxShadow: "0 0 0 2px rgba(34, 197, 94, 0.95)", borderRadius: 12 };
+  }
+  if (status === "error") {
+    return { boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.95)", borderRadius: 12 };
+  }
+  if (status === "queued") {
+    return { boxShadow: "0 0 0 1px rgba(148, 163, 184, 0.75)", borderRadius: 12 };
+  }
+  if (status === "skipped") {
+    return { opacity: 0.82 };
+  }
+  return {};
+};
+
+const STATUS_DOT_CLASS: Record<RunNodeStatus, string> = {
+  queued: "bg-slate-400",
+  running: "bg-sky-500 animate-pulse",
+  done: "bg-emerald-500",
+  error: "bg-red-500",
+  skipped: "bg-slate-300",
+};
+
+const statusToLabel = (status: RunNodeStatus | undefined): string => {
+  if (!status) return "idle";
+  return status;
+};
+
+const nodeTypeLabel = (type: string | undefined): string => {
+  if (!type) return "Node";
+  return type.charAt(0).toUpperCase() + type.slice(1);
+};
 
 const toStrictMinimalScript = (pythonCode: string): string => {
   const lines = pythonCode.replace(/\r\n/g, "\n").split("\n");
@@ -832,6 +918,9 @@ export default function VisualBuilder() {
   const [buildProgress, setBuildProgress] = useState(0);
   const [buildStatus, setBuildStatus] = useState("");
   const [buildLogs, setBuildLogs] = useState<string[]>([]);
+  const [trackedNodeOrder, setTrackedNodeOrder] = useState<string[]>([]);
+  const [nodeRunStatus, setNodeRunStatus] = useState<Record<string, RunNodeStatus>>({});
+  const currentRunningNodeRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -945,6 +1034,8 @@ export default function VisualBuilder() {
       baseData.rmaxM = 2.45;
       baseData.sameElementBonds = false;
       baseData.sameMoleculeOnly = true;
+      baseData.neighborElement = "";
+      baseData.dmMethod = "auto";
       baseData.calcBonds = true;
       baseData.calcAngles = true;
       baseData.calcDihedrals = false;
@@ -986,6 +1077,8 @@ export default function VisualBuilder() {
       baseData.detectBimodal = false;
       baseData.bimodalThreshold = 30;
       baseData.nrexcl = 1;
+      baseData.writeN2T = false;
+      baseData.n2tFilename = "";
       baseData.minimalisticScript = false;
     }
     if (type === "transform") {
@@ -998,7 +1091,20 @@ export default function VisualBuilder() {
       baseData.radius = 50;
     }
     if (type === "pbc") {
-      baseData.mode = "condense";
+      baseData.mode = "wrap";
+      baseData.unwrapMolid = "";
+    }
+    if (type === "atomProps") {
+      baseData.applyElement = true;
+      baseData.applyFormalCharges = false;
+      baseData.applyMass = false;
+      baseData.computeCom = false;
+      baseData.comLogFile = "com_report.json";
+    }
+    if (type === "coordFrame") {
+      baseData.mode = "cart_to_frac";
+      baseData.updateBox = true;
+      baseData.vectorsFile = "cell_vectors.json";
     }
     if (type === "edit") {
       baseData.mode = "slice";
@@ -1032,6 +1138,22 @@ export default function VisualBuilder() {
       baseData.atomTypeB = "Cl";
       baseData.cutoff = 3.5;
       baseData.rmax = 12.0;
+      baseData.dr = 0.1;
+      baseData.unwrapMolid = "";
+      baseData.closestReferenceMode = "index";
+      baseData.closestRefIndex = 1;
+      baseData.closestRefX = 0;
+      baseData.closestRefY = 0;
+      baseData.closestRefZ = 0;
+      baseData.closestOutputMode = "json";
+      baseData.closestOutputBase = "closest_results";
+      baseData.occupancyRmax = 1.0;
+      baseData.occupancyOutputMode = "json";
+      baseData.occupancyOutputBase = "occupancy_results";
+      baseData.rdfOutputMode = "json";
+      baseData.rdfOutputBase = "rdf_results";
+      baseData.cnOutputMode = "json";
+      baseData.cnOutputBase = "cn_results";
       baseData.topN = 10; baseData.bvsLogFile = "bvs_summary.log";
       baseData.writeCsv = true; baseData.csvFile = "bvs_results.csv";
       baseData.statsLogFile = "output.log";
@@ -1337,6 +1459,18 @@ export default function VisualBuilder() {
     const isOutputProducing = nodes.some((n) =>
       ["export", "xrd", "bvs", "bondAngle", "stats"].includes(n.type || "")
     );
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const topoOrder = topologicalSortNodeIds(nodes, edges);
+    const trackedOrder = topoOrder.filter((nodeId) => shouldTrackNodeStatus(nodeById.get(nodeId)?.type || ""));
+    setTrackedNodeOrder(trackedOrder);
+    setNodeRunStatus(
+      Object.fromEntries(trackedOrder.map((nodeId) => [nodeId, "queued"])) as Record<string, RunNodeStatus>,
+    );
+    setBuildProgress(0);
+    setBuildStatus("Build queued...");
+    setBuildLogs([]);
+    setIsBuilding(true);
+    currentRunningNodeRef.current = null;
 
     try {
       const useMinimalExecution = nodes.some(
@@ -1382,6 +1516,23 @@ export default function VisualBuilder() {
           try {
             const data = JSON.parse(rawLine.slice(6));
             if (data.type === "complete") {
+              setIsBuilding(false);
+              setBuildStatus(data.success ? "Build completed." : "Build failed.");
+              setBuildProgress((prev) => (data.success ? 100 : prev));
+              setNodeRunStatus((prev) => {
+                const next = { ...prev };
+                const runningId = currentRunningNodeRef.current;
+                if (runningId && next[runningId] === "running") {
+                  next[runningId] = data.success ? "done" : "error";
+                }
+                Object.keys(next).forEach((nodeId) => {
+                  if (next[nodeId] === "queued") {
+                    next[nodeId] = "skipped";
+                  }
+                });
+                return next;
+              });
+              currentRunningNodeRef.current = null;
               if (data.success) {
                 if (isOutputProducing) {
                   toast.success("Run successful! Downloading results...", { id: runToastId });
@@ -1394,6 +1545,42 @@ export default function VisualBuilder() {
                 window.location.href = `/api/download-result/${data.token}`;
               }
               return;
+            } else if (data.type === "status") {
+              const statusMessage = typeof data.message === "string" ? data.message.trim() : "";
+              if (statusMessage) setBuildStatus(statusMessage);
+            } else if (data.type === "log") {
+              const logLine = typeof data.message === "string" ? data.message.trim() : "";
+              if (logLine) {
+                setBuildLogs((prev) => [...prev.slice(-24), logLine]);
+              }
+            } else if (data.type === "progress") {
+              const nodeId = typeof data.nodeId === "string" ? data.nodeId : "";
+              if (nodeId) {
+                const nodeType = nodeById.get(nodeId)?.type || "node";
+                setBuildStatus(`Running ${nodeTypeLabel(nodeType)} (${nodeId})`);
+
+                if (trackedOrder.includes(nodeId)) {
+                  setNodeRunStatus((prev) => {
+                    const next = { ...prev };
+                    const previousRunning = currentRunningNodeRef.current;
+                    if (previousRunning && previousRunning !== nodeId && next[previousRunning] === "running") {
+                      next[previousRunning] = "done";
+                    }
+                    next[nodeId] = "running";
+                    return next;
+                  });
+                  currentRunningNodeRef.current = nodeId;
+
+                  const trackedIndex = trackedOrder.indexOf(nodeId);
+                  if (trackedIndex >= 0 && trackedOrder.length > 0) {
+                    const progressPct = Math.max(
+                      5,
+                      Math.min(95, Math.round(((trackedIndex + 1) / trackedOrder.length) * 100)),
+                    );
+                    setBuildProgress(progressPct);
+                  }
+                }
+              }
             } else if (data.type === "visualize") {
               const { nodeId, data: pdbData } = data;
               setNodes((nds) =>
@@ -1426,7 +1613,23 @@ export default function VisualBuilder() {
           }
         }
       }
+
+      setIsBuilding(false);
     } catch (error: unknown) {
+      setIsBuilding(false);
+      setBuildStatus("Build request failed.");
+      setNodeRunStatus((prev) => {
+        const next = { ...prev };
+        const runningId = currentRunningNodeRef.current;
+        if (runningId && next[runningId] === "running") {
+          next[runningId] = "error";
+        }
+        Object.keys(next).forEach((nodeId) => {
+          if (next[nodeId] === "queued") next[nodeId] = "skipped";
+        });
+        return next;
+      });
+      currentRunningNodeRef.current = null;
       toast.error("Workflow error: " + (error instanceof Error ? error.message : String(error)), { id: runToastId });
     }
   };
@@ -1502,6 +1705,12 @@ export default function VisualBuilder() {
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("edit")} title="Edit Atoms (Slice/Remove/Resname/Reorder)">
                   <SlidersHorizontal className="w-4 h-4" /> Edit
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("atomProps")} title="Atom Properties (Element/Charge/Mass/COM)">
+                  <Atom className="w-4 h-4" /> Props
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("coordFrame")} title="Coordinate Frame Tools">
+                  <Move3D className="w-4 h-4" /> Coords
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("chemistry")} title="Chemistry (Substitute/Fuse/AddH)">
                   <FlaskConical className="w-4 h-4" /> Chem
@@ -1597,9 +1806,51 @@ export default function VisualBuilder() {
       </div>
 
       <div className="flex-1 rounded-2xl overflow-hidden border border-border bg-muted/20 relative" ref={reactFlowWrapper}>
+        {(isBuilding || trackedNodeOrder.length > 0) && (
+          <div className="absolute right-3 top-3 z-20 w-[320px] rounded-xl border border-border bg-card/95 p-3 shadow-xl backdrop-blur-sm">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Node Status</p>
+              <p className="text-xs text-muted-foreground">{Math.round(buildProgress)}%</p>
+            </div>
+            <Progress value={buildProgress} className="h-1.5 mb-2" />
+            <p className="text-xs text-muted-foreground mb-3">{buildStatus || "Waiting for backend updates..."}</p>
+            <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1" ref={scrollRef}>
+              {trackedNodeOrder.length === 0 && (
+                <p className="text-xs text-muted-foreground">No tracked compute nodes in current workflow.</p>
+              )}
+              {trackedNodeOrder.map((nodeId) => {
+                const node = nodes.find((item) => item.id === nodeId);
+                const status = nodeRunStatus[nodeId];
+                return (
+                  <div key={nodeId} className="flex items-center justify-between rounded-md border border-border/70 bg-background/70 px-2 py-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`inline-block h-2.5 w-2.5 rounded-full ${STATUS_DOT_CLASS[status || "queued"]}`} />
+                      <span className="truncate text-xs font-medium">
+                        {nodeTypeLabel(node?.type)} <span className="text-muted-foreground">({nodeId})</span>
+                      </span>
+                    </div>
+                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{statusToLabel(status)}</span>
+                  </div>
+                );
+              })}
+              {buildLogs.slice(-3).map((line, idx) => (
+                <p key={`${line}-${idx}`} className="text-[11px] text-muted-foreground truncate">
+                  {line}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
         <ReactFlowProvider>
           <ReactFlow
-            nodes={nodes.map((n) => ({ ...n, data: { ...n.data, presets } }))}
+            nodes={nodes.map((n) => ({
+              ...n,
+              data: { ...n.data, presets },
+              style: {
+                ...(n.style || {}),
+                ...getNodeStatusStyle(nodeRunStatus[n.id]),
+              },
+            }))}
             edges={edges}
             onNodesChange={(changes) => setNodes((nds) => applyNodeChanges(changes, nds))}
             onEdgesChange={(changes) => setEdges((eds) => applyEdgeChanges(changes, eds))}
@@ -1655,7 +1906,9 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
 
   let pythonCode = `import atomipy as ap\n`;
   if (mode === "full") {
-    pythonCode += `import os\nimport traceback\n`;
+    pythonCode += `import json\nimport os\nimport traceback\n`;
+  } else if (mode === "minimal") {
+    pythonCode += `import json\n`;
   }
   pythonCode += `\n`;
 
@@ -2254,35 +2507,136 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
       case "analysis": {
         const amode = getString(data, "mode", "unwrap");
         if (amode === "unwrap") {
-          pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox})\n`;
+          const unwrapMolidRaw = getString(data, "unwrapMolid", "").trim();
+          const unwrapMolidTokens = unwrapMolidRaw
+            .split(/[;,]+/)
+            .map((token) => token.trim())
+            .filter((token) => /^-?\d+$/.test(token))
+            .map((token) => parseInt(token, 10));
+          if (unwrapMolidTokens.length === 1) {
+            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox}, molid=${unwrapMolidTokens[0]})\n`;
+          } else if (unwrapMolidTokens.length > 1) {
+            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox}, molid=[${unwrapMolidTokens.join(", ")}])\n`;
+          } else {
+            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox})\n`;
+          }
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (amode === "rdf") {
           const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
           const typeB = pyEscape(getString(data, "atomTypeB", "Cl"));
           const rmax = getNumber(data, "rmax", 12.0);
-          const rdfId = id.replace(/[^a-zA-Z0-9_]/g, "_");
-          pythonCode += `r_rdf, g_r = ap.calculate_rdf(${inAtoms}, ${inBox}, typeA='${typeA}', typeB='${typeB}', rmax=${rmax})\n`;
-          pythonCode += `with open('rdf_${rdfId}.json', 'w') as f: json.dump({"bins": r_rdf.tolist(), "rdf": g_r.tolist()}, f)\n`;
+          const dr = getNumber(data, "dr", 0.1);
+          const outputMode = getString(data, "rdfOutputMode", "json");
+          const outputBase = pyEscape(getString(data, "rdfOutputBase", "rdf_results"));
+          const writeJson = outputMode === "json" || outputMode === "both";
+          const writeCsv = outputMode === "csv" || outputMode === "both";
+          pythonCode += `r_rdf, g_r = ap.calculate_rdf(${inAtoms}, ${inBox}, typeA='${typeA}', typeB='${typeB}', rmax=${rmax}, dr=${dr})\n`;
+          if (writeJson) {
+            pythonCode += `with open('${outputBase}.json', 'w') as _rdf_json:\n`;
+            pythonCode += `    json.dump({"bins": r_rdf.tolist(), "rdf": g_r.tolist()}, _rdf_json)\n`;
+          }
+          if (writeCsv) {
+            pythonCode += `with open('${outputBase}.csv', 'w') as _rdf_csv:\n`;
+            pythonCode += `    _rdf_csv.write('r,rdf\\n')\n`;
+            pythonCode += `    for _ri, _gi in zip(r_rdf.tolist(), g_r.tolist()):\n`;
+            pythonCode += `        _rdf_csv.write(f"{float(_ri):.8f},{float(_gi):.8f}\\\\n")\n`;
+          }
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (amode === "cn") {
           const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
+          const typeB = getString(data, "atomTypeB", "").trim();
           const cutoff = getNumber(data, "cutoff", 3.5);
-          pythonCode += `cn_data = ap.coordination_number(${inAtoms}, ${inBox}, typeA='${typeA}', cutoff=${cutoff})\n`;
-          pythonCode += `print(f"Node ${id} CN summary: {cn_data}")\n`;
+          const outputMode = getString(data, "cnOutputMode", "json");
+          const outputBase = pyEscape(getString(data, "cnOutputBase", "cn_results"));
+          const writeJson = outputMode === "json" || outputMode === "both";
+          const writeCsv = outputMode === "csv" || outputMode === "both";
+          const typeBArg = typeB ? `, typeB='${pyEscape(typeB)}'` : "";
+          pythonCode += `cn_data = ap.coordination_number(${inAtoms}, ${inBox}, typeA='${typeA}', cutoff=${cutoff}${typeBArg})\n`;
+          if (writeJson) {
+            pythonCode += `with open('${outputBase}.json', 'w') as _cn_json:\n`;
+            pythonCode += `    json.dump({"coordination_number": cn_data}, _cn_json)\n`;
+          }
+          if (writeCsv) {
+            pythonCode += `with open('${outputBase}.csv', 'w') as _cn_csv:\n`;
+            pythonCode += `    _cn_csv.write('index,coordination_number\\n')\n`;
+            pythonCode += `    for _idx, _cnv in enumerate(cn_data, start=1):\n`;
+            pythonCode += `        _cn_csv.write(f"{_idx},{int(_cnv)}\\\\n")\n`;
+          }
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (amode === "closest") {
-          pythonCode += `closest_data = ap.closest_atom(${inAtoms}, ${inBox})\n`;
+          const refMode = getString(data, "closestReferenceMode", "index");
+          const outputMode = getString(data, "closestOutputMode", "json");
+          const outputBase = pyEscape(getString(data, "closestOutputBase", "closest_results"));
+          const writeJson = outputMode === "json" || outputMode === "both";
+          const writeCsv = outputMode === "csv" || outputMode === "both";
+          if (refMode === "coords") {
+            const refX = getNumber(data, "closestRefX", 0);
+            const refY = getNumber(data, "closestRefY", 0);
+            const refZ = getNumber(data, "closestRefZ", 0);
+            pythonCode += `closest_data = ap.closest_atom(${inAtoms}, [${refX}, ${refY}, ${refZ}], Box=${inBox})\n`;
+          } else {
+            const refIdx = Math.max(1, Math.round(getNumber(data, "closestRefIndex", 1)));
+            pythonCode += `_closest_ref_idx = max(0, min(len(${inAtoms}) - 1, ${refIdx} - 1)) if ${inAtoms} else 0\n`;
+            pythonCode += `_closest_ref = ${inAtoms}[_closest_ref_idx] if ${inAtoms} else {'x': 0.0, 'y': 0.0, 'z': 0.0}\n`;
+            pythonCode += `closest_data = ap.closest_atom(${inAtoms}, _closest_ref, Box=${inBox})\n`;
+          }
+          if (writeJson) {
+            pythonCode += `with open('${outputBase}.json', 'w') as _closest_json:\n`;
+            pythonCode += `    json.dump({"closest_atom": closest_data}, _closest_json)\n`;
+          }
+          if (writeCsv) {
+            pythonCode += `with open('${outputBase}.csv', 'w') as _closest_csv:\n`;
+            pythonCode += `    _closest_csv.write('index,type,element,x,y,z,charge\\n')\n`;
+            pythonCode += `    if closest_data:\n`;
+            pythonCode += `        _closest_csv.write(f"{closest_data.get('index', '')},{closest_data.get('type', '')},{closest_data.get('element', '')},{closest_data.get('x', '')},{closest_data.get('y', '')},{closest_data.get('z', '')},{closest_data.get('charge', '')}\\\\n")\n`;
+          }
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
+        } else if (amode === "occupancy") {
+          const occupancyRmax = getNumber(data, "occupancyRmax", 1.0);
+          const outputMode = getString(data, "occupancyOutputMode", "json");
+          const outputBase = pyEscape(getString(data, "occupancyOutputBase", "occupancy_results"));
+          const writeJson = outputMode === "json" || outputMode === "both";
+          const writeCsv = outputMode === "csv" || outputMode === "both";
+          pythonCode += `if hasattr(ap, 'occupancy_atom'):\n`;
+          pythonCode += `    ${blockOutAtoms}, occupancy_values = ap.occupancy_atom(${inAtoms}, ${inBox}, rmax=${occupancyRmax})\n`;
+          pythonCode += `else:\n`;
+          pythonCode += `    _dist, _, _, _ = ap.dist_matrix(${inAtoms}, ${inBox})\n`;
+          pythonCode += `    occupancy_values = []\n`;
+          pythonCode += `    for _i in range(len(${inAtoms})):\n`;
+          pythonCode += `        _neighbors = [_d for _d in _dist[:, _i] if _d < ${occupancyRmax}]\n`;
+          pythonCode += `        _occ = (1.0 / len(_neighbors)) if len(_neighbors) > 0 else 0.0\n`;
+          pythonCode += `        ${inAtoms}[_i]['occupancy'] = _occ\n`;
+          pythonCode += `        occupancy_values.append(_occ)\n`;
+          pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
+          if (writeJson) {
+            pythonCode += `with open('${outputBase}.json', 'w') as _occ_json:\n`;
+            pythonCode += `    _occ_out = occupancy_values.tolist() if hasattr(occupancy_values, 'tolist') else list(occupancy_values)\n`;
+            pythonCode += `    json.dump({"occupancy": _occ_out}, _occ_json)\n`;
+          }
+          if (writeCsv) {
+            pythonCode += `with open('${outputBase}.csv', 'w') as _occ_csv:\n`;
+            pythonCode += `    _occ_csv.write('index,occupancy\\n')\n`;
+            pythonCode += `    _occ_out = occupancy_values.tolist() if hasattr(occupancy_values, 'tolist') else list(occupancy_values)\n`;
+            pythonCode += `    for _idx, _occ in enumerate(_occ_out, start=1):\n`;
+            pythonCode += `        _occ_csv.write(f"{_idx},{float(_occ):.8f}\\\\n")\n`;
+          }
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (amode === "bvs") {
-          const topN = Math.round(getNumber(data, "topN", 10));
+          const topN = Math.max(1, Math.round(getNumber(data, "topN", 10)));
           const bvsLog = pyEscape(getString(data, "bvsLogFile", "bvs_summary.log"));
           const writeCsv = getBoolean(data, "writeCsv", true);
           const csvFile = pyEscape(getString(data, "csvFile", "bvs_results.csv"));
-          const csvArg = writeCsv ? `, write_csv=True, csv_file='${csvFile}'` : "";
-          pythonCode += `ap.bvs(${inAtoms}, ${inBox}, top_n=${topN}, log_file='${bvsLog}'${csvArg})\n`;
+          const csvPathExpr = writeCsv ? `'${csvFile}'` : "None";
+          const reportVar = `analysis_bvs_report_${index}`;
+          pythonCode += `${reportVar} = ap.analyze_bvs(${inAtoms}, ${inBox}, csv_path=${csvPathExpr}, top_n=${topN})\n`;
+          pythonCode += `with open('${bvsLog}', 'w') as _bvs_log:\n`;
+          pythonCode += `    _bvs_log.write('BVS Analysis Summary\\n')\n`;
+          pythonCode += `    _bvs_log.write(f"GII: {${reportVar}.get('gii', 0.0):.6f}\\n")\n`;
+          pythonCode += `    _bvs_log.write(f"GII (no H): {${reportVar}.get('gii_no_h', 0.0):.6f}\\n")\n`;
+          pythonCode += `    _bvs_log.write(f"Formal charge: {${reportVar}.get('formal_charge', 0)}\\n")\n`;
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (amode === "stats") {
@@ -2362,12 +2716,100 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         break;
       }
       case "pbc": {
-        const pbcMode = getString(data, "mode", "condense");
+        const pbcMode = getString(data, "mode", "wrap");
         if (pbcMode === "condense") {
           pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.condense(${inAtoms}, ${inBox})\\n`;
+        } else if (pbcMode === "unwrap") {
+          const unwrapMolidRaw = getString(data, "unwrapMolid", "").trim();
+          const unwrapMolidTokens = unwrapMolidRaw
+            .split(/[;,]+/)
+            .map((token) => token.trim())
+            .filter((token) => /^-?\\d+$/.test(token))
+            .map((token) => parseInt(token, 10));
+          if (unwrapMolidTokens.length === 1) {
+            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox}, molid=${unwrapMolidTokens[0]})\\n`;
+          } else if (unwrapMolidTokens.length > 1) {
+            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox}, molid=[${unwrapMolidTokens.join(", ")}])\\n`;
+          } else {
+            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox})\\n`;
+          }
+          pythonCode += `${blockOutBox} = ${inBox}\\n`;
         } else {
           pythonCode += `${blockOutAtoms} = ap.wrap(${inAtoms}, ${inBox})\\n`;
           pythonCode += `${blockOutBox} = ${inBox}\\n`;
+        }
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "atomProps": {
+        const applyElement = getBoolean(data, "applyElement", true);
+        const applyFormalCharges = getBoolean(data, "applyFormalCharges", false);
+        const applyMass = getBoolean(data, "applyMass", false);
+        const computeCom = getBoolean(data, "computeCom", false);
+        const comLogFile = pyEscape(getString(data, "comLogFile", "com_report.json"));
+        const comVar = `com_${index}`;
+
+        pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+        if (applyElement) {
+          pythonCode += `${blockOutAtoms} = ap.element(${blockOutAtoms})\n`;
+        }
+        if (applyFormalCharges) {
+          pythonCode += `${blockOutAtoms} = ap.assign_formal_charges(${blockOutAtoms})\n`;
+        }
+        if (applyMass) {
+          pythonCode += `${blockOutAtoms} = ap.set_atomic_masses(${blockOutAtoms})\n`;
+        }
+        if (computeCom) {
+          pythonCode += `${comVar} = ap.com(${blockOutAtoms}, add_to_atoms=True)\n`;
+          pythonCode += `with open('${comLogFile}', 'w') as _com_file:\n`;
+          pythonCode += `    json.dump({"com": [float(${comVar}[0]), float(${comVar}[1]), float(${comVar}[2])]}, _com_file)\n`;
+        }
+        pythonCode += `${blockOutBox} = ${inBox}\n`;
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "coordFrame": {
+        const coordMode = getString(data, "mode", "cart_to_frac");
+        const updateBox = getBoolean(data, "updateBox", true);
+        const vectorsFile = pyEscape(getString(data, "vectorsFile", "cell_vectors.json"));
+        const boxCellVar = `cell_${index}`;
+        const orthoBoxVar = `ortho_box_${index}`;
+        const orthoCoordsVar = `ortho_coords_${index}`;
+        const cellVectorsVar = `cell_vectors_${index}`;
+
+        if (inBox === "None") {
+          pythonCode += `# Coordinate frame operation skipped: missing input box\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
+          stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+          break;
+        }
+
+        if (coordMode === "cart_to_frac") {
+          pythonCode += `_, ${blockOutAtoms} = ap.cartesian_to_fractional(atoms=${inAtoms}, Box=${inBox}, add_to_atoms=True)\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
+        } else if (coordMode === "frac_to_cart") {
+          pythonCode += `_, ${blockOutAtoms} = ap.fractional_to_cartesian(atoms=${inAtoms}, Box=${inBox}, add_to_atoms=True)\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
+        } else if (coordMode === "triclinic_to_ortho") {
+          pythonCode += `_, ${blockOutAtoms}, ${orthoBoxVar} = ap.triclinic_to_orthogonal(atoms=${inAtoms}, Box=${inBox}, add_to_atoms=True)\n`;
+          if (updateBox) {
+            pythonCode += `${blockOutBox} = ${orthoBoxVar}.tolist() if hasattr(${orthoBoxVar}, 'tolist') else list(${orthoBoxVar})\n`;
+          } else {
+            pythonCode += `${blockOutBox} = ${inBox}\n`;
+          }
+        } else if (coordMode === "ortho_to_triclinic") {
+          pythonCode += `${boxCellVar} = ap.Box_dim2Cell(${inBox})\n`;
+          pythonCode += `${orthoCoordsVar} = [[a.get('x_ortho', a.get('x', 0.0)), a.get('y_ortho', a.get('y', 0.0)), a.get('z_ortho', a.get('z', 0.0))] for a in ${inAtoms}]\n`;
+          pythonCode += `_, ${blockOutAtoms} = ap.orthogonal_to_triclinic(${orthoCoordsVar}, ${boxCellVar}, atoms=${inAtoms}, add_to_atoms=True)\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
+        } else {
+          pythonCode += `${boxCellVar} = ap.Box_dim2Cell(${inBox})\n`;
+          pythonCode += `${cellVectorsVar} = ap.get_cell_vectors(${boxCellVar})\n`;
+          pythonCode += `with open('${vectorsFile}', 'w') as _vectors_file:\n`;
+          pythonCode += `    json.dump({"cell_vectors": ${cellVectorsVar}.tolist() if hasattr(${cellVectorsVar}, 'tolist') else ${cellVectorsVar}}, _vectors_file)\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         }
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
@@ -2571,6 +3013,13 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         const rmaxM = getNumber(data, "rmaxM", 2.45);
         const sameElementBonds = getBoolean(data, "sameElementBonds", false) ? "True" : "False";
         const sameMoleculeOnly = getBoolean(data, "sameMoleculeOnly", true) ? "True" : "False";
+        const neighborElement = getString(data, "neighborElement", "").trim();
+        const dmMethodRaw = getString(data, "dmMethod", "auto").trim().toLowerCase();
+        const dmMethodArg =
+          dmMethodRaw && dmMethodRaw !== "auto" && ["direct", "sparse", "fast_cl"].includes(dmMethodRaw)
+            ? `, dm_method='${dmMethodRaw}'`
+            : "";
+        const neighborElementArg = neighborElement ? `, neighbor_element='${pyEscape(neighborElement)}'` : "";
         const calcBonds = getBoolean(data, "calcBonds", true);
         const calcAngles = getBoolean(data, "calcAngles", true);
         const calcDihedrals = getBoolean(data, "calcDihedrals", false);
@@ -2585,9 +3034,9 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         if (inAtoms !== "None" && inBox !== "None") {
           if (calcAny) {
             if (calcDihedrals) {
-              pythonCode += `${analyzedAtoms}, ${bondIndexVar}, ${angleIndexVar}, ${dihedralIndexVar}, ${pairListVar} = ap.bond_angle_dihedral(${inAtoms}, ${inBox}, rmaxH=${rmaxH}, rmaxM=${rmaxM}, same_element_bonds=${sameElementBonds}, same_molecule_only=${sameMoleculeOnly})\n`;
+              pythonCode += `${analyzedAtoms}, ${bondIndexVar}, ${angleIndexVar}, ${dihedralIndexVar}, ${pairListVar} = ap.bond_angle_dihedral(${inAtoms}, ${inBox}, rmaxH=${rmaxH}, rmaxM=${rmaxM}, same_element_bonds=${sameElementBonds}, same_molecule_only=${sameMoleculeOnly}${neighborElementArg})\n`;
             } else {
-              pythonCode += `${analyzedAtoms}, ${bondIndexVar}, ${angleIndexVar} = ap.bond_angle(${inAtoms}, ${inBox}, rmaxH=${rmaxH}, rmaxM=${rmaxM}, same_element_bonds=${sameElementBonds}, same_molecule_only=${sameMoleculeOnly})\n`;
+              pythonCode += `${analyzedAtoms}, ${bondIndexVar}, ${angleIndexVar} = ap.bond_angle(${inAtoms}, ${inBox}, rmaxH=${rmaxH}, rmaxM=${rmaxM}, same_element_bonds=${sameElementBonds}, same_molecule_only=${sameMoleculeOnly}${neighborElementArg}${dmMethodArg})\n`;
               pythonCode += `${dihedralIndexVar} = []\n`;
               pythonCode += `${pairListVar} = []\n`;
             }
@@ -2740,12 +3189,15 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         const moleculeName = getString(data, "moleculeName", "").trim();
         const segid = getString(data, "segid", "").trim();
         const nrexcl = Math.max(0, Math.round(getNumber(data, "nrexcl", 1)));
+        const writeN2T = getBoolean(data, "writeN2T", false);
+        const n2tFilenameRaw = getString(data, "n2tFilename", "").trim();
         const validAngleTerms = new Set(["none", "0", "250", "500", "1500"]);
         const angleTerms = validAngleTerms.has(angleTermsRaw) ? angleTermsRaw : "500";
         const includeAngles = angleTerms !== "none";
         const kangle = includeAngles ? parseInt(angleTerms, 10) : 0;
         const explicitAngles = includeAngles ? 1 : 0;
         const maxAngleExpr = includeAngles ? "None" : "0.0";
+        const n2tFilename = pyEscape(n2tFilenameRaw || `${outName}.n2t`);
 
         pythonCode += `# Final Export\n`;
 
@@ -2773,6 +3225,9 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         } else if (topologyFormat === "psf") {
           const segidArg = segid ? `, segid='${pyEscape(segid)}'` : "";
           pythonCode += `ap.write_psf(${inAtoms}, ${inBox}, '${outName}.psf', rmaxH=${topologyRmaxH}, rmaxM=${topologyRmaxM}, detect_bimodal=${detectBimodal}, bimodal_threshold=${bimodalThreshold}, max_angle=${maxAngleExpr}${segidArg})\n`;
+        }
+        if (writeN2T) {
+          pythonCode += `ap.write_n2t(${inAtoms}, Box=${inBox}, n2t_file='${n2tFilename}')\n`;
         }
         break;
       }
