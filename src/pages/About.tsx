@@ -207,7 +207,7 @@ const About = () => {
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Button asChild variant="default" className="w-full sm:w-auto">
-                  <a href="https://www.atomipy.io/about" target="_blank" rel="noopener noreferrer" className="gap-2">
+                  <a href="https://atomipy-topology-generator-1000562662604.europe-north2.run.app" target="_blank" rel="noopener noreferrer" className="gap-2">
                     <ExternalLink className="h-4 w-4" />
                     atomipy topology generator
                   </a>
