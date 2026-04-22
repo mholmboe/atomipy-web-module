@@ -87,6 +87,24 @@ def _parse_payload() -> dict[str, Any]:
         raise ValueError("Field 'request' must be a JSON object.")
     return payload
 
+def _extract_script_artifacts(payload: dict[str, Any]) -> dict[str, str]:
+    raw_artifacts = payload.get("artifacts", {})
+    if not isinstance(raw_artifacts, dict):
+        return {}
+
+    artifacts: dict[str, str] = {}
+    for filename, content in raw_artifacts.items():
+        if not isinstance(filename, str) or not isinstance(content, str):
+            continue
+
+        safe_name = _safe_filename(filename, "artifact.txt")
+        if safe_name in {"build_script.py", "workflow.json"}:
+            continue
+
+        artifacts[safe_name] = content
+
+    return artifacts
+
 
 def _as_box_dim(box_like):
     if box_like is None or (hasattr(box_like, "__len__") and len(box_like) == 0):
@@ -518,6 +536,7 @@ def build_stream():
         payload = _parse_payload()
         script_code = payload.get("script", "")
         workflow_data = payload.get("workflow")
+        script_artifacts = _extract_script_artifacts(payload)
         
         if not script_code:
             return jsonify({"error": "No script provided."}), 400
@@ -558,6 +577,11 @@ def build_stream():
                 script_path = os.path.join(work_dir, "build_script.py")
                 with open(script_path, "w", encoding="utf-8") as f:
                     f.write(script_code)
+
+                for artifact_name, artifact_content in script_artifacts.items():
+                    artifact_path = os.path.join(work_dir, artifact_name)
+                    with open(artifact_path, "w", encoding="utf-8") as f:
+                        f.write(artifact_content)
                 
                 if workflow_data:
                     with open(os.path.join(work_dir, "workflow.json"), "w", encoding="utf-8") as f:
@@ -707,6 +731,7 @@ def execute_script():
     try:
         payload = _parse_payload()
         script_code = payload.get("script", "")
+        script_artifacts = _extract_script_artifacts(payload)
         if not script_code:
             return jsonify({"error": "No script provided."}), 400
 
@@ -738,6 +763,11 @@ def execute_script():
             script_path = os.path.join(work_dir, "build_script.py")
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(script_code)
+
+            for artifact_name, artifact_content in script_artifacts.items():
+                artifact_path = os.path.join(work_dir, artifact_name)
+                with open(artifact_path, "w", encoding="utf-8") as f:
+                    f.write(artifact_content)
             
             # Save the workflow JSON for re-importing
             workflow_data = payload.get("workflow")

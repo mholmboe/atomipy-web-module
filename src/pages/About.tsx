@@ -4,6 +4,55 @@ import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
+const quickSteps = [
+  {
+    title: "1. Add Input Nodes",
+    desc: "Start with one or more Structure nodes (upload or preset).",
+  },
+  {
+    title: "2. Connect Workflow Logic",
+    desc: "Wire nodes left-to-right so atoms and box data flow through each operation.",
+  },
+  {
+    title: "3. Configure Parameters",
+    desc: "Set replication factors, ion count, forcefield choices, analysis settings, and export options.",
+  },
+  {
+    title: "4. Validate + Run",
+    desc: "Click Run to execute the generated Python script on the backend.",
+  },
+  {
+    title: "5. Download Result Bundle",
+    desc: "The app returns a zip with generated structures, scripts, logs, and workflow JSON.",
+  },
+];
+
+const outputBundleEntries = [
+  "`build_script.py` (runtime script used for that run)",
+  "`build_script_full.py` (full export with instrumentation and node-level safety wrappers)",
+  "`build_script_strict_minimal.py` (boiled-down atomipy commands only)",
+  "`build_script_notebook.ipynb` (Jupyter notebook derived from strict-minimal flow)",
+  "`workflow.json` (re-importable node graph)",
+  "`build_summary.json` and `execution_stdout.txt`",
+  "Generated structure/topology/analysis files based on your selected nodes",
+];
+
+const coordinateFormats = [
+  ".xyz",
+  ".gro",
+  ".pdb",
+  ".cif",
+  ".pqr",
+  ".poscar",
+  ".sdf",
+];
+
+const topologyFormats = [
+  ".itp (GROMACS)",
+  ".data (LAMMPS)",
+  ".psf (NAMD/OpenMM)",
+];
+
 const About = () => {
   return (
     <div className="min-h-screen bg-background">
@@ -25,51 +74,28 @@ const About = () => {
           </section>
 
           <div className="grid gap-12 pt-8">
-            {/* What is it section */}
             <section className="space-y-4">
               <div className="flex items-center gap-2 text-primary font-semibold uppercase tracking-wider text-sm">
                 <Zap className="h-4 w-4" />
-                <span>The Vision</span>
+                <span>What It Does</span>
               </div>
-              <h2 className="text-2xl font-bold">A Visual Workflow Engine</h2>
+              <h2 className="text-2xl font-bold">A Visual Workflow Engine for atomipy</h2>
               <p className="text-muted-foreground leading-relaxed">
-                The <span className="text-foreground font-medium">atomipy web module</span> is designed to bridge the gap between complex Python scripts and visual research design. Instead of writing code to build molecular slabs or solvate systems, you can chain visual nodes to create a transparent, reproducible pipeline.
+                The <span className="text-foreground font-medium">atomipy web module</span> turns system construction into a transparent node graph. Instead of hand-writing long scripts, you define structure import, transformations, chemistry, forcefield assignment, analysis, and export through connected operations.
               </p>
             </section>
 
-            {/* Manual Section */}
             <section className="space-y-6">
               <div className="flex items-center gap-2 text-primary font-semibold uppercase tracking-wider text-sm">
                 <BookOpen className="h-4 w-4" />
-                <span>Quick Manual</span>
+                <span>How To Use</span>
               </div>
-              <h2 className="text-2xl font-bold">How to Build Your System</h2>
+              <h2 className="text-2xl font-bold">Build Workflow (Typical Path)</h2>
 
               <div className="grid sm:grid-cols-2 gap-4">
-                {[
-                  {
-                    title: "Add Nodes",
-                    desc: "Use the top toolbar to add 'Structure', 'Box', 'Merge', or 'Solv' nodes to your canvas.",
-                    icon: Layers
-                  },
-                  {
-                    title: "Connect Logic",
-                    desc: "Drag connections between handles to pass atoms and cell dimensions from one operation to the next.",
-                    icon: ArrowRight
-                  },
-                  {
-                    title: "Configure",
-                    desc: "Set parameters like replication factors, ion counts, or XRD wavelength directly inside each node.",
-                    icon: Zap
-                  },
-                  {
-                    title: "Export Results",
-                    desc: "Generate a full simulation package including a custom 'build_script.py' for local execution in your preferred Python IDE.",
-                    icon: BarChart3
-                  }
-                ].map((item, i) => (
-                  <div key={i} className="p-5 rounded-xl border bg-card hover:shadow-md transition-shadow space-y-3">
-                    <item.icon className="h-6 w-6 text-primary" />
+                {quickSteps.map((item) => (
+                  <div key={item.title} className="p-5 rounded-xl border bg-card hover:shadow-md transition-shadow space-y-3">
+                    <Layers className="h-6 w-6 text-primary" />
                     <h3 className="font-bold">{item.title}</h3>
                     <p className="text-sm text-muted-foreground leading-snug">{item.desc}</p>
                   </div>
@@ -77,54 +103,103 @@ const About = () => {
               </div>
             </section>
 
-            {/* Local Execution & AI Section */}
             <section className="bg-primary/5 p-8 rounded-2xl space-y-4 border border-primary/20">
               <h2 className="text-2xl font-bold flex items-center gap-2">
-                <Zap className="h-6 w-6 text-primary" />
-                Local Execution & AI Assistance
+                <Layers className="h-6 w-6 text-primary" />
+                Node Types and Capabilities
               </h2>
               <p className="text-muted-foreground leading-relaxed">
-                For large systems, running the backend locally is often faster. Every build includes a <code>build_script.py</code> that can be executed in any Python IDE (e.g., VS Code, Cursor, Windsurf, or Antigravity) with the <code>atomipy</code> package installed.
-              </p>
-              <p className="text-muted-foreground leading-relaxed">
-                When paired with an AI-assisted IDE, you can leverage agentic coding using <strong>atomipy</strong> as an API to refine and scale your molecular system construction far beyond the capabilities of a web interface.
+                The app supports structure input, replication/box edits, transforms (translate/rotate/scale/bend), solvent/ion insertion, substitutions, forcefield typing, bonded-term analysis, BVS, XRD, trajectory I/O, and final structure/topology export. You can combine these in arbitrary acyclic graphs.
               </p>
             </section>
 
-            {/* Forcefield Support Section */}
-            <section className="bg-muted/50 p-8 rounded-2xl space-y-4 border border-border/50">
-              <h2 className="text-2xl font-bold flex items-center gap-2">
-                <Zap className="h-6 w-6 text-primary" />
-                Forcefield Support & Atomtyping
-              </h2>
-              <p className="text-muted-foreground leading-relaxed">
-                The <strong>atomipy</strong> web module integrates advanced atomtyping engines for mineral and interface systems. It features native support for the <strong>CLAYFF</strong> (Cygan et al., 2004) and <strong>MINFF</strong> (Holmboe, 2025) forcefields, ensuring that your generated topologies are physically consistent and ready for high-fidelity simulations.
-              </p>
-            </section>
-
-            {/* XRD Simulation Section */}
-            <section className="bg-muted/50 p-8 rounded-2xl space-y-4 border border-border/50">
+            <section className="bg-muted/50 p-8 rounded-2xl space-y-5 border border-border/50">
               <h2 className="text-2xl font-bold flex items-center gap-2">
                 <BarChart3 className="h-6 w-6 text-primary" />
-                Integrated XRD Simulation
+                Output Bundle Contents
               </h2>
               <p className="text-muted-foreground leading-relaxed">
-                One of the core features of <strong>atomipy</strong> is the ability to simulate Powder X-ray Diffraction (XRD) patterns on-the-fly. You can test your structures for preferred orientation, instrumental broadening, and wavelength effects without ever leaving the builder.
+                Each run returns a zip bundle containing generated outputs and reproducibility artifacts.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {outputBundleEntries.map((item) => (
+                  <div key={item} className="rounded-lg border bg-background p-3 text-sm text-muted-foreground">
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="bg-muted/50 p-8 rounded-2xl space-y-5 border border-border/50">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <ArrowRight className="h-6 w-6 text-primary" />
+                Supported Export File Formats
+              </h2>
+
+              <div className="grid sm:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <h3 className="font-semibold">Structure Formats</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {coordinateFormats.map((fmt) => (
+                      <span key={fmt} className="text-xs px-2 py-1 rounded-md border bg-background text-muted-foreground">
+                        {fmt}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h3 className="font-semibold">Topology Formats</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {topologyFormats.map((fmt) => (
+                      <span key={fmt} className="text-xs px-2 py-1 rounded-md border bg-background text-muted-foreground">
+                        {fmt}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-primary/5 p-8 rounded-2xl space-y-5 border border-primary/20">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <BookOpen className="h-6 w-6 text-primary" />
+                Python and Jupyter Script Types
+              </h2>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-xl border bg-background p-4 space-y-2">
+                  <h3 className="font-semibold">Full Script</h3>
+                  <p className="text-sm text-muted-foreground">
+                    <code>build_script_full.py</code> includes node instrumentation, logging hooks, and per-node safety wrappers for traceability.
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-background p-4 space-y-2">
+                  <h3 className="font-semibold">Strict Minimal Script</h3>
+                  <p className="text-sm text-muted-foreground">
+                    <code>build_script_strict_minimal.py</code> is boiled down to essential <code>atomipy</code> commands with minimal surrounding logic.
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-background p-4 space-y-2">
+                  <h3 className="font-semibold">Notebook Script</h3>
+                  <p className="text-sm text-muted-foreground">
+                    <code>build_script_notebook.ipynb</code> is based on the strict-minimal flow and adds per-node markdown documentation plus detected <code>ap.*</code> function usage.
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                The runtime script used during execution is saved as <code>build_script.py</code> in the bundle.
               </p>
             </section>
 
-            {/* BVS Analysis Section */}
             <section className="bg-muted/50 p-8 rounded-2xl space-y-4 border border-border/50">
               <h2 className="text-2xl font-bold flex items-center gap-2">
                 <Zap className="h-6 w-6 text-primary" />
-                Bond Valence Sum (BVS) Analysis
+                Scientific Features
               </h2>
               <p className="text-muted-foreground leading-relaxed">
-                Validate the chemical environment of your structures using <strong>Bond Valence Sum (BVS)</strong> analysis. This tool helps identify oxidation states and coordination geometry, providing a quantitative metric for structural stability and refinement.
+                The module integrates CLAYFF/MINFF atomtyping workflows, XRD simulation, bonded-term generation, and BVS-based validation for mineral and interface systems.
               </p>
             </section>
 
-            {/* External Links Section */}
             <section className="text-center py-12 border-t space-y-6">
               <h2 className="text-2xl font-bold">Go Deeper</h2>
               <p className="text-muted-foreground">
@@ -139,7 +214,7 @@ const About = () => {
                 </Button>
                 <Button asChild variant="outline" className="w-full sm:w-auto">
                   <Link to="/" className="gap-2">
-                    Back to <>atomipy</> web module
+                    Back to atomipy web module
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>

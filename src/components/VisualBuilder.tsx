@@ -538,6 +538,287 @@ const getBoolean = (data: NodeDataMap, key: string, fallback: boolean) => {
 
 const pyEscape = (value: string) => value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 
+type PythonScriptMode = "full" | "minimal" | "strict";
+type ScriptSection = { nodeType: string; nodeId: string; code: string };
+
+const NODE_PURPOSE_DOCS: Record<string, string> = {
+  structure: "Imports a starting structure from upload or preset files.",
+  preset: "Imports a preset structure file.",
+  upload: "Imports an uploaded structure file.",
+  merge: "Merges two structures while applying a distance filter.",
+  add: "Combines two atom sets into one unified structure.",
+  box: "Defines or updates simulation box dimensions/cell parameters.",
+  replicate: "Replicates the structure along x/y/z to build supercells.",
+  position: "Repositions or translates atoms in Cartesian space.",
+  rotate: "Rotates atoms using fixed or random Euler angles.",
+  scale: "Scales coordinates and box dimensions.",
+  reorder: "Reorders atoms by index/type selection rules.",
+  slice: "Keeps atoms in a selected region and removes the rest.",
+  remove: "Removes atoms by type/index/molecule/coordinate criteria.",
+  insert: "Inserts template molecules into a selected region.",
+  substitute: "Performs isomorphic substitution in mineral frameworks.",
+  fuse: "Fuses nearby atoms based on distance criteria.",
+  resname: "Assigns residue names used for topology/export workflows.",
+  molecule: "Assigns molecule IDs and optional residue names.",
+  addIons: "Adds ions inside the box with placement constraints.",
+  solvate: "Adds solvent molecules using density and distance settings.",
+  wrap: "Wraps atoms back into periodic boundaries.",
+  addH: "Adds hydrogens using bond valence heuristics.",
+  stats: "Computes and writes structural statistics.",
+  bend: "Applies bending transformation to coordinates.",
+  condense: "Condenses periodic images into a compact representation.",
+  grid: "Generates a grid of atoms in a defined region.",
+  analysis: "Runs analysis operations like RDF/CN/BVS/unwrap.",
+  trajectory: "Imports or writes trajectory frames.",
+  waterModel: "Converts/adjusts water model representations.",
+  transform: "Runs translate/rotate/scale/bend transformations.",
+  pbc: "Applies periodic-boundary operations (wrap/condense).",
+  edit: "Runs structural editing operations on current atoms.",
+  chemistry: "Runs chemistry operations like substitution/fusion/H-addition.",
+  solvent: "Runs solvent/water-model operations.",
+  viewer: "Exports an in-memory visualization representation.",
+  forcefield: "Assigns forcefield atom types and parameters.",
+  bondAngle: "Calculates bonded terms (bonds/angles/dihedrals).",
+  bvs: "Runs bond-valence analysis and summaries.",
+  xrd: "Calculates and exports simulated XRD profiles.",
+  export: "Writes final coordinate/topology files.",
+};
+
+const compactBlankLines = (text: string): string => text.replace(/\n{3,}/g, "\n\n");
+
+const toStrictMinimalScript = (pythonCode: string): string => {
+  const lines = pythonCode.replace(/\r\n/g, "\n").split("\n");
+  const output: string[] = [];
+  let inDocstring = false;
+  let skipIndent: number | null = null;
+
+  const isControlLine = (trimmed: string) =>
+    trimmed.endsWith(":") &&
+    (trimmed.startsWith("if ") ||
+      trimmed.startsWith("elif ") ||
+      trimmed === "else:" ||
+      trimmed === "try:" ||
+      trimmed.startsWith("except ") ||
+      trimmed === "finally:" ||
+      trimmed.startsWith("with ") ||
+      trimmed.startsWith("for ") ||
+      trimmed.startsWith("while "));
+
+  const indentLevel = (line: string) => line.length - line.trimStart().length;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const indent = indentLevel(line);
+
+    if (inDocstring) {
+      if (trimmed.includes('"""')) {
+        inDocstring = false;
+      }
+      continue;
+    }
+
+    if (skipIndent !== null) {
+      if (trimmed === "") {
+        continue;
+      }
+      if (indent > skipIndent) {
+        continue;
+      }
+      skipIndent = null;
+    }
+
+    if (trimmed.includes('"""')) {
+      const quoteCount = (trimmed.match(/"""/g) || []).length;
+      if (quoteCount % 2 === 1) {
+        inDocstring = true;
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("# --- Operation:")) {
+      output.push(line);
+      continue;
+    }
+
+    if (trimmed === "") {
+      output.push("");
+      continue;
+    }
+
+    if (trimmed.startsWith("import ") && trimmed !== "import atomipy as ap") {
+      continue;
+    }
+    if (trimmed.startsWith("def __report_error__")) {
+      skipIndent = indent;
+      continue;
+    }
+    if (trimmed.startsWith("open('build_errors.log'")) {
+      continue;
+    }
+    if (trimmed.startsWith("print(")) {
+      continue;
+    }
+    if (trimmed.startsWith("#")) {
+      continue;
+    }
+    if (isControlLine(trimmed)) {
+      skipIndent = indent;
+      continue;
+    }
+
+    output.push(line);
+  }
+
+  return `${compactBlankLines(output.join("\n")).trimEnd()}\n`;
+};
+
+const stripOperationMarkers = (pythonCode: string): string => {
+  const filtered = pythonCode
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("# --- Operation:"))
+    .join("\n");
+  return `${compactBlankLines(filtered).trimEnd()}\n`;
+};
+
+const extractAtomipyCalls = (code: string): string[] => {
+  const matches = code.match(/ap\.[A-Za-z_][A-Za-z0-9_.]*/g) || [];
+  return Array.from(new Set(matches));
+};
+
+const parseScriptSections = (pythonCode: string): { preamble: string; sections: ScriptSection[] } => {
+  const markerRegex = /^# --- Operation: (.+) \((.+)\) ---$/;
+  const lines = pythonCode.replace(/\r\n/g, "\n").split("\n");
+  const sections: ScriptSection[] = [];
+  const preambleLines: string[] = [];
+  let current: { nodeType: string; nodeId: string; lines: string[] } | null = null;
+
+  lines.forEach((line) => {
+    const match = line.trim().match(markerRegex);
+    if (match) {
+      if (current) {
+        sections.push({
+          nodeType: current.nodeType,
+          nodeId: current.nodeId,
+          code: current.lines.join("\n").trimEnd(),
+        });
+      }
+      current = { nodeType: match[1], nodeId: match[2], lines: [] };
+      return;
+    }
+
+    if (current) {
+      current.lines.push(line);
+    } else {
+      preambleLines.push(line);
+    }
+  });
+
+  if (current) {
+    sections.push({
+      nodeType: current.nodeType,
+      nodeId: current.nodeId,
+      code: current.lines.join("\n").trimEnd(),
+    });
+  }
+
+  return { preamble: preambleLines.join("\n").trimEnd(), sections };
+};
+
+const notebookSource = (text: string): string[] => {
+  const normalized = text.replace(/\r\n/g, "\n");
+  const lines = normalized.split("\n");
+  return lines.map((line, idx) => (idx < lines.length - 1 ? `${line}\n` : line));
+};
+
+const markdownCell = (text: string) => ({
+  cell_type: "markdown",
+  metadata: {},
+  source: notebookSource(text),
+});
+
+const codeCell = (text: string) => ({
+  cell_type: "code",
+  execution_count: null,
+  metadata: {},
+  outputs: [],
+  source: notebookSource(text),
+});
+
+const generateNotebookFromStrictScript = (nodes: Node[], strictScriptWithMarkers: string): string => {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const { preamble, sections } = parseScriptSections(strictScriptWithMarkers);
+  const cells: Array<Record<string, unknown>> = [];
+
+  cells.push(
+    markdownCell(
+      [
+        "# atomipy Workflow Notebook",
+        "",
+        "Generated by atomipy web module from the strict-minimal script path.",
+        "Each step includes a short explanation and the detected `atomipy` API calls.",
+      ].join("\n"),
+    ),
+  );
+
+  if (preamble.trim()) {
+    cells.push(codeCell(`${preamble}\n`));
+  }
+
+  sections.forEach((section, idx) => {
+    const node = nodeById.get(section.nodeId);
+    const nodeType = (node?.type || section.nodeType || "unknown").trim();
+    const purpose = NODE_PURPOSE_DOCS[nodeType] || `Runs the \`${nodeType}\` workflow step.`;
+    const calls = extractAtomipyCalls(section.code);
+    const callsLine =
+      calls.length > 0
+        ? calls.map((call) => `\`${call}\``).join(", ")
+        : "`No direct atomipy call detected in this step.`";
+
+    const md = [
+      `## Step ${idx + 1}: \`${nodeType}\``,
+      `Node id: \`${section.nodeId}\``,
+      "",
+      purpose,
+      "",
+      `atomipy functions: ${callsLine}`,
+    ].join("\n");
+
+    cells.push(markdownCell(md));
+    if (section.code.trim()) {
+      cells.push(codeCell(`${section.code.trimEnd()}\n`));
+    } else {
+      cells.push(codeCell("# No executable statements generated for this step.\n"));
+    }
+  });
+
+  return JSON.stringify(
+    {
+      cells,
+      metadata: {
+        kernelspec: {
+          display_name: "Python 3",
+          language: "python",
+          name: "python3",
+        },
+        language_info: {
+          codemirror_mode: { name: "ipython", version: 3 },
+          file_extension: ".py",
+          mimetype: "text/x-python",
+          name: "python",
+          nbconvert_exporter: "python",
+          pygments_lexer: "ipython3",
+          version: "3.11",
+        },
+      },
+      nbformat: 4,
+      nbformat_minor: 5,
+    },
+    null,
+    2,
+  );
+};
+
 export default function VisualBuilder() {
   const [nodes, setNodes] = useNodesState(initialNodes);
   const [edges, setEdges] = useEdgesState(initialEdges);
@@ -1058,11 +1339,26 @@ export default function VisualBuilder() {
     );
 
     try {
-      const code = generatePythonCode(nodes, edges);
+      const useMinimalExecution = nodes.some(
+        (node) => node.type === "export" && (node.data as { minimalisticScript?: boolean })?.minimalisticScript === true,
+      );
+      const fullScript = generatePythonCode(nodes, edges, "full");
+      const runtimeScript = useMinimalExecution ? generatePythonCode(nodes, edges, "minimal") : fullScript;
+      const strictScriptWithMarkers = generatePythonCode(nodes, edges, "strict");
+      const strictScript = stripOperationMarkers(strictScriptWithMarkers);
+      const notebookScript = generateNotebookFromStrictScript(nodes, strictScriptWithMarkers);
       const response = await fetch("/api/build-stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script: code, workflow: { nodes, edges } }),
+        body: JSON.stringify({
+          script: runtimeScript,
+          workflow: { nodes, edges },
+          artifacts: {
+            "build_script_full.py": fullScript,
+            "build_script_strict_minimal.py": strictScript,
+            "build_script_notebook.ipynb": notebookScript,
+          },
+        }),
       });
 
       if (!response.ok) throw new Error(`Run request failed: ${response.status}`);
@@ -1321,7 +1617,7 @@ export default function VisualBuilder() {
   );
 }
 
-function generatePythonCode(nodes: Node[], edges: Edge[]) {
+function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode = "full") {
   const adj = new Map<string, string[]>();
   const inDegree = new Map<string, number>();
   nodes.forEach((n) => {
@@ -1354,17 +1650,16 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
   }
 
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-  const isMinimal = nodes.some(n => n.type === "export" && (n.data as any).minimalisticScript === true);
+  const isMinimal = mode !== "full";
+  const isStrictMinimal = mode === "strict";
 
   let pythonCode = `import atomipy as ap\n`;
-  if (!isMinimal) {
+  if (mode === "full") {
     pythonCode += `import os\nimport traceback\n`;
   }
   pythonCode += `\n`;
 
-  if (isMinimal) {
-    pythonCode += `\"\"\"\natomipy Minimalist Script\nGenerated by atomipy web module\n\"\"\"\n\n`;
-  } else {
+  if (mode === "full") {
     pythonCode += `\"\"\"\natomipy Workflow Script\nGenerated by atomipy web module\n\nTo run this script locally:\n1. Install atomipy: pip install git+https://github.com/mholmboe/atomipy.git\n2. Note: Built-in structures ('UC_conf/') are accessible when running in the web bundle.\n   For local use, you may need to provide absolute paths to your PDB/CIF files.\n\"\"\"\n\n`;
 
     pythonCode += `def __report_error__(node_type, node_id, exc):\n`;
@@ -1373,9 +1668,13 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
     pythonCode += `        _err.write(f'Node {node_type} ({node_id}) failed: {exc}\\n')\n`;
     pythonCode += `        _err.write(traceback.format_exc() + '\\n')\n`;
     pythonCode += `    raise\n\n`;
+  } else if (mode === "minimal") {
+    pythonCode += `\"\"\"\natomipy Minimalist Script\nGenerated by atomipy web module\n\"\"\"\n\n`;
+  } else {
+    pythonCode += `\"\"\"\natomipy Strict Minimal Script\nGenerated by atomipy web module\n\"\"\"\n\n`;
   }
 
-  if (!isMinimal) {
+  if (mode === "full") {
     pythonCode += `open('build_errors.log', 'w', encoding='utf-8').close()\n`;
   }
 
@@ -1415,7 +1714,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
     const opTypeEscaped = pyEscape(opType);
     const opIdEscaped = pyEscape(id);
     pythonCode += `\n# --- Operation: ${opType} (${id}) ---\n`;
-    if (!isMinimal) {
+    if (mode === "full") {
       pythonCode += `print("__NODE_START__:${opIdEscaped}:${index}")\n`;
     }
     const nodeBlockStart = pythonCode.length;
@@ -2486,7 +2785,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
     pythonCode = pythonCode.slice(0, nodeBlockStart);
     const trimmedNodeBlock = nodeBlock.endsWith("\n") ? nodeBlock.slice(0, -1) : nodeBlock;
 
-    if (isMinimal) {
+    if (mode !== "full") {
       if (trimmedNodeBlock.trim().length > 0) {
         pythonCode += `${trimmedNodeBlock}\n`;
       } else {
@@ -2507,6 +2806,10 @@ function generatePythonCode(nodes: Node[], edges: Edge[]) {
       pythonCode += `except Exception as _node_exc: __report_error__('${opTypeEscaped}', '${opIdEscaped}', _node_exc)\n`;
     }
   });
+
+  if (isStrictMinimal) {
+    return toStrictMinimalScript(pythonCode);
+  }
 
   return pythonCode;
 }
