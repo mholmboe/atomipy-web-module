@@ -2130,7 +2130,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
 
         if (gatheredStates.length > 0) {
           const atomArgs = gatheredStates.map((s) => s.atoms).join(", ");
-          pythonCode += `${blockOutAtoms} = ap.update(${atomArgs})\n`;
+          pythonCode += `${blockOutAtoms} = ap.update(${atomArgs}, force=True)\n`;
           pythonCode += `${blockOutBox} = ${gatheredStates[0].box}\n`;
           stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         } else {
