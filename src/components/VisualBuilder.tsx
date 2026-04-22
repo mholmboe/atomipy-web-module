@@ -1828,14 +1828,14 @@ export default function VisualBuilder() {
           )}
           </div>
           <div className="flex flex-col gap-2 shrink-0">
-            <Button className="shadow-lg shadow-primary/20" onClick={handleCompileAndRun}>
+            <Button className="shadow-lg shadow-primary/20 w-28 h-11" onClick={handleCompileAndRun}>
               <Play className="w-4 h-4 mr-2" />
               Run
             </Button>
             {showMoreOptions && (
               <Button 
                 variant="destructive" 
-                className="shadow-lg shadow-destructive/20 h-8 text-xs font-bold uppercase tracking-wider" 
+                className="shadow-lg shadow-destructive/20 w-28 h-11 text-xs font-bold uppercase tracking-wider" 
                 onClick={handleResetWorkflow}
                 title="Clear all nodes and reset workflow"
               >
