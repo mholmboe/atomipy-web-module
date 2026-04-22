@@ -58,6 +58,7 @@ import {
   Move3D,
   SlidersHorizontal,
   Atom,
+  X,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -915,6 +916,7 @@ export default function VisualBuilder() {
 
   // Build Progress States
   const [isBuilding, setIsBuilding] = useState(false);
+  const [showStatusWindow, setShowStatusWindow] = useState(false);
   const [buildProgress, setBuildProgress] = useState(0);
   const [buildStatus, setBuildStatus] = useState("");
   const [buildLogs, setBuildLogs] = useState<string[]>([]);
@@ -1485,6 +1487,7 @@ export default function VisualBuilder() {
     setBuildStatus("Build queued...");
     setBuildLogs([]);
     setIsBuilding(true);
+    setShowStatusWindow(true);
     currentRunningNodeRef.current = null;
 
     try {
@@ -1818,11 +1821,23 @@ export default function VisualBuilder() {
       </div>
 
       <div className="flex-1 rounded-2xl overflow-hidden border border-border bg-muted/20 relative" ref={reactFlowWrapper}>
-        {(isBuilding || trackedNodeOrder.length > 0) && (
+        {showStatusWindow && (
           <div className="absolute right-3 top-3 z-20 w-[320px] rounded-xl border border-border bg-card/95 p-3 shadow-xl backdrop-blur-sm">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Node Status</p>
-              <p className="text-xs text-muted-foreground">{Math.round(buildProgress)}%</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Node Status</p>
+                {isBuilding && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+              </div>
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-muted-foreground">{Math.round(buildProgress)}%</p>
+                <button 
+                  onClick={() => setShowStatusWindow(false)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  title="Close Status Window"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
             <Progress value={buildProgress} className="h-1.5 mb-2" />
             <p className="text-xs text-muted-foreground mb-3">{buildStatus || "Waiting for backend updates..."}</p>
