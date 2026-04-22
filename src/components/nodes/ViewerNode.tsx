@@ -219,7 +219,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
           setViewerOption({ width: Math.round(params.width), height: Math.round(params.height) })
         }
       />
-      <Handle type="target" position={Position.Left} className="w-3.5 h-3.5 bg-indigo-500 border-2 border-background z-50" />
+      <Handle type="target" position={Position.Left} className="w-3.5 h-3.5 bg-secondary border-2 border-background z-50" />
       <Handle type="source" position={Position.Right} className="w-3.5 h-3.5 bg-indigo-500 border-2 border-background z-50" />
       
       <Card
