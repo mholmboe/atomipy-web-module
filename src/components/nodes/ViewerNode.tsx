@@ -1,12 +1,15 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Handle, Position, NodeResizer } from "@xyflow/react";
-import { Eye, RotateCw, Maximize2, Settings2, Palette, Box as BoxIcon } from "lucide-react";
+import React, { useEffect, useRef } from "react";
+import { Handle, Position, useReactFlow } from "@xyflow/react";
+import { Eye, RotateCw, Settings2, Palette, Box as BoxIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -23,6 +26,17 @@ type ViewerNodeData = {
   charges?: number[];
   title?: string;
   showUnitCell?: boolean;
+  background?: keyof typeof BACKGROUNDS;
+  viewStyle?: "stick" | "sphere" | "both" | "line";
+  showOutline?: boolean;
+  showHydrogens?: boolean;
+  showAtomLabels?: boolean;
+  colorScheme?: "Jmol" | "greenCarbon" | "cyanCarbon" | "magentaCarbon" | "chain";
+  spin?: boolean;
+  projection?: "perspective" | "orthographic";
+  stickRadius?: number;
+  sphereScale?: number;
+  lineWidth?: number;
 };
 
 const BACKGROUNDS = {
@@ -32,15 +46,39 @@ const BACKGROUNDS = {
   black: "#000000",
 };
 
+const COLOR_SCHEME_LABELS: Record<
+  NonNullable<ViewerNodeData["colorScheme"]>,
+  string
+> = {
+  Jmol: "Jmol",
+  greenCarbon: "Green Carbon",
+  cyanCarbon: "Cyan Carbon",
+  magentaCarbon: "Magenta Carbon",
+  chain: "Chain",
+};
+
 export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNodeData>) {
+  const { updateNodeData } = useReactFlow();
   const viewerRef = useRef<HTMLDivElement>(null);
   const viewerInstance = useRef<any>(null);
-  const [activeBg, setActiveBg] = useState<keyof typeof BACKGROUNDS>("light");
-  const [viewStyle, setViewStyle] = useState<"stick" | "sphere" | "both">("both");
-  const [showOutline, setShowOutline] = useState(true);
 
   const pdb = data.pdb || "";
+  const background = data.background ?? "light";
+  const viewStyle = data.viewStyle ?? "both";
+  const showOutline = data.showOutline ?? true;
   const showUnitCell = data.showUnitCell ?? true;
+  const showHydrogens = data.showHydrogens ?? true;
+  const showAtomLabels = data.showAtomLabels ?? false;
+  const colorScheme = data.colorScheme ?? "Jmol";
+  const spin = data.spin ?? false;
+  const projection = data.projection ?? "perspective";
+  const stickRadius = data.stickRadius ?? 0.15;
+  const sphereScale = data.sphereScale ?? 0.25;
+  const lineWidth = data.lineWidth ?? 1.2;
+
+  const setViewerOption = (patch: Partial<ViewerNodeData>) => {
+    updateNodeData(id, { ...data, ...patch });
+  };
 
   useEffect(() => {
     if (!viewerRef.current || !window.$3Dmol) return;
@@ -48,30 +86,42 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     // Initialize viewer if not already done
     if (!viewerInstance.current) {
       viewerInstance.current = window.$3Dmol.createViewer(viewerRef.current, {
-        backgroundColor: BACKGROUNDS[activeBg],
+        backgroundColor: BACKGROUNDS[background],
       });
     }
 
     const viewer = viewerInstance.current;
-    viewer.setBackgroundColor(BACKGROUNDS[activeBg]);
+    viewer.setBackgroundColor(BACKGROUNDS[background]);
     viewer.clear();
+    if (viewer.setProjection) {
+      viewer.setProjection(projection);
+    }
 
     if (pdb) {
-      // 1. Add model with keepH: true to ensure Hydrogens aren't stripped for clarity
       const model = viewer.addModel(pdb, "pdb", { keepH: true });
       
       const styleConfig: any = {};
       if (viewStyle === "stick" || viewStyle === "both") {
-        styleConfig.stick = { radius: 0.15, colorscheme: "Jmol" };
+        styleConfig.stick = { radius: stickRadius, colorscheme: colorScheme };
       }
       if (viewStyle === "sphere" || viewStyle === "both") {
-        styleConfig.sphere = { scale: 0.25, colorscheme: "Jmol" };
+        styleConfig.sphere = { scale: sphereScale, colorscheme: colorScheme };
+      }
+      if (viewStyle === "line") {
+        styleConfig.line = { linewidth: lineWidth, colorscheme: colorScheme };
       }
       
-      const globalOptions = showOutline ? { outline: { color: "black", width: 0.05 } } : {};
+      const outlineColor = background === "dark" || background === "black" ? "white" : "black";
+      const globalOptions = showOutline ? { outline: { color: outlineColor, width: 0.05 } } : {};
       viewer.setStyle({}, { ...styleConfig, ...globalOptions });
+
+      if (!showHydrogens) {
+        viewer.setStyle(
+          { elem: "H" },
+          { stick: { hidden: true }, sphere: { hidden: true }, line: { hidden: true } }
+        );
+      }
       
-      // 2. Add Unit Cell if requested and available in PDB
       if (showUnitCell) {
         viewer.addUnitCell(model, {
           box: { color: "#6366f1", linewidth: 1.5 },
@@ -79,10 +129,24 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
         });
       }
 
+      if (showAtomLabels && viewer.addPropertyLabels) {
+        viewer.addPropertyLabels("elem", showHydrogens ? {} : { not: { elem: "H" } }, {
+          fontSize: 10,
+          fontColor: background === "dark" || background === "black" ? "#e2e8f0" : "#0f172a",
+          backgroundOpacity: 0.45,
+          inFront: true,
+        });
+      }
+
+      if (spin && viewer.spin) {
+        viewer.spin("y", 0.8);
+      } else if (viewer.spin) {
+        viewer.spin(false);
+      }
+
       viewer.zoomTo();
       viewer.render();
       
-      // 3. Force multiple resize checks to ensure the canvas fills the large node immediately
       setTimeout(() => {
         if (viewerInstance.current) {
           viewerInstance.current.resize();
@@ -96,12 +160,26 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
         }
       }, 250);
     } else {
+      if (viewer.spin) viewer.spin(false);
       viewer.render();
       viewer.resize();
     }
-  }, [pdb, showUnitCell, activeBg, viewStyle, showOutline]);
+  }, [
+    pdb,
+    showUnitCell,
+    background,
+    viewStyle,
+    showOutline,
+    showHydrogens,
+    showAtomLabels,
+    colorScheme,
+    spin,
+    projection,
+    stickRadius,
+    sphereScale,
+    lineWidth,
+  ]);
 
-  // Ensure re-render/resize when selected
   useEffect(() => {
     if (viewerInstance.current) {
       viewerInstance.current.resize();
@@ -137,20 +215,90 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                 <DropdownMenuLabel className="flex items-center gap-2">
                   <Palette className="w-3.5 h-3.5" /> Background
                 </DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => setActiveBg("white")}>White</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActiveBg("light")}>Light Slate (Default)</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActiveBg("dark")}>Dark Slate</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActiveBg("black")}>Black</DropdownMenuItem>
+                <DropdownMenuRadioGroup
+                  value={background}
+                  onValueChange={(value) => setViewerOption({ background: value as keyof typeof BACKGROUNDS })}
+                >
+                  <DropdownMenuRadioItem value="white">White</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="light">Light Slate</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="dark">Dark Slate</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="black">Black</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="flex items-center gap-2">
                   <BoxIcon className="w-3.5 h-3.5" /> Representation
                 </DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => setViewStyle("both")}>Ball & Stick</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setViewStyle("stick")}>Sticks Only</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setViewStyle("sphere")}>Spheres Only</DropdownMenuItem>
+                <DropdownMenuRadioGroup
+                  value={viewStyle}
+                  onValueChange={(value) => setViewerOption({ viewStyle: value as ViewerNodeData["viewStyle"] })}
+                >
+                  <DropdownMenuRadioItem value="both">Ball & Stick</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="stick">Sticks</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="sphere">Spheres</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="line">Lines</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setShowOutline(!showOutline)}>
-                  {showOutline ? "❌ Disable Outlines" : "✨ Enable Outlines"}
+                <DropdownMenuLabel>Colors</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={colorScheme}
+                  onValueChange={(value) => setViewerOption({ colorScheme: value as ViewerNodeData["colorScheme"] })}
+                >
+                  {Object.entries(COLOR_SCHEME_LABELS).map(([key, label]) => (
+                    <DropdownMenuRadioItem key={key} value={key}>
+                      {label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Projection</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={projection}
+                  onValueChange={(value) => setViewerOption({ projection: value as ViewerNodeData["projection"] })}
+                >
+                  <DropdownMenuRadioItem value="perspective">Perspective</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="orthographic">Orthographic</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={showUnitCell}
+                  onCheckedChange={(checked) => setViewerOption({ showUnitCell: Boolean(checked) })}
+                >
+                  Show Unit Cell
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={showHydrogens}
+                  onCheckedChange={(checked) => setViewerOption({ showHydrogens: Boolean(checked) })}
+                >
+                  Show Hydrogens
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={showAtomLabels}
+                  onCheckedChange={(checked) => setViewerOption({ showAtomLabels: Boolean(checked) })}
+                >
+                  Show Atom Labels
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={showOutline}
+                  onCheckedChange={(checked) => setViewerOption({ showOutline: Boolean(checked) })}
+                >
+                  Show Outline
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={spin}
+                  onCheckedChange={(checked) => setViewerOption({ spin: Boolean(checked) })}
+                >
+                  Spin Model
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Style Presets</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => setViewerOption({ stickRadius: 0.1, sphereScale: 0.2, lineWidth: 0.9 })}>
+                  Thin
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setViewerOption({ stickRadius: 0.15, sphereScale: 0.25, lineWidth: 1.2 })}>
+                  Default
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setViewerOption({ stickRadius: 0.22, sphereScale: 0.34, lineWidth: 1.7 })}>
+                  Bold
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

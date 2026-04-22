@@ -1157,6 +1157,21 @@ export default function VisualBuilder() {
       baseData.writeCsv = true; baseData.csvFile = "bvs_results.csv";
       baseData.statsLogFile = "output.log";
     }
+    if (type === "viewer") {
+      baseData.title = "Structure Viewer";
+      baseData.background = "light";
+      baseData.viewStyle = "both";
+      baseData.showOutline = true;
+      baseData.showHydrogens = true;
+      baseData.showUnitCell = true;
+      baseData.showAtomLabels = false;
+      baseData.colorScheme = "Jmol";
+      baseData.spin = false;
+      baseData.projection = "perspective";
+      baseData.stickRadius = 0.15;
+      baseData.sphereScale = 0.25;
+      baseData.lineWidth = 1.2;
+    }
     if (type === "bend") {
       baseData.radius = 50;
     }
