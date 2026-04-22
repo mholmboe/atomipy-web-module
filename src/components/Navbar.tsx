@@ -1,4 +1,4 @@
-import { Atom, Github, ExternalLink, Info } from "lucide-react";
+import { Github, ExternalLink, Info } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Navbar = () => {
@@ -6,7 +6,7 @@ const Navbar = () => {
     <nav className="bg-nav text-nav-foreground border-b border-border/40 backdrop-blur-sm sticky top-0 z-50">
       <div className="container mx-auto flex items-center justify-between px-6 py-3">
         <Link to="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
-          <Atom className="h-6 w-6 text-primary" />
+          <img src="/atomipy_favicon_transparent_thick.ico" alt="atomipy logo" className="h-8 w-auto" />
           <div>
             <span className="text-lg font-bold tracking-tight">atomipy</span>
             <span className="ml-2 text-lg font-bold tracking-tight text-nav-foreground/60">web module</span>
