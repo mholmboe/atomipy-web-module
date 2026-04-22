@@ -576,12 +576,12 @@ const NODE_PURPOSE_DOCS: Record<string, string> = {
   bend: "Applies bending transformation to coordinates.",
   condense: "Condenses periodic images into a compact representation.",
   grid: "Generates a grid of atoms in a defined region.",
-  analysis: "Runs analysis operations like RDF/CN/BVS/unwrap.",
+  analysis: "Runs analysis operations like RDF/CN/BVS/closest/occupancy/stats.",
   atomProps: "Applies element/charge/mass annotations and optional COM reporting.",
-  coordFrame: "Runs coordinate-frame conversions and cell-vector reporting tools.",
+  coordFrame: "Transform node for coordinate-frame conversions and cell-vector reporting tools.",
   trajectory: "Imports or writes trajectory frames.",
   waterModel: "Converts/adjusts water model representations.",
-  transform: "Runs translate/rotate/scale/bend transformations.",
+  transform: "Spatial Ops node for translate/rotate/scale/bend transformations.",
   pbc: "Applies periodic-boundary operations (wrap/unwrap/condense).",
   edit: "Runs structural editing operations on current atoms.",
   chemistry: "Runs chemistry operations like substitution/fusion/H-addition.",
@@ -1107,7 +1107,7 @@ export default function VisualBuilder() {
       baseData.vectorsFile = "cell_vectors.json";
     }
     if (type === "edit") {
-      baseData.mode = "slice";
+      baseData.mode = "remove";
       baseData.xlo = 0; baseData.ylo = 0; baseData.zlo = 0;
       baseData.removePartial = true;
       baseData.logic = "and";
@@ -1133,13 +1133,12 @@ export default function VisualBuilder() {
       baseData.omDist = 0.15;
     }
     if (type === "analysis") {
-      baseData.mode = "unwrap";
+      baseData.mode = "rdf";
       baseData.atomTypeA = "Na";
       baseData.atomTypeB = "Cl";
       baseData.cutoff = 3.5;
       baseData.rmax = 12.0;
       baseData.dr = 0.1;
-      baseData.unwrapMolid = "";
       baseData.closestReferenceMode = "index";
       baseData.closestRefIndex = 1;
       baseData.closestRefX = 0;
@@ -1655,8 +1654,8 @@ export default function VisualBuilder() {
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("box")} title="Box Settings">
                 <Box className="w-4 h-4" /> Box
               </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("transform")} title="Transform (Translate/Rotate/Scale/Bend)">
-                <Move3D className="w-4 h-4" /> Transform
+              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("transform")} title="Spatial Ops (Translate/Rotate/Scale/Bend)">
+                <Move3D className="w-4 h-4" /> Spatial
               </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("add")} title="Join branches">
                 <Combine className="w-4 h-4" /> Join
@@ -1673,7 +1672,7 @@ export default function VisualBuilder() {
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("forcefield")} title="Assign Forcefield">
                 <FlaskConical className="w-4 h-4" /> FF
               </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("analysis")} title="Analysis (RDF/CN/Unwrap/BVS/Stats)">
+              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("analysis")} title="Analysis (RDF/CN/Closest/Occupancy/BVS/Stats)">
                 <BarChart3 className="w-4 h-4" /> Analysis
               </Button>
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("viewer")} title="3D Preview Structure">
@@ -1700,7 +1699,7 @@ export default function VisualBuilder() {
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("merge")} title="Merge with overlap removal">
                   <GitMerge className="w-4 h-4" /> Merge
                 </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("pbc")} title="PBC Tools (Condense / Wrap)">
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("pbc")} title="PBC Tools (Wrap/Unwrap/Condense)">
                   <Minimize className="w-4 h-4" /> PBC
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("edit")} title="Edit Atoms (Slice/Remove/Resname/Reorder)">
@@ -1709,8 +1708,8 @@ export default function VisualBuilder() {
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("atomProps")} title="Atom Properties (Element/Charge/Mass/COM)">
                   <Atom className="w-4 h-4" /> Props
                 </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("coordFrame")} title="Coordinate Frame Tools">
-                  <Move3D className="w-4 h-4" /> Coords
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("coordFrame")} title="Transform (Coordinate Frame Tools)">
+                  <Move3D className="w-4 h-4" /> Transform
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("chemistry")} title="Chemistry (Substitute/Fuse/AddH)">
                   <FlaskConical className="w-4 h-4" /> Chem
@@ -2505,21 +2504,10 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         break;
       }
       case "analysis": {
-        const amode = getString(data, "mode", "unwrap");
+        const amode = getString(data, "mode", "rdf");
         if (amode === "unwrap") {
-          const unwrapMolidRaw = getString(data, "unwrapMolid", "").trim();
-          const unwrapMolidTokens = unwrapMolidRaw
-            .split(/[;,]+/)
-            .map((token) => token.trim())
-            .filter((token) => /^-?\d+$/.test(token))
-            .map((token) => parseInt(token, 10));
-          if (unwrapMolidTokens.length === 1) {
-            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox}, molid=${unwrapMolidTokens[0]})\n`;
-          } else if (unwrapMolidTokens.length > 1) {
-            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox}, molid=[${unwrapMolidTokens.join(", ")}])\n`;
-          } else {
-            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox})\n`;
-          }
+          pythonCode += `# Structure Analysis no longer exposes unwrap. Use a PBC node set to Unwrap Coordinates.\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (amode === "rdf") {
           const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
@@ -2815,7 +2803,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         break;
       }
       case "edit": {
-        const editMode = getString(data, "mode", "slice");
+        const editMode = getString(data, "mode", "remove");
         if (editMode === "slice") {
           const exlo = getNumber(data, "xlo", 0); const eylo = getNumber(data, "ylo", 0); const ezlo = getNumber(data, "zlo", 0);
           const exhi = data.xhi != null ? getNumber(data, "xhi", 0) : null;

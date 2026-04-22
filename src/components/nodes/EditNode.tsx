@@ -32,7 +32,7 @@ type EditNodeData = {
 
 export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
   const { updateNodeData } = useReactFlow();
-  const mode = data.mode ?? "slice";
+  const mode = data.mode ?? "remove";
 
   const set = (field: keyof EditNodeData, value: string | number | boolean | undefined) =>
     updateNodeData(id, { ...data, [field]: value });
@@ -54,8 +54,8 @@ export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
         <div>
           <label className="text-xs font-semibold text-muted-foreground block mb-1">Operation</label>
           <select className={selectCls} value={mode} onChange={(e) => set("mode", e.target.value)} onPointerDown={(e) => e.stopPropagation()}>
-            <option value="slice">Slice Region</option>
             <option value="remove">Remove Atoms</option>
+            <option value="slice">Slice Region</option>
             <option value="molecule">Set Molecule ID</option>
             <option value="resname">Assign Resname</option>
             <option value="reorder">Reorder Atoms</option>

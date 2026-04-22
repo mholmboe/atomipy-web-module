@@ -31,7 +31,7 @@ export function CoordinateFrameNode({ id, data }: NodeComponentProps<CoordinateF
 
       <div className="bg-indigo-500/10 p-3 border-b border-border flex items-center gap-2">
         <Move3D className="w-4 h-4 text-indigo-500" />
-        <h3 className="text-sm font-semibold text-foreground m-0">Coordinate Frame</h3>
+        <h3 className="text-sm font-semibold text-foreground m-0">Transform</h3>
       </div>
 
       <div className="p-4 space-y-3 bg-background">

@@ -43,6 +43,7 @@
     --step-active: 192 82% 45%;
     --step-inactive: 210 14% 80%;
     --step-completed: 160 60% 45%;
+    --builder-node-width: 280px;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -109,5 +110,10 @@
   .react-flow__handle {
     width: 14px !important;
     height: 14px !important;
+  }
+
+  .react-flow__node:not(.react-flow__node-viewer) > * {
+    width: var(--builder-node-width) !important;
+    min-width: var(--builder-node-width) !important;
   }
 }

@@ -3,7 +3,7 @@ import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { BarChart3 } from "lucide-react";
 import type { NodeComponentProps } from "./types";
 
-type AnalysisMode = "unwrap" | "rdf" | "cn" | "closest" | "occupancy" | "bvs" | "stats";
+type AnalysisMode = "rdf" | "cn" | "closest" | "occupancy" | "bvs" | "stats";
 type OutputMode = "none" | "json" | "csv" | "both";
 type ClosestReferenceMode = "index" | "coords";
 
@@ -14,8 +14,6 @@ type AnalysisNodeData = {
   cutoff?: number;
   rmax?: number;
   dr?: number;
-  // Unwrap
-  unwrapMolid?: string;
   // Closest
   closestReferenceMode?: ClosestReferenceMode;
   closestRefIndex?: number;
@@ -44,7 +42,7 @@ type AnalysisNodeData = {
 
 export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>) {
   const { updateNodeData } = useReactFlow();
-  const mode = (data.mode ?? "unwrap") as AnalysisMode;
+  const mode = (data.mode ?? "rdf") as AnalysisMode;
 
   const set = (field: keyof AnalysisNodeData, value: string | number | boolean) =>
     updateNodeData(id, { ...data, [field]: value });
@@ -70,7 +68,6 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
             onChange={(e) => set("mode", e.target.value)}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <option value="unwrap">Unwrap Molecules</option>
             <option value="rdf">Radial Distribution (RDF)</option>
             <option value="cn">Coordination Number</option>
             <option value="closest">Find Closest Atom</option>
@@ -79,23 +76,6 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
             <option value="stats">Structure Stats</option>
           </select>
         </div>
-
-        {mode === "unwrap" && (
-          <>
-            <p className="text-[10px] text-muted-foreground">Fixes molecules split across periodic boundaries.</p>
-            <div>
-              <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Target molid(s) (optional)</label>
-              <input
-                type="text"
-                className={inputCls}
-                placeholder="e.g. 1 or 1,2,3"
-                value={data.unwrapMolid ?? ""}
-                onChange={(e) => set("unwrapMolid", e.target.value)}
-                onPointerDown={(e) => e.stopPropagation()}
-              />
-            </div>
-          </>
-        )}
 
         {mode === "rdf" && (
           <div className="space-y-2">
