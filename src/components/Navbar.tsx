@@ -1,4 +1,4 @@
-import { Github, ExternalLink, Info } from "lucide-react";
+import { Github, ExternalLink, HelpCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Navbar = () => {
@@ -18,8 +18,8 @@ const Navbar = () => {
             atomipy topology generator
           </a>
           <Link to="/about" className="flex items-center gap-1 text-nav-foreground/80 transition-colors hover:text-primary">
-            <Info className="h-3.5 w-3.5" />
-            About
+            <HelpCircle className="h-3.5 w-3.5" />
+            Help
           </Link>
           <a href="https://github.com/mholmboe/atomipy" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-nav-foreground/80 transition-colors hover:text-primary">
             <Github className="h-4 w-4" />

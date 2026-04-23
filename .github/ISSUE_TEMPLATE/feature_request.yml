@@ -1,0 +1,56 @@
+name: 💡 Feature Request
+description: Suggest a new node, option, or capability for the atomipy web module
+title: "[Feature]: "
+labels: ["enhancement"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea for a new feature or an improvement to an existing node? We'd love to hear it!
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Motivation
+      description: What problem does this feature solve? Or what workflow does it enable?
+      placeholder: "Currently I can't do X, which makes Y workflows very difficult..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the feature or change you'd like to see. Which node category does it belong to?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Node Category
+      description: Which node category does this feature relate to?
+      options:
+        - Input (Import Structure, Upload)
+        - Geometry (Replicate, Box, Spatial Ops)
+        - Chemistry (Chemistry, PBC, Edit, Atom Props)
+        - Joining (Join Branches, Merge)
+        - Simulation Setup (Solvent, Ions, Forcefield)
+        - Analysis (Analysis, Bond/Angle, BVS, XRD)
+        - Output (Export, Viewer, Trajectory)
+        - Workflow / General
+        - New Node Type
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative approaches or workarounds you have considered?
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: References, papers, or any other context about the feature.
