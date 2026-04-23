@@ -196,8 +196,8 @@ type SavedWorkflow = {
   edges: Edge[];
 };
 
-const WORKFLOW_SAVED_STORAGE_KEY = "atomipy_v2_saved_workflows";
-const WORKFLOW_TEMPLATE_STORAGE_KEY = "atomipy_v2_custom_templates";
+const WORKFLOW_SAVED_STORAGE_KEY = "atomipy_saved_workflows";
+const WORKFLOW_TEMPLATE_STORAGE_KEY = "atomipy_custom_templates";
 const DEFAULT_WORKFLOW_SELECTION = "template:basic";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -1758,74 +1758,74 @@ export default function VisualBuilder() {
 
             {showMoreOptions && (
               <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
-              <select
-                className="nodrag min-w-[270px] text-xs bg-background border border-border rounded-md px-2 py-1.5 h-8"
-                value={selectedWorkflowKey}
-                onChange={(e) => setSelectedWorkflowKey(e.target.value)}
-              >
-                <optgroup label="Built-in Templates">
-                  {templateWorkflows.map((workflow) => (
-                    <option key={workflow.id} value={`template:${workflow.id}`}>
-                      {workflow.name}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="My Templates">
-                  {customTemplates.length === 0 ? (
-                    <option value="custom:none" disabled>
-                      No custom templates
-                    </option>
-                  ) : (
-                    customTemplates.map((template) => (
-                      <option key={template.id} value={`custom:${template.id}`}>
-                        {template.name}
-                      </option>
-                    ))
-                  )}
-                </optgroup>
-                <optgroup label="Saved">
-                  {savedWorkflows.length === 0 ? (
-                    <option value="saved:none" disabled>
-                      No saved workflows
-                    </option>
-                  ) : (
-                    savedWorkflows.map((workflow) => (
-                      <option key={workflow.id} value={`saved:${workflow.id}`}>
+                <select
+                  className="nodrag min-w-[270px] text-xs bg-background border border-border rounded-md px-2 py-1.5 h-8"
+                  value={selectedWorkflowKey}
+                  onChange={(e) => setSelectedWorkflowKey(e.target.value)}
+                >
+                  <optgroup label="Built-in Templates">
+                    {templateWorkflows.map((workflow) => (
+                      <option key={workflow.id} value={`template:${workflow.id}`}>
                         {workflow.name}
                       </option>
-                    ))
-                  )}
-                </optgroup>
-              </select>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={handleLoadSelectedWorkflow} title="Load workflow">
-                <FolderOpen className="w-4 h-4" /> Load
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={handleSaveCurrentWorkflow} title="Save current workflow">
-                <Save className="w-4 h-4" /> Save
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={handleSaveAsTemplate} title="Save current workflow as template">
-                <Save className="w-4 h-4" /> Save Tpl
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={handleExportCurrentWorkflow} title="Download workflow JSON file">
-                <Download className="w-4 h-4" /> Download
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={handleImportWorkflowClick} title="Upload workflow JSON file">
-                <Upload className="w-4 h-4" /> Upload
-              </Button>
-              {(selectedSavedWorkflow || selectedCustomTemplate) && (
-                <Button className="gap-1" variant="ghost" size="sm" onClick={handleDeleteSelectedEntry} title="Delete selected workflow/template">
-                  <Trash2 className="w-4 h-4" /> Delete
+                    ))}
+                  </optgroup>
+                  <optgroup label="My Templates">
+                    {customTemplates.length === 0 ? (
+                      <option value="custom:none" disabled>
+                        No custom templates
+                      </option>
+                    ) : (
+                      customTemplates.map((template) => (
+                        <option key={template.id} value={`custom:${template.id}`}>
+                          {template.name}
+                        </option>
+                      ))
+                    )}
+                  </optgroup>
+                  <optgroup label="Saved">
+                    {savedWorkflows.length === 0 ? (
+                      <option value="saved:none" disabled>
+                        No saved workflows
+                      </option>
+                    ) : (
+                      savedWorkflows.map((workflow) => (
+                        <option key={workflow.id} value={`saved:${workflow.id}`}>
+                          {workflow.name}
+                        </option>
+                      ))
+                    )}
+                  </optgroup>
+                </select>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={handleLoadSelectedWorkflow} title="Load workflow">
+                  <FolderOpen className="w-4 h-4" /> Load
                 </Button>
-              )}
-              <input
-                ref={workflowImportInputRef}
-                type="file"
-                accept=".json,application/json"
-                className="hidden"
-                onChange={handleImportWorkflowFile}
-              />
-            </div>
-          )}
+                <Button className="gap-1" variant="ghost" size="sm" onClick={handleSaveCurrentWorkflow} title="Save current workflow">
+                  <Save className="w-4 h-4" /> Save
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={handleSaveAsTemplate} title="Save current workflow as template">
+                  <Save className="w-4 h-4" /> Save Tpl
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={handleExportCurrentWorkflow} title="Download workflow JSON file">
+                  <Download className="w-4 h-4" /> Download
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={handleImportWorkflowClick} title="Upload workflow JSON file">
+                  <Upload className="w-4 h-4" /> Upload
+                </Button>
+                {(selectedSavedWorkflow || selectedCustomTemplate) && (
+                  <Button className="gap-1" variant="ghost" size="sm" onClick={handleDeleteSelectedEntry} title="Delete selected workflow/template">
+                    <Trash2 className="w-4 h-4" /> Delete
+                  </Button>
+                )}
+                <input
+                  ref={workflowImportInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  onChange={handleImportWorkflowFile}
+                />
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-2 shrink-0">
             <Button className="shadow-lg shadow-primary/20 w-28 h-11" onClick={handleCompileAndRun}>
@@ -1833,9 +1833,9 @@ export default function VisualBuilder() {
               Run
             </Button>
             {showMoreOptions && (
-              <Button 
-                variant="destructive" 
-                className="shadow-lg shadow-destructive/20 w-28 h-11 text-xs font-bold uppercase tracking-wider" 
+              <Button
+                variant="destructive"
+                className="shadow-lg shadow-destructive/20 w-28 h-11 text-xs font-bold uppercase tracking-wider"
                 onClick={handleResetWorkflow}
                 title="Clear all nodes and reset workflow"
               >
@@ -1857,7 +1857,7 @@ export default function VisualBuilder() {
               </div>
               <div className="flex items-center gap-3">
                 <p className="text-xs text-muted-foreground">{Math.round(buildProgress)}%</p>
-                <button 
+                <button
                   onClick={() => setShowStatusWindow(false)}
                   className="text-muted-foreground hover:text-foreground transition-colors"
                   title="Close Status Window"
@@ -2076,9 +2076,9 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
           const atomLabelsRaw = getString(data, "atomLabels", "").trim() || getString(data, "atomLabel", "").trim();
           const atomLabels = atomLabelsRaw
             ? atomLabelsRaw
-                .split(/[;,]+/)
-                .map((token) => token.trim())
-                .filter((token) => token.length > 0)
+              .split(/[;,]+/)
+              .map((token) => token.trim())
+              .filter((token) => token.length > 0)
             : [];
           const filteredVar = `merged_${index}`;
           const minDistanceExpr =
@@ -2181,11 +2181,11 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
             pythonCode += `${inCell} = ap.Box_dim2Cell(${inBox})\n`;
           }
 
-          const aExpr     = a     !== null ? `${a}`     : (inBox !== "None" ? `${inCell}[0]` : "50.0");
-          const bExpr     = b     !== null ? `${b}`     : (inBox !== "None" ? `${inCell}[1]` : "50.0");
-          const cExpr     = c     !== null ? `${c}`     : (inBox !== "None" ? `${inCell}[2]` : "50.0");
+          const aExpr = a !== null ? `${a}` : (inBox !== "None" ? `${inCell}[0]` : "50.0");
+          const bExpr = b !== null ? `${b}` : (inBox !== "None" ? `${inCell}[1]` : "50.0");
+          const cExpr = c !== null ? `${c}` : (inBox !== "None" ? `${inCell}[2]` : "50.0");
           const alphaExpr = alpha !== null ? `${alpha}` : (inBox !== "None" ? `${inCell}[3]` : "90.0");
-          const betaExpr  = beta  !== null ? `${beta}`  : (inBox !== "None" ? `${inCell}[4]` : "90.0");
+          const betaExpr = beta !== null ? `${beta}` : (inBox !== "None" ? `${inCell}[4]` : "90.0");
           const gammaExpr = gamma !== null ? `${gamma}` : (inBox !== "None" ? `${inCell}[5]` : "90.0");
 
           pythonCode += `${blockOutBox} = ap.Cell2Box_dim([${aExpr}, ${bExpr}, ${cExpr}, ${alphaExpr}, ${betaExpr}, ${gammaExpr}])\n`;
@@ -2462,7 +2462,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
       case "addIons": {
         const method = getString(data, "method", "random");
         const ion = pyEscape(getString(data, "ionType", "Na"));
-        
+
         const xlo = getOptionalNumber(data, "xlo");
         const ylo = getOptionalNumber(data, "ylo");
         const zlo = getOptionalNumber(data, "zlo");
@@ -2473,7 +2473,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         const boxXExpr = inBox !== "None" ? `${inBox}[0]` : "50.0";
         const boxYExpr = inBox !== "None" ? `${inBox}[1]` : "50.0";
         const boxZExpr = inBox !== "None" ? `${inBox}[2]` : "50.0";
-        
+
         const limitsExpr = hasCustomLimits
           ? `[${xlo !== null ? xlo : 0.0}, ${ylo !== null ? ylo : 0.0}, ${zlo !== null ? zlo : 0.0}, ${xhi !== null ? xhi : boxXExpr}, ${yhi !== null ? yhi : boxYExpr}, ${zhi !== null ? zhi : boxZExpr}]`
           : (inBox !== "None" ? `${inBox}` : "[0, 0, 0, 50, 50, 50]");
@@ -2492,12 +2492,12 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
           const placement = pyEscape(getString(data, "placement", "random"));
           const direction = getString(data, "direction", "").toLowerCase();
           const directionValue = getOptionalNumber(data, "directionValue");
-          
+
           const directionArg =
             (direction === "x" || direction === "y" || direction === "z") && directionValue !== null
               ? `, direction='${direction}', direction_value=${directionValue}`
               : "";
-          
+
           const wrappedInAtoms = `wrapped_${index}`;
           pythonCode += `${wrappedInAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
           pythonCode += `${ionsVar} = ap.ionize('${ion}', resname='ION', limits=${limitsExpr}, num_ions=${count}, Box=${inBox}, min_distance=${dist}, solute_atoms=${wrappedInAtoms}, placement='${placement}'${directionArg})\n`;
@@ -2732,11 +2732,11 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         const tfilename = pyEscape(getString(data, "filename", "trajectory.pdb"));
         const tformat = pyEscape(getString(data, "format", "pdb"));
         if (tmode === "import") {
-           pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_traj('${tfilename}', format='${tformat}', start=0, stop=1)[0]\n`;
+          pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_traj('${tfilename}', format='${tformat}', start=0, stop=1)[0]\n`;
         } else {
-           pythonCode += `ap.write_traj(${inAtoms}, ${inBox}, '${tfilename}', format='${tformat}', append=True)\n`;
-           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
-           pythonCode += `${blockOutBox} = ${inBox}\n`;
+          pythonCode += `ap.write_traj(${inAtoms}, ${inBox}, '${tfilename}', format='${tformat}', append=True)\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         }
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;

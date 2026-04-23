@@ -698,7 +698,7 @@ def build_stream():
 
                 BUILD_RESULTS_CACHE[token] = {
                     "path": zip_path,
-                    "filename": "atomipy_v2_system_bundle.zip",
+                    "filename": "atomipy_system_bundle.zip",
                     "timestamp": time.time()
                 }
                 
@@ -735,7 +735,7 @@ def execute_script():
         if not script_code:
             return jsonify({"error": "No script provided."}), 400
 
-        with tempfile.TemporaryDirectory(prefix="atomipy_v2_") as work_dir:
+        with tempfile.TemporaryDirectory(prefix="atomipy_") as work_dir:
             # Create symlink to UC_conf by checking potential locations
             ap = get_ap()
             ap_data_dir = os.path.dirname(ap.__file__)
@@ -826,7 +826,7 @@ def execute_script():
                 memory_file,
                 mimetype="application/zip",
                 as_attachment=True,
-                download_name="atomipy_v2_system_bundle.zip",
+                download_name="atomipy_system_bundle.zip",
             )
             return response, status_code
 
