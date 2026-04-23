@@ -1669,10 +1669,7 @@ export default function VisualBuilder() {
   return (
     <section className="mx-auto w-full max-w-[1700px] py-2 px-4 h-[850px] flex flex-col space-y-1">
       <div className="flex justify-between items-center bg-card/50 backdrop-blur-md p-1.5 rounded-2xl border border-border shadow-2xl">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground text-balance">Add and connect nodes to compose your system as a workflow</p>
-        </div>
-        <div className="flex gap-2 items-start flex-1 justify-center ml-8">
+        <div className="flex gap-2 items-start flex-1 justify-start mr-8">
           <div className="space-y-1">
             <div className="flex bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto">
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
@@ -1844,6 +1841,9 @@ export default function VisualBuilder() {
               </Button>
             )}
           </div>
+        </div>
+        <div>
+          <p className="text-sm font-medium text-muted-foreground text-balance">Add and connect nodes to compose your system as a workflow</p>
         </div>
       </div>
 
