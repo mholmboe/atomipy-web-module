@@ -343,11 +343,19 @@ const validateWorkflow = (nodes: Node[], edges: Edge[]): string[] => {
       errors.push(`Node "${node.type}" has no input connection.`);
     }
 
-    if (node.type === "merge" || node.type === "add") {
+    if (node.type === "merge") {
       const hasA = incoming.some((e) => e.targetHandle === "inA");
       const hasB = incoming.some((e) => e.targetHandle === "inB");
       if (!hasA || !hasB) {
         errors.push(`Node "${node.type}" requires both A and B inputs.`);
+      }
+    }
+
+    if (node.type === "add") {
+      const possibleHandles = ["inA", "inB", "in1", "in2", "in3", "in4", "in5", "in6"];
+      const connectedHandles = incoming.filter(e => possibleHandles.includes(e.targetHandle || "")).length;
+      if (connectedHandles < 2) {
+        errors.push(`Node "add" (Join Branches) requires at least two inputs to join.`);
       }
     }
 
