@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 
 const HeroSection = () => {
   return (
-    <div className="relative overflow-hidden bg-gradient-to-b from-nav via-nav/95 to-background pb-12 pt-10">
+    <div className="relative overflow-hidden bg-gradient-to-b from-nav via-nav/95 to-background pb-6 pt-8">
       {/* Animated background pattern */}
       <div className="absolute inset-0 opacity-10">
         <svg className="h-full w-full" xmlns="http://www.w3.org/2000/svg">

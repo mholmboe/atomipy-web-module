@@ -2,8 +2,8 @@ import React from "react";
 
 const Footer = () => {
   return (
-    <footer className="border-t border-border py-12 mt-12 bg-muted/30">
-      <div className="container mx-auto px-6 text-center space-y-4">
+    <footer className="border-t border-border py-4 mt-8 bg-muted/30">
+      <div className="container mx-auto px-6 text-center space-y-2">
         <div className="text-sm text-muted-foreground">
           Based on <a href="https://github.com/mholmboe/atomipy" className="text-primary hover:underline font-medium" target="_blank" rel="noopener noreferrer">atomipy</a> — The atom toolbox in Python
         </div>

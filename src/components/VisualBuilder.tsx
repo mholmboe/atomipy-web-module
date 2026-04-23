@@ -1667,7 +1667,7 @@ export default function VisualBuilder() {
   };
 
   return (
-    <section className="mx-auto w-full max-w-[1700px] py-2 px-4 h-[850px] flex flex-col space-y-1">
+    <section className="mx-auto w-full max-w-[1700px] py-2 px-4 h-[1100px] flex flex-col space-y-1">
       <div className="flex justify-between items-start bg-card/50 backdrop-blur-md p-1.5 rounded-2xl border border-border shadow-2xl">
         <div className="grid grid-cols-[max-content_theme(spacing.28)_1fr] gap-x-2 gap-y-1 items-center w-full">
           {/* Row 1: Main Ribbon + Run + Help Text */}
