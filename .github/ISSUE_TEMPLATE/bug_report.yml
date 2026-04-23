@@ -1,0 +1,74 @@
+name: 🐛 Bug Report
+description: Report a problem or unexpected behavior in the atomipy web module
+title: "[Bug]: "
+labels: ["bug"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out this form as completely as possible so we can reproduce and fix the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what the bug is.
+      placeholder: "When I connect a Viewer node to a Box node, the box dimensions show 50x50x50 instead of the structure's actual dimensions..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Add an Import Structure node (preset: Pyrophyllite)
+        2. Add a Structure Viewer node and connect it
+        3. Add a Set System Box node and connect it to the Viewer
+        4. Observe the box dimensions are 50/50/50
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow JSON (optional)
+      description: If possible, export and paste your workflow JSON here. This helps us reproduce the exact node graph.
+      render: json
+
+  - type: textarea
+    id: error_log
+    attributes:
+      label: Error Message / Log Output
+      description: Paste any error messages from the Run output panel or browser console.
+      render: text
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options:
+        - Chrome / Chromium
+        - Firefox
+        - Safari
+        - Edge
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or information that might help.

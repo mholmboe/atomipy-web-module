@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Documentation & Help
+    url: https://github.com/mholmboe/atomipy-web-module/blob/main/README.md
+    about: Read the README for workflow guidance and node reference.
+  - name: 💬 General Discussion
+    url: https://github.com/mholmboe/atomipy-web-module/discussions
+    about: For questions and general discussion about the app.
