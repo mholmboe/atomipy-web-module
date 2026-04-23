@@ -1667,13 +1667,13 @@ export default function VisualBuilder() {
   };
 
   return (
-    <section className="mx-auto w-full max-w-[1700px] py-2 px-4 h-[850px] flex flex-col space-y-2">
-      <div className="flex justify-between items-center bg-card/50 backdrop-blur-md p-2 rounded-2xl border border-border shadow-2xl">
+    <section className="mx-auto w-full max-w-[1700px] py-2 px-4 h-[850px] flex flex-col space-y-1">
+      <div className="flex justify-between items-center bg-card/50 backdrop-blur-md p-1.5 rounded-2xl border border-border shadow-2xl">
         <div>
           <p className="text-sm font-medium text-muted-foreground text-balance">Add and connect nodes to compose your system as a workflow</p>
         </div>
         <div className="flex gap-2 items-start flex-1 justify-center ml-8">
-          <div className="space-y-2">
+          <div className="space-y-1">
             <div className="flex bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto">
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
                 <FileInput className="w-4 h-4" /> Import
@@ -1827,15 +1827,15 @@ export default function VisualBuilder() {
               </div>
             )}
           </div>
-          <div className="flex flex-col gap-2 shrink-0">
-            <Button className="shadow-lg shadow-primary/20 w-28 h-11" onClick={handleCompileAndRun}>
+          <div className="flex flex-col gap-1 shrink-0">
+            <Button className="shadow-lg shadow-primary/20 w-28 h-9" onClick={handleCompileAndRun}>
               <Play className="w-4 h-4 mr-2" />
               Run
             </Button>
             {showMoreOptions && (
               <Button
                 variant="destructive"
-                className="shadow-lg shadow-destructive/20 w-28 h-11 text-xs font-bold uppercase tracking-wider"
+                className="shadow-lg shadow-destructive/20 w-28 h-9 text-xs font-bold uppercase tracking-wider"
                 onClick={handleResetWorkflow}
                 title="Clear all nodes and reset workflow"
               >
@@ -1849,7 +1849,7 @@ export default function VisualBuilder() {
 
       <div className="flex-1 rounded-2xl overflow-hidden border border-border bg-muted/20 relative" ref={reactFlowWrapper}>
         {showStatusWindow && (
-          <div className="absolute right-3 top-3 z-20 w-[400px] rounded-xl border border-border bg-card/95 p-3 shadow-xl backdrop-blur-sm">
+          <div className="absolute right-3 top-3 z-20 w-[360px] rounded-xl border border-border bg-card/95 p-2.5 shadow-xl backdrop-blur-sm">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Node Status</p>
@@ -1866,9 +1866,9 @@ export default function VisualBuilder() {
                 </button>
               </div>
             </div>
-            <Progress value={buildProgress} className="h-1.5 mb-2" />
-            <p className="text-xs text-muted-foreground mb-3">{buildStatus || "Waiting for backend updates..."}</p>
-            <div className="max-h-[600px] overflow-y-auto space-y-1.5 pr-1 scrollbar-thin" ref={scrollRef}>
+            <Progress value={buildProgress} className="h-1 mb-2" />
+            <p className="text-xs text-muted-foreground mb-2">{buildStatus || "Waiting for backend updates..."}</p>
+            <div className="max-h-[480px] overflow-y-auto space-y-1 pr-1 scrollbar-thin" ref={scrollRef}>
               {trackedNodeOrder.length === 0 && (
                 <p className="text-xs text-muted-foreground">No tracked compute nodes in current workflow.</p>
               )}
