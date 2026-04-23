@@ -2404,7 +2404,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         const zDiffArg = zDiff !== null ? `, z_diff=${zDiff}` : "";
 
         pythonCode += `${wrappedInAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
-        pythonCode += `${insertedVar} = ap.insert(${templateAtoms}, ${limitsExpr}, rotate=${rotateArg}, min_distance=${minDistance}, num_molecules=${numMolecules}, solute_atoms=${wrappedInAtoms}${constraintsArg}${zDiffArg})\n`;
+        pythonCode += `${insertedVar} = ap.insert(${templateAtoms}, ${limitsExpr}, Box=${inBox}, rotate=${rotateArg}, min_distance=${minDistance}, num_mols=${numMolecules}, solute_atoms=${wrappedInAtoms}${constraintsArg}${zDiffArg})\n`;
         pythonCode += `${blockOutAtoms} = ap.update(${inAtoms}, ${insertedVar})\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
@@ -2618,7 +2618,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
             pythonCode += `with open('${outputBase}.csv', 'w') as _rdf_csv:\n`;
             pythonCode += `    _rdf_csv.write('r,rdf\\n')\n`;
             pythonCode += `    for _ri, _gi in zip(r_rdf.tolist(), g_r.tolist()):\n`;
-            pythonCode += `        _rdf_csv.write(f"{float(_ri):.8f},{float(_gi):.8f}\\\\n")\n`;
+            pythonCode += `        _rdf_csv.write(f"{float(_ri):.8f},{float(_gi):.8f}\\n")\n`;
           }
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
@@ -2640,7 +2640,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
             pythonCode += `with open('${outputBase}.csv', 'w') as _cn_csv:\n`;
             pythonCode += `    _cn_csv.write('index,coordination_number\\n')\n`;
             pythonCode += `    for _idx, _cnv in enumerate(cn_data, start=1):\n`;
-            pythonCode += `        _cn_csv.write(f"{_idx},{int(_cnv)}\\\\n")\n`;
+            pythonCode += `        _cn_csv.write(f"{_idx},{int(_cnv)}\\n")\n`;
           }
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
@@ -2669,7 +2669,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
             pythonCode += `with open('${outputBase}.csv', 'w') as _closest_csv:\n`;
             pythonCode += `    _closest_csv.write('index,type,element,x,y,z,charge\\n')\n`;
             pythonCode += `    if closest_data:\n`;
-            pythonCode += `        _closest_csv.write(f"{closest_data.get('index', '')},{closest_data.get('type', '')},{closest_data.get('element', '')},{closest_data.get('x', '')},{closest_data.get('y', '')},{closest_data.get('z', '')},{closest_data.get('charge', '')}\\\\n")\n`;
+            pythonCode += `        _closest_csv.write(f"{closest_data.get('index', '')},{closest_data.get('type', '')},{closest_data.get('element', '')},{closest_data.get('x', '')},{closest_data.get('y', '')},{closest_data.get('z', '')},{closest_data.get('charge', '')}\\n")\n`;
           }
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
@@ -2700,7 +2700,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
             pythonCode += `    _occ_csv.write('index,occupancy\\n')\n`;
             pythonCode += `    _occ_out = occupancy_values.tolist() if hasattr(occupancy_values, 'tolist') else list(occupancy_values)\n`;
             pythonCode += `    for _idx, _occ in enumerate(_occ_out, start=1):\n`;
-            pythonCode += `        _occ_csv.write(f"{_idx},{float(_occ):.8f}\\\\n")\n`;
+            pythonCode += `        _occ_csv.write(f"{_idx},{float(_occ):.8f}\\n")\n`;
           }
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (amode === "bvs") {
@@ -2762,34 +2762,34 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
           const transResname = getString(data, "translateResname", "").trim();
           const resnameArg = transResname ? `, resname='${pyEscape(transResname)}'` : "";
           if (transMode === "absolute") {
-            pythonCode += `${blockOutAtoms} = ap.center(${inAtoms}, [${tx}, ${ty}, ${tz}])\\n`;
+            pythonCode += `${blockOutAtoms} = ap.center(${inAtoms}, [${tx}, ${ty}, ${tz}])\n`;
           } else {
-            pythonCode += `${blockOutAtoms} = ap.translate(${inAtoms}, [${tx}, ${ty}, ${tz}]${resnameArg})\\n`;
+            pythonCode += `${blockOutAtoms} = ap.translate(${inAtoms}, [${tx}, ${ty}, ${tz}]${resnameArg})\n`;
           }
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (tmode === "rotate") {
           const rotMode = getString(data, "rotateMode", "random");
           if (rotMode === "random") {
-            pythonCode += `${blockOutAtoms} = ap.rotate(${inAtoms}, ${inBox})\\n`;
+            pythonCode += `${blockOutAtoms} = ap.rotate(${inAtoms}, ${inBox})\n`;
           } else {
             const rx = getNumber(data, "rx", 0);
             const ry = getNumber(data, "ry", 0);
             const rz = getNumber(data, "rz", 0);
-            pythonCode += `${blockOutAtoms} = ap.rotate(${inAtoms}, ${inBox}, angles=[${rx}, ${ry}, ${rz}])\\n`;
+            pythonCode += `${blockOutAtoms} = ap.rotate(${inAtoms}, ${inBox}, angles=[${rx}, ${ry}, ${rz}])\n`;
           }
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (tmode === "scale") {
           const sx = getNumber(data, "sx", 1.0);
           const sy = getNumber(data, "sy", 1.0);
           const sz = getNumber(data, "sz", 1.0);
           const scaleRes = getString(data, "scaleResname", "").trim();
           const scaleResArg = scaleRes ? `, resname='${pyEscape(scaleRes)}'` : "";
-          pythonCode += `${blockOutAtoms} = ap.scale(${inAtoms}, ${sx}, ${sy}, ${sz}${scaleResArg})\\n`;
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutAtoms} = ap.scale(${inAtoms}, ${sx}, ${sy}, ${sz}${scaleResArg})\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (tmode === "bend") {
           const radius = getNumber(data, "radius", 50);
-          pythonCode += `${blockOutAtoms} = ap.bend(${inAtoms}, ${radius})\\n`;
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutAtoms} = ap.bend(${inAtoms}, ${radius})\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         }
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
@@ -2797,7 +2797,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
       case "pbc": {
         const pbcMode = getString(data, "mode", "wrap");
         if (pbcMode === "condense") {
-          pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.condense(${inAtoms}, ${inBox})\\n`;
+          pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.condense(${inAtoms}, ${inBox})\n`;
         } else if (pbcMode === "unwrap") {
           const unwrapMolidRaw = getString(data, "unwrapMolid", "").trim();
           const unwrapMolidTokens = unwrapMolidRaw
@@ -2806,16 +2806,16 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
             .filter((token) => /^-?\\d+$/.test(token))
             .map((token) => parseInt(token, 10));
           if (unwrapMolidTokens.length === 1) {
-            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox}, molid=${unwrapMolidTokens[0]})\\n`;
+            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox}, molid=${unwrapMolidTokens[0]})\n`;
           } else if (unwrapMolidTokens.length > 1) {
-            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox}, molid=[${unwrapMolidTokens.join(", ")}])\\n`;
+            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox}, molid=[${unwrapMolidTokens.join(", ")}])\n`;
           } else {
-            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox})\\n`;
+            pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox})\n`;
           }
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else {
-          pythonCode += `${blockOutAtoms} = ap.wrap(${inAtoms}, ${inBox})\\n`;
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         }
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
@@ -2904,8 +2904,8 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
           const xhiExpr = exhi !== null ? String(exhi) : "None";
           const yhiExpr = eyhi !== null ? String(eyhi) : "None";
           const zhiExpr = ezhi !== null ? String(ezhi) : "None";
-          pythonCode += `${blockOutAtoms} = ap.slice(${inAtoms}, ${inBox}, xlo=${exlo}, ylo=${eylo}, zlo=${ezlo}, xhi=${xhiExpr}, yhi=${yhiExpr}, zhi=${zhiExpr}, remove_partial_molecules=${rmPartial})\\n`;
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutAtoms} = ap.slice(${inAtoms}, ${inBox}, xlo=${exlo}, ylo=${eylo}, zlo=${ezlo}, xhi=${xhiExpr}, yhi=${yhiExpr}, zhi=${zhiExpr}, remove_partial_molecules=${rmPartial})\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (editMode === "remove") {
           const atomType = getString(data, "atomType", "").trim();
           const indices = getString(data, "indices", "").trim();
@@ -2923,18 +2923,18 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
             }
           });
           const axesArg = axes.length > 0 ? `, ${axes.join(", ")}` : "";
-          pythonCode += `${blockOutAtoms} = ap.remove(${inAtoms}${atomTypeArg}${indicesArg}${molidsArg}, logic='${logic}'${axesArg})\\n`;
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutAtoms} = ap.remove(${inAtoms}${atomTypeArg}${indicesArg}${molidsArg}, logic='${logic}'${axesArg})\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (editMode === "molecule") {
           const molid = Math.max(1, Math.round(getNumber(data, "molid", 1)));
           const molRes = getString(data, "moleculeResname", "").trim();
           const molResArg = molRes ? `, resname='${pyEscape(molRes)}'` : "";
-          pythonCode += `${blockOutAtoms} = ap.molecule(${inAtoms}, molid=${molid}${molResArg})\\n`;
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutAtoms} = ap.molecule(${inAtoms}, molid=${molid}${molResArg})\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (editMode === "resname") {
           const defResname = pyEscape(getString(data, "defaultResname", "MIN"));
-          pythonCode += `${blockOutAtoms} = ap.assign_resname(${inAtoms}, default_resname='${defResname}')\\n`;
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutAtoms} = ap.assign_resname(${inAtoms}, default_resname='${defResname}')\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (editMode === "reorder") {
           const byMode = getString(data, "byMode", "index");
           const neworder = getString(data, "neworder", "");
@@ -2942,8 +2942,8 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
           const orderExpr = byMode === "index"
             ? `[${orderList.map((v) => parseInt(v) || 0).join(", ")}]`
             : `['${orderList.map(pyEscape).join("', '")}']`;
-          pythonCode += `${blockOutAtoms} = ap.reorder(${inAtoms}, by='${byMode}', order=${orderExpr})\\n`;
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutAtoms} = ap.reorder(${inAtoms}, ${orderExpr}, by='${byMode}')\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         }
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
@@ -2962,24 +2962,24 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
           const loLim = data.loLimit != null ? String(getNumber(data, "loLimit", 0)) : "None";
           const hiLim = data.hiLimit != null ? String(getNumber(data, "hiLimit", 1)) : "None";
           const dim = Math.round(getNumber(data, "dimension", 3));
-          pythonCode += `${blockOutAtoms} = ap.substitute(${inAtoms}, ${inBox}, numOct=${numOct}, o1_type='${o1}', o2_type='${o2}', min_o2_dist=${mo2}, numTet=${numTet}, t1_type='${t1}', t2_type='${t2}', min_t2_dist=${mt2}, lo_limit=${loLim}, hi_limit=${hiLim}, dim=${dim})\\n`;
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutAtoms} = ap.substitute(${inAtoms}, ${inBox}, num_oct_subst=${numOct}, o1_type='${o1}', o2_type='${o2}', min_o2o2_dist=${mo2}, num_tet_subst=${numTet}, t1_type='${t1}', t2_type='${t2}', min_t2t2_dist=${mt2}, lo_limit=${loLim}, hi_limit=${hiLim}, dimension=${dim})\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (chemMode === "fuse") {
           const fuseR = getNumber(data, "fuseRmax", 0.5);
           const fuseCrit = pyEscape(getString(data, "fuseCriteria", "average"));
-          pythonCode += `${blockOutAtoms} = ap.fuse_atoms(${inAtoms}, rmax=${fuseR}, criteria='${fuseCrit}')\\n`;
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutAtoms} = ap.fuse_atoms(${inAtoms}, ${inBox}, rmax=${fuseR}, criteria='${fuseCrit}')\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (chemMode === "addH") {
           const delta = getNumber(data, "deltaThreshold", -0.5);
           const maxAdd = getNumber(data, "maxAdditions", 10);
           const bondLen = getNumber(data, "bondLength", 0.96);
-          pythonCode += `${blockOutAtoms} = ap.add_hydrogens_bvs(${inAtoms}, ${inBox}, delta_threshold=${delta}, max_additions=${maxAdd}, bond_length=${bondLen})\\n`;
+          pythonCode += `${blockOutAtoms} = ap.add_hydrogens_bvs(${inAtoms}, ${inBox}, delta_threshold=${delta}, max_additions=${maxAdd}, bond_length=${bondLen})\n`;
           const adjustH = getBoolean(data, "adjustH", false);
           if (adjustH) {
             const hDist = getNumber(data, "hDistance", 0.96);
-            pythonCode += `${blockOutAtoms} = ap.adjust_H_atom(${blockOutAtoms}, ${inBox}, distance=${hDist})\\n`;
+            pythonCode += `${blockOutAtoms} = ap.adjust_H_atom(${blockOutAtoms}, ${inBox}, distance=${hDist})\n`;
           }
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         }
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
@@ -3011,28 +3011,28 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
             : inBox;
           const wrappedInAtomsSolv = `wrapped_${blockOutAtoms}`;
           const solventVarS = `solvent_${index}`;
-          pythonCode += `${wrappedInAtomsSolv} = ap.wrap(${inAtoms}, ${inBox})\\n`;
-          pythonCode += `${solventVarS} = ap.solvate(limits=${limitsExpr}, density=${dens}, min_distance=${sdist}, max_solvent=${maxSolventExpr}, solute_atoms=${wrappedInAtomsSolv}, Box=${inBox}, solvent_type='${model}', include_solute=${includeSolutePy})\\n`;
+          pythonCode += `${wrappedInAtomsSolv} = ap.wrap(${inAtoms}, ${inBox})\n`;
+          pythonCode += `${solventVarS} = ap.solvate(limits=${limitsExpr}, density=${dens}, min_distance=${sdist}, max_solvent=${maxSolventExpr}, solute_atoms=${wrappedInAtomsSolv}, Box=${inBox}, solvent_type='${model}', include_solute=${includeSolutePy})\n`;
           if (includeSolute) {
-            pythonCode += `${blockOutAtoms} = ${solventVarS}\\n`;
+            pythonCode += `${blockOutAtoms} = ${solventVarS}\n`;
           } else {
-            pythonCode += `${blockOutAtoms} = ap.update(${inAtoms}, ${solventVarS})\\n`;
+            pythonCode += `${blockOutAtoms} = ap.update(${inAtoms}, ${solventVarS})\n`;
           }
           const repairW = getBoolean(data, "repairGeometry", false);
           if (repairW) {
-            pythonCode += `${blockOutAtoms} = ap.adjust_Hw_atom(${blockOutAtoms}, ${inBox})\\n`;
+            pythonCode += `${blockOutAtoms} = ap.adjust_Hw_atom(${blockOutAtoms}, ${inBox})\n`;
           }
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else {
           // waterModel conversion
           const conv = getString(data, "conversion", "spc2tip4p");
           if (conv === "spc2tip4p") {
             const omDist = getNumber(data, "omDist", 0.15);
-            pythonCode += `${blockOutAtoms} = ap.spc2tip4p(${inAtoms}, Box=${inBox}, om_dist=${omDist})\\n`;
+            pythonCode += `${blockOutAtoms} = ap.spc2tip4p(${inAtoms}, Box=${inBox}, om_dist=${omDist})\n`;
           } else {
-            pythonCode += `${blockOutAtoms} = ap.tip3p2tip4p(${inAtoms}, Box=${inBox})\\n`;
+            pythonCode += `${blockOutAtoms} = ap.tip3p2tip4p(${inAtoms}, Box=${inBox})\n`;
           }
-          pythonCode += `${blockOutBox} = ${inBox}\\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         }
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
