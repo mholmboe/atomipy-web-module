@@ -188,7 +188,12 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
         return res;
       }
 
-      const passthroughTypes = new Set(["position", "rotate", "wrap", "addIons", "ions", "solvate", "bondAngle", "bvs", "slice", "insert", "substitute", "fuse", "resname", "molecule", "merge", "add", "transform", "pbc", "edit", "chemistry", "solvent", "analysis", "forcefield", "bend", "atomProps", "coordFrame", "xrd", "viewer"]);
+      const passthroughTypes = new Set([
+        "position", "rotate", "wrap", "addIons", "ions", "solvate", "bondAngle", "bvs", "slice", "insert", 
+        "substitute", "fuse", "resname", "molecule", "merge", "add", "transform", "pbc", "edit", 
+        "chemistry", "solvent", "analysis", "forcefield", "bend", "atomProps", "coordFrame", 
+        "xrd", "viewer", "trajectory", "export"
+      ]);
       if (passthroughTypes.has(node.type ?? "")) {
         const up = getPrimary(node.id);
         return up ? inferSeed(up, visited) : null;
