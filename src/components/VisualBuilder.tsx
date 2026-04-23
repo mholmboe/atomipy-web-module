@@ -1668,6 +1668,7 @@ export default function VisualBuilder() {
 
   return (
     <section className="mx-auto w-full max-w-[1700px] py-2 px-4 h-[850px] flex flex-col space-y-1">
+      <div className="flex justify-between items-start bg-card/50 backdrop-blur-md p-1.5 rounded-2xl border border-border shadow-2xl">
         <div className="flex gap-4 items-start flex-1">
           <div className="space-y-1 flex-1">
             <div className="flex items-center justify-between w-full">
