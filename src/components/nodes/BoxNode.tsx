@@ -123,8 +123,8 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
     const getPrimary = (nodeId: string) => {
       const incoming = edges.filter((e) => e.target === nodeId);
       if (!incoming.length) return null;
-      const inA = edges.find((e) => e.targetHandle === "inA");
-      return (inA ?? edges[0]).source;
+      const inA = incoming.find((e) => e.targetHandle === "inA");
+      return (inA ?? incoming[0]).source;
     };
 
     const inferSeed = (nodeId: string, visited = new Set<string>()): BoxSeed | null => {
