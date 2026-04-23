@@ -1849,7 +1849,7 @@ export default function VisualBuilder() {
 
       <div className="flex-1 rounded-2xl overflow-hidden border border-border bg-muted/20 relative" ref={reactFlowWrapper}>
         {showStatusWindow && (
-          <div className="absolute right-3 top-3 z-20 w-[320px] rounded-xl border border-border bg-card/95 p-3 shadow-xl backdrop-blur-sm">
+          <div className="absolute right-3 top-3 z-20 w-[400px] rounded-xl border border-border bg-card/95 p-3 shadow-xl backdrop-blur-sm">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Node Status</p>
@@ -1868,7 +1868,7 @@ export default function VisualBuilder() {
             </div>
             <Progress value={buildProgress} className="h-1.5 mb-2" />
             <p className="text-xs text-muted-foreground mb-3">{buildStatus || "Waiting for backend updates..."}</p>
-            <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1" ref={scrollRef}>
+            <div className="max-h-[600px] overflow-y-auto space-y-1.5 pr-1 scrollbar-thin" ref={scrollRef}>
               {trackedNodeOrder.length === 0 && (
                 <p className="text-xs text-muted-foreground">No tracked compute nodes in current workflow.</p>
               )}
@@ -1887,11 +1887,18 @@ export default function VisualBuilder() {
                   </div>
                 );
               })}
-              {buildLogs.slice(-3).map((line, idx) => (
-                <p key={`${line}-${idx}`} className="text-[11px] text-muted-foreground truncate">
-                  {line}
-                </p>
-              ))}
+              {buildLogs.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-border">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Execution Logs</p>
+                  <div className="bg-muted/30 rounded-lg p-2 font-mono text-[10px] space-y-1">
+                    {buildLogs.map((line, idx) => (
+                      <p key={`${line}-${idx}`} className="text-muted-foreground break-words leading-relaxed">
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
