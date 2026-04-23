@@ -1672,7 +1672,7 @@ export default function VisualBuilder() {
         <div className="flex flex-col gap-1 w-full">
           {/* Row 1: Main Ribbon + Run + Help Text */}
           <div className="flex items-center gap-2 w-full">
-            <div className="flex bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto flex-[5]">
+            <div className="flex bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto flex-1">
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
                 <FileInput className="w-4 h-4" /> Import
               </Button>
@@ -1727,7 +1727,7 @@ export default function VisualBuilder() {
                 Run
               </Button>
             </div>
-            <div className="flex-1 flex justify-end pr-12">
+            <div className="w-[400px] shrink-0 flex justify-end pr-12">
               <p className="text-sm font-medium text-muted-foreground text-balance text-right max-w-[300px]">
                 Add and connect nodes to compose your system as a workflow
               </p>
@@ -1737,7 +1737,7 @@ export default function VisualBuilder() {
           {/* Row 2: Secondary Ribbon + Reset */}
           {showMoreOptions && (
             <div className="flex items-center gap-2 w-full">
-              <div className="flex bg-muted p-1 rounded-lg flex-wrap flex-[5]">
+              <div className="flex bg-muted p-1 rounded-lg flex-wrap flex-1">
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("merge")} title="Merge with overlap removal">
                   <GitMerge className="w-4 h-4" /> Merge
                 </Button>
@@ -1777,14 +1777,14 @@ export default function VisualBuilder() {
                   Reset
                 </Button>
               </div>
-              <div className="flex-1"></div> {/* Spacer for alignment */}
+              <div className="w-[400px] shrink-0"></div> {/* Spacer for alignment */}
             </div>
           )}
 
           {/* Row 3: Workflow/Templates Management */}
           {showMoreOptions && (
             <div className="flex items-center gap-2 w-full">
-              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg flex-[5]">
+              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg flex-1">
                 <select
                   className="nodrag min-w-[270px] text-xs bg-background border border-border rounded-md px-2 py-1.5 h-8"
                   value={selectedWorkflowKey}
@@ -1853,7 +1853,7 @@ export default function VisualBuilder() {
                 />
               </div>
               <div className="w-28 shrink-0"></div> {/* Spacer to keep Action column consistent */}
-              <div className="flex-1"></div> {/* Spacer to keep Help column consistent */}
+              <div className="w-[400px] shrink-0"></div> {/* Spacer to keep Help column consistent */}
             </div>
           )}
         </div>
