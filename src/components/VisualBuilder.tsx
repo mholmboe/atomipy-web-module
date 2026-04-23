@@ -2969,8 +2969,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
           const loLim = data.loLimit != null ? String(getNumber(data, "loLimit", 0)) : "None";
           const hiLim = data.hiLimit != null ? String(getNumber(data, "hiLimit", 1)) : "None";
           const dim = Math.round(getNumber(data, "dimension", 3));
-          pythonCode += `${blockOutAtoms} = ap.substitute(${inAtoms}, ${inBox}, num_oct_subst=${numOct}, o1_type='${o1}', o2_type='${o2}', min_o2o2_dist=${mo2}, num_tet_subst=${numTet}, t1_type='${t1}', t2_type='${t2}', min_t2t2_dist=${mt2}, lo_limit=${loLim}, hi_limit=${hiLim}, dimension=${dim})\n`;
-          pythonCode += `${blockOutBox} = ${inBox}\n`;
+          pythonCode += `${blockOutAtoms}, ${blockOutBox}, _ = ap.substitute(${inAtoms}, ${inBox}, num_oct_subst=${numOct}, o1_type='${o1}', o2_type='${o2}', min_o2o2_dist=${mo2}, num_tet_subst=${numTet}, t1_type='${t1}', t2_type='${t2}', min_t2t2_dist=${mt2}, lo_limit=${loLim}, hi_limit=${hiLim}, dimension=${dim})\n`;
         } else if (chemMode === "fuse") {
           const fuseR = getNumber(data, "fuseRmax", 0.5);
           const fuseCrit = pyEscape(getString(data, "fuseCriteria", "average"));
