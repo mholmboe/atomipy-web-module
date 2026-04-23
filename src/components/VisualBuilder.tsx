@@ -1668,57 +1668,59 @@ export default function VisualBuilder() {
 
   return (
     <section className="mx-auto w-full max-w-[1700px] py-2 px-4 h-[850px] flex flex-col space-y-1">
-      <div className="flex justify-between items-center bg-card/50 backdrop-blur-md p-1.5 rounded-2xl border border-border shadow-2xl">
-        <div className="flex gap-2 items-start flex-1 justify-start mr-8">
-          <div className="space-y-1">
-            <div className="flex bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto">
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
-                <FileInput className="w-4 h-4" /> Import
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("replicate")} title="Replicate">
-                <Grid3x3 className="w-4 h-4" /> Rep
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("box")} title="Box Settings">
-                <Box className="w-4 h-4" /> Box
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("transform")} title="Spatial Ops (Translate/Rotate/Scale/Bend)">
-                <Move3D className="w-4 h-4" /> Spatial
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("add")} title="Join branches">
-                <Combine className="w-4 h-4" /> Join
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("insert")} title="Insert Molecule">
-                <PackagePlus className="w-4 h-4" /> Insert
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("ions")} title="Add Ions (Random or Grid)">
-                <BadgePlus className="w-4 h-4" /> Ions
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("solvent")} title="Solvent (Solvate / Convert Water Model)">
-                <Droplet className="w-4 h-4" /> Solvent
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("forcefield")} title="Assign Forcefield">
-                <FlaskConical className="w-4 h-4" /> FF
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("analysis")} title="Analysis (RDF/CN/Closest/Occupancy/BVS/Stats)">
-                <BarChart3 className="w-4 h-4" /> Analysis
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("viewer")} title="3D Preview Structure">
-                <Eye className="w-4 h-4" /> View
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
-                <FileOutput className="w-4 h-4" /> Export
-              </Button>
+        <div className="flex gap-4 items-start flex-1">
+          <div className="space-y-1 flex-1">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto">
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
+                  <FileInput className="w-4 h-4" /> Import
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("replicate")} title="Replicate">
+                  <Grid3x3 className="w-4 h-4" /> Rep
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("box")} title="Box Settings">
+                  <Box className="w-4 h-4" /> Box
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("transform")} title="Spatial Ops (Translate/Rotate/Scale/Bend)">
+                  <Move3D className="w-4 h-4" /> Spatial
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("add")} title="Join branches">
+                  <Combine className="w-4 h-4" /> Join
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("insert")} title="Insert Molecule">
+                  <PackagePlus className="w-4 h-4" /> Insert
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("ions")} title="Add Ions (Random or Grid)">
+                  <BadgePlus className="w-4 h-4" /> Ions
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("solvent")} title="Solvent (Solvate / Convert Water Model)">
+                  <Droplet className="w-4 h-4" /> Solvent
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("forcefield")} title="Assign Forcefield">
+                  <FlaskConical className="w-4 h-4" /> FF
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("analysis")} title="Analysis (RDF/CN/Closest/Occupancy/BVS/Stats)">
+                  <BarChart3 className="w-4 h-4" /> Analysis
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("viewer")} title="3D Preview Structure">
+                  <Eye className="w-4 h-4" /> View
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
+                  <FileOutput className="w-4 h-4" /> Export
+                </Button>
 
-              <Button
-                className="gap-1"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowMoreOptions((prev) => !prev)}
-                title="More options"
-              >
-                {showMoreOptions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                More
-              </Button>
+                <Button
+                  className="gap-1"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowMoreOptions((prev) => !prev)}
+                  title="More options"
+                >
+                  {showMoreOptions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  More
+                </Button>
+              </div>
+              <p className="text-sm font-medium text-muted-foreground text-balance ml-4 max-w-[300px]">Add and connect nodes to compose your system as a workflow</p>
             </div>
 
             {showMoreOptions && (
@@ -1824,15 +1826,16 @@ export default function VisualBuilder() {
               </div>
             )}
           </div>
-          <div className="flex gap-2 shrink-0">
-            <Button className="shadow-lg shadow-primary/20 w-28 h-11" onClick={handleCompileAndRun}>
+
+          <div className="flex flex-col gap-1 shrink-0">
+            <Button className="shadow-lg shadow-primary/20 w-28 h-9" onClick={handleCompileAndRun}>
               <Play className="w-4 h-4 mr-2" />
               Run
             </Button>
             {showMoreOptions && (
               <Button
                 variant="destructive"
-                className="shadow-lg shadow-destructive/20 w-28 h-11 text-xs font-bold uppercase tracking-wider"
+                className="shadow-lg shadow-destructive/20 w-28 h-9 text-xs font-bold uppercase tracking-wider"
                 onClick={handleResetWorkflow}
                 title="Clear all nodes and reset workflow"
               >
@@ -1841,9 +1844,6 @@ export default function VisualBuilder() {
               </Button>
             )}
           </div>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-muted-foreground text-balance">Add and connect nodes to compose your system as a workflow</p>
         </div>
       </div>
 
