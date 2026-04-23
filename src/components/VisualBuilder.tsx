@@ -1672,7 +1672,7 @@ export default function VisualBuilder() {
         <div className="flex flex-col gap-1 w-full">
           {/* Row 1: Main Ribbon + Run + Help Text */}
           <div className="flex items-center gap-2 w-full">
-            <div className="flex bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto flex-1">
+            <div className="flex bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto flex-[5]">
               <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
                 <FileInput className="w-4 h-4" /> Import
               </Button>
@@ -1722,12 +1722,12 @@ export default function VisualBuilder() {
               </Button>
             </div>
             <div className="w-28 shrink-0">
-              <Button className="shadow-lg shadow-primary/20 w-full h-9" onClick={handleCompileAndRun}>
+              <Button className="shadow-lg shadow-primary/20 w-full h-11" onClick={handleCompileAndRun}>
                 <Play className="w-4 h-4 mr-2" />
                 Run
               </Button>
             </div>
-            <div className="flex-1 flex justify-end">
+            <div className="flex-1 flex justify-end pr-12">
               <p className="text-sm font-medium text-muted-foreground text-balance text-right max-w-[300px]">
                 Add and connect nodes to compose your system as a workflow
               </p>
@@ -1737,7 +1737,7 @@ export default function VisualBuilder() {
           {/* Row 2: Secondary Ribbon + Reset */}
           {showMoreOptions && (
             <div className="flex items-center gap-2 w-full">
-              <div className="flex bg-muted p-1 rounded-lg flex-wrap flex-1">
+              <div className="flex bg-muted p-1 rounded-lg flex-wrap flex-[5]">
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("merge")} title="Merge with overlap removal">
                   <GitMerge className="w-4 h-4" /> Merge
                 </Button>
@@ -1769,7 +1769,7 @@ export default function VisualBuilder() {
               <div className="w-28 shrink-0">
                 <Button
                   variant="destructive"
-                  className="shadow-lg shadow-destructive/20 w-full h-9 text-xs font-bold uppercase tracking-wider"
+                  className="shadow-lg shadow-destructive/20 w-full h-11 text-xs font-bold uppercase tracking-wider"
                   onClick={handleResetWorkflow}
                   title="Clear all nodes and reset workflow"
                 >
@@ -1784,7 +1784,7 @@ export default function VisualBuilder() {
           {/* Row 3: Workflow/Templates Management */}
           {showMoreOptions && (
             <div className="flex items-center gap-2 w-full">
-              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg flex-1">
+              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg flex-[5]">
                 <select
                   className="nodrag min-w-[270px] text-xs bg-background border border-border rounded-md px-2 py-1.5 h-8"
                   value={selectedWorkflowKey}
