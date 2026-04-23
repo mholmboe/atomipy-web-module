@@ -1669,75 +1669,73 @@ export default function VisualBuilder() {
   return (
     <section className="mx-auto w-full max-w-[1700px] py-2 px-4 h-[850px] flex flex-col space-y-1">
       <div className="flex justify-between items-start bg-card/50 backdrop-blur-md p-1.5 rounded-2xl border border-border shadow-2xl">
-        <div className="flex flex-col gap-1 w-full">
+        <div className="grid grid-cols-[max-content_theme(spacing.28)_1fr] gap-x-2 gap-y-1 items-center w-full">
           {/* Row 1: Main Ribbon + Run + Help Text */}
-          <div className="flex items-center gap-2 w-full">
-            <div className="flex bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto flex-1">
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
-                <FileInput className="w-4 h-4" /> Import
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("replicate")} title="Replicate">
-                <Grid3x3 className="w-4 h-4" /> Rep
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("box")} title="Box Settings">
-                <Box className="w-4 h-4" /> Box
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("transform")} title="Spatial Ops (Translate/Rotate/Scale/Bend)">
-                <Move3D className="w-4 h-4" /> Spatial
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("add")} title="Join branches">
-                <Combine className="w-4 h-4" /> Join
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("insert")} title="Insert Molecule">
-                <PackagePlus className="w-4 h-4" /> Insert
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("ions")} title="Add Ions (Random or Grid)">
-                <BadgePlus className="w-4 h-4" /> Ions
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("solvent")} title="Solvent (Solvate / Convert Water Model)">
-                <Droplet className="w-4 h-4" /> Solvent
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("forcefield")} title="Assign Forcefield">
-                <FlaskConical className="w-4 h-4" /> FF
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("analysis")} title="Analysis (RDF/CN/Closest/Occupancy/BVS/Stats)">
-                <BarChart3 className="w-4 h-4" /> Analysis
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("viewer")} title="3D Preview Structure">
-                <Eye className="w-4 h-4" /> View
-              </Button>
-              <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
-                <FileOutput className="w-4 h-4" /> Export
-              </Button>
+          <div className="flex bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto w-max">
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
+              <FileInput className="w-4 h-4" /> Import
+            </Button>
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("replicate")} title="Replicate">
+              <Grid3x3 className="w-4 h-4" /> Rep
+            </Button>
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("box")} title="Box Settings">
+              <Box className="w-4 h-4" /> Box
+            </Button>
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("transform")} title="Spatial Ops (Translate/Rotate/Scale/Bend)">
+              <Move3D className="w-4 h-4" /> Spatial
+            </Button>
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("add")} title="Join branches">
+              <Combine className="w-4 h-4" /> Join
+            </Button>
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("insert")} title="Insert Molecule">
+              <PackagePlus className="w-4 h-4" /> Insert
+            </Button>
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("ions")} title="Add Ions (Random or Grid)">
+              <BadgePlus className="w-4 h-4" /> Ions
+            </Button>
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("solvent")} title="Solvent (Solvate / Convert Water Model)">
+              <Droplet className="w-4 h-4" /> Solvent
+            </Button>
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("forcefield")} title="Assign Forcefield">
+              <FlaskConical className="w-4 h-4" /> FF
+            </Button>
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("analysis")} title="Analysis (RDF/CN/Closest/Occupancy/BVS/Stats)">
+              <BarChart3 className="w-4 h-4" /> Analysis
+            </Button>
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("viewer")} title="3D Preview Structure">
+              <Eye className="w-4 h-4" /> View
+            </Button>
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
+              <FileOutput className="w-4 h-4" /> Export
+            </Button>
 
-              <Button
-                className="gap-1"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowMoreOptions((prev) => !prev)}
-                title="More options"
-              >
-                {showMoreOptions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                More
-              </Button>
-            </div>
-            <div className="w-28 shrink-0">
-              <Button className="shadow-lg shadow-primary/20 w-full h-11" onClick={handleCompileAndRun}>
-                <Play className="w-4 h-4 mr-2" />
-                Run
-              </Button>
-            </div>
-            <div className="w-[400px] shrink-0 flex justify-end pr-12">
-              <p className="text-sm font-medium text-muted-foreground text-balance text-right max-w-[300px]">
-                Add and connect nodes to compose your system as a workflow
-              </p>
-            </div>
+            <Button
+              className="gap-1"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowMoreOptions((prev) => !prev)}
+              title="More options"
+            >
+              {showMoreOptions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              More
+            </Button>
+          </div>
+          <div className="w-28 shrink-0">
+            <Button className="shadow-lg shadow-primary/20 w-full h-11" onClick={handleCompileAndRun}>
+              <Play className="w-4 h-4 mr-2" />
+              Run
+            </Button>
+          </div>
+          <div className="flex justify-end pr-12">
+            <p className="text-sm font-medium text-muted-foreground text-balance text-right max-w-[300px]">
+              Add and connect nodes to compose your system as a workflow
+            </p>
           </div>
 
-          {/* Row 2: Secondary Ribbon + Reset */}
+          {/* Row 2 content (if expanded) */}
           {showMoreOptions && (
-            <div className="flex items-center gap-2 w-full">
-              <div className="flex bg-muted p-1 rounded-lg flex-wrap flex-1">
+            <>
+              <div className="flex bg-muted p-1 rounded-lg flex-wrap w-full min-w-0">
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("merge")} title="Merge with overlap removal">
                   <GitMerge className="w-4 h-4" /> Merge
                 </Button>
@@ -1777,14 +1775,14 @@ export default function VisualBuilder() {
                   Reset
                 </Button>
               </div>
-              <div className="w-[400px] shrink-0"></div> {/* Spacer for alignment */}
-            </div>
+              <div /> {/* Grid spacer */}
+            </>
           )}
 
-          {/* Row 3: Workflow/Templates Management */}
+          {/* Row 3 content (if expanded) */}
           {showMoreOptions && (
-            <div className="flex items-center gap-2 w-full">
-              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg flex-1">
+            <>
+              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg w-full min-w-0">
                 <select
                   className="nodrag min-w-[270px] text-xs bg-background border border-border rounded-md px-2 py-1.5 h-8"
                   value={selectedWorkflowKey}
@@ -1852,9 +1850,9 @@ export default function VisualBuilder() {
                   onChange={handleImportWorkflowFile}
                 />
               </div>
-              <div className="w-28 shrink-0"></div> {/* Spacer to keep Action column consistent */}
-              <div className="w-[400px] shrink-0"></div> {/* Spacer to keep Help column consistent */}
-            </div>
+              <div /> {/* Grid spacer */}
+              <div /> {/* Grid spacer */}
+            </>
           )}
         </div>
       </div>
