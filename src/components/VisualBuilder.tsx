@@ -2210,6 +2210,29 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
           const atomArgs = gatheredStates.map((s) => s.atoms).join(", ");
           pythonCode += `${blockOutAtoms} = ap.update(${atomArgs}, force=True)\n`;
           pythonCode += `${blockOutBox} = ${gatheredStates[0].box}\n`;
+
+          const reorder = getBoolean(data, "reorderMolids", true);
+          const customMolid = getNumber(data, "molid", undefined);
+          const customResname = getString(data, "resname", "");
+
+          if (reorder) {
+            pythonCode += `# Reorder molids sequentially across joined branches\n`;
+            pythonCode += `curr_molid = 1\n`;
+            pythonCode += `for branch_atoms in [${atomArgs}]:\n`;
+            pythonCode += `    if not branch_atoms: continue\n`;
+            pythonCode += `    m_ids = sorted(list(set(a.get('molid', 1) for a in branch_atoms)))\n`;
+            pythonCode += `    m_map = {old: curr_molid + i for i, old in enumerate(m_ids)}\n`;
+            pythonCode += `    for a in branch_atoms: a['molid'] = m_map.get(a.get('molid', 1), curr_molid)\n`;
+            pythonCode += `    curr_molid += len(m_ids)\n`;
+            pythonCode += `${blockOutAtoms} = ap.update(${atomArgs}, force=True) # Refresh combined list\n`;
+          }
+
+          if (customMolid !== undefined || customResname) {
+            const molidArg = customMolid !== undefined ? `, molid=${customMolid}` : "";
+            const resArg = customResname ? `, resname='${customResname}'` : "";
+            pythonCode += `${blockOutAtoms} = ap.molecule(${blockOutAtoms}${molidArg}${resArg})\n`;
+          }
+
           stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         } else {
           pythonCode += `# Error: Join node has no valid inputs connected\n`;
