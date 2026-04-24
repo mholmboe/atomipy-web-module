@@ -1089,7 +1089,6 @@ export default function VisualBuilder() {
       baseData.nrexcl = 1;
       baseData.writeN2T = false;
       baseData.n2tFilename = "";
-      baseData.minimalisticScript = false;
     }
     if (type === "transform") {
       baseData.mode = "translate";
@@ -1513,9 +1512,8 @@ export default function VisualBuilder() {
     currentRunningNodeRef.current = null;
 
     try {
-      const useMinimalExecution = nodes.some(
-        (node) => node.type === "export" && (node.data as { minimalisticScript?: boolean })?.minimalisticScript === true,
-      );
+      // Default to minimalistic execution for cleaner generated scripts
+      const useMinimalExecution = true;
       const fullScript = generatePythonCode(nodes, edges, "full");
       const runtimeScript = useMinimalExecution ? generatePythonCode(nodes, edges, "minimal") : fullScript;
       const strictScriptWithMarkers = generatePythonCode(nodes, edges, "strict");
