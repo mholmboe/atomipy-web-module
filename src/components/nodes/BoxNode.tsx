@@ -277,7 +277,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
   );
 
   return (
-    <div className="bg-card w-[270px] shadow-lg rounded-xl border border-indigo-500/50 overflow-hidden font-sans select-none">
+    <div className="bg-card w-[310px] shadow-lg rounded-xl border border-indigo-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
       <NodeHeader id={id} title="Set System Box" Icon={Box} colorClass="text-indigo-500" className="bg-indigo-500/10" />
