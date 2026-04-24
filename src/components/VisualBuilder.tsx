@@ -114,6 +114,11 @@ import { BendNode } from "./nodes/BendNode";
 import { CondenseNode } from "./nodes/CondenseNode";
 import { WaterModelNode } from "./nodes/WaterModelNode";
 import type { PresetOption } from "./nodes/types";
+import DeletableEdge from "./edges/DeletableEdge";
+
+const edgeTypes = {
+  deletable: DeletableEdge,
+};
 
 const nodeTypes = {
   // Primary nodes (actively in toolbar)
@@ -605,7 +610,7 @@ const NODE_PURPOSE_DOCS: Record<string, string> = {
 
 const compactBlankLines = (text: string): string => text.replace(/\n{3,}/g, "\n\n");
 
-const NODE_STATUS_EXCLUDED_TYPES = new Set(["structure", "preset", "upload", "export", "viewer"]);
+const NODE_STATUS_EXCLUDED_TYPES = new Set(["preset", "upload", "viewer"]);
 
 const shouldTrackNodeStatus = (nodeType: string | null | undefined): boolean => {
   if (!nodeType) return false;
@@ -921,6 +926,7 @@ export default function VisualBuilder() {
   const workflowImportInputRef = useRef<HTMLInputElement>(null);
   const [presets, setPresets] = useState<PresetOption[]>([]);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
+  const [edgeType, setEdgeType] = useState<"bezier" | "step">("bezier");
 
   // Build Progress States
   const [isBuilding, setIsBuilding] = useState(false);
@@ -983,9 +989,29 @@ export default function VisualBuilder() {
     setSavedWorkflows(loadWorkflowEntriesFromStorage(WORKFLOW_SAVED_STORAGE_KEY));
   }, []);
 
+  // Update all existing edges when edgeType changes
+  useEffect(() => {
+    setEdges((eds) =>
+      eds.map((edge) => ({
+        ...edge,
+        data: { ...edge.data, type: edgeType },
+      }))
+    );
+  }, [edgeType, setEdges]);
+
   const onConnect = useCallback(
-    (params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges],
+    (params: Connection | Edge) =>
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...params,
+            type: "deletable",
+            data: { type: edgeType },
+          },
+          eds,
+        ),
+      ),
+    [setEdges, edgeType],
   );
 
   const addNode = (type: string) => {
@@ -1565,7 +1591,8 @@ export default function VisualBuilder() {
                 }
                 Object.keys(next).forEach((nodeId) => {
                   if (next[nodeId] === "queued") {
-                    next[nodeId] = "skipped";
+                    // If build was successful, mark remaining as done (likely finished very fast)
+                    next[nodeId] = data.success ? "done" : "skipped";
                   }
                 });
                 return next;
@@ -1843,6 +1870,32 @@ export default function VisualBuilder() {
                 <Button className="gap-1" variant="ghost" size="sm" onClick={handleImportWorkflowClick} title="Upload workflow JSON file">
                   <Upload className="w-4 h-4" /> Upload
                 </Button>
+                
+                <div className="h-6 w-[1px] bg-border mx-1" /> {/* Separator */}
+                
+                <div className="flex items-center gap-1 bg-slate-200/50 rounded-md p-1 border border-slate-300 shadow-inner">
+                  <Button 
+                    variant={edgeType === "bezier" ? "default" : "ghost"} 
+                    size="xs" 
+                    className={`h-7 text-[10px] px-3 uppercase font-black transition-all ${
+                      edgeType === "bezier" ? "shadow-sm" : "text-slate-500"
+                    }`}
+                    onClick={() => setEdgeType("bezier")}
+                  >
+                    Smooth
+                  </Button>
+                  <Button 
+                    variant={edgeType === "step" ? "default" : "ghost"} 
+                    size="xs" 
+                    className={`h-7 text-[10px] px-3 uppercase font-black transition-all ${
+                      edgeType === "step" ? "shadow-sm" : "text-slate-500"
+                    }`}
+                    onClick={() => setEdgeType("step")}
+                  >
+                    Step
+                  </Button>
+                </div>
+
                 {(selectedSavedWorkflow || selectedCustomTemplate) && (
                   <Button className="gap-1" variant="ghost" size="sm" onClick={handleDeleteSelectedEntry} title="Delete selected workflow/template">
                     <Trash2 className="w-4 h-4" /> Delete
@@ -1933,6 +1986,8 @@ export default function VisualBuilder() {
             onEdgesChange={(changes) => setEdges((eds) => applyEdgeChanges(changes, eds))}
             onConnect={onConnect}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            defaultEdgeOptions={{ type: "deletable" }}
             fitView
             fitViewOptions={{ padding: 0.4, maxZoom: 0.8 }}
           >
