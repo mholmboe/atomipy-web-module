@@ -277,7 +277,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
   );
 
   return (
-    <div className="bg-card w-[310px] shadow-lg rounded-xl border border-indigo-500/50 overflow-hidden font-sans select-none">
+    <div className="bg-card w-[270px] shadow-lg rounded-xl border border-indigo-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
       <NodeHeader id={id} title="Set System Box" Icon={Box} colorClass="text-indigo-500" className="bg-indigo-500/10" />
@@ -335,13 +335,31 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
           <label className="text-[9px] font-bold text-indigo-500/70 uppercase block mb-1">
             {mode === "cell" ? "Equivalent Box Dims" : "Equivalent Cell Params"}
           </label>
-          <div className="text-[10px] text-foreground/80 font-mono text-center">
+          <div className="text-[10px] text-foreground/80 font-mono text-center leading-relaxed">
             {mode === "cell" ? (() => {
               const bd = cellToBoxDim(data.a ?? 50, data.b ?? 50, data.c ?? 50, data.alpha ?? 90, data.beta ?? 90, data.gamma ?? 90);
-              return `${fmt(bd.lx)}, ${fmt(bd.ly)}, ${fmt(bd.lz)} | ${fmt(bd.xy)}, ${fmt(bd.xz)}, ${fmt(bd.yz)}`;
+              return (
+                <>
+                  <div className="border-b border-indigo-500/10 pb-0.5 mb-0.5">
+                    {fmt(bd.lx)}, {fmt(bd.ly)}, {fmt(bd.lz)}
+                  </div>
+                  <div>
+                    {fmt(bd.xy)}, {fmt(bd.xz)}, {fmt(bd.yz)}
+                  </div>
+                </>
+              );
             })() : (() => {
               const c = boxDimToCell(data.lx ?? 50, data.ly ?? 50, data.lz ?? 50, data.xy ?? 0, data.xz ?? 0, data.yz ?? 0);
-              return `${fmt(c.a)}, ${fmt(c.b)}, ${fmt(c.c)} | ${fmt(c.alpha)}°, ${fmt(c.beta)}°, ${fmt(c.gamma)}°`;
+              return (
+                <>
+                  <div className="border-b border-indigo-500/10 pb-0.5 mb-0.5">
+                    {fmt(c.a)}, {fmt(c.b)}, {fmt(c.c)}
+                  </div>
+                  <div>
+                    {fmt(c.alpha)}°, {fmt(c.beta)}°, {fmt(c.gamma)}°
+                  </div>
+                </>
+              );
             })()}
           </div>
         </div>
