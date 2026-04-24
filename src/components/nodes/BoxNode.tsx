@@ -57,7 +57,7 @@ function boxDimToCell(lx: number, ly: number, lz: number, xy: number, xz: number
 }
 
 function fmt(v: number) {
-  return parseFloat(v.toFixed(5));
+  return parseFloat(v.toFixed(4));
 }
 
 // ----------------------------------------------------------------
@@ -269,7 +269,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
         type="number" step={step}
         className="nodrag w-full text-center text-xs bg-muted border border-border rounded-md py-1"
         placeholder={placeholder}
-        value={(data[field] as number | undefined) ?? ""}
+        value={(data[field] as number | undefined) !== undefined ? fmt(data[field] as number) : ""}
         onChange={(e) => setField(field, e.target.value)}
         onPointerDown={(e) => e.stopPropagation()}
       />
