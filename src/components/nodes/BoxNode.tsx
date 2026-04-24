@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Handle, Position, useReactFlow, useEdges } from "@xyflow/react";
+import { Handle, Position, useReactFlow, useEdges, useNodes } from "@xyflow/react";
 import { Box, X } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps, PresetOption } from "./types";
@@ -22,6 +22,11 @@ type BoxNodeData = {
   xy?: number;
   xz?: number;
   yz?: number;
+  // Tracks what we last inherited so we can follow changes
+  lastInferredFrom?: {
+    nodeId: string;
+    values: Partial<BoxNodeData>; // The actual values we last pushed
+  };
 };
 
 // --- Pure JS conversions (mirrors atomipy/cell_utils.py) ---
@@ -65,6 +70,7 @@ function fmt(v: number) {
 export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
   const { updateNodeData, getNode } = useReactFlow();
   const edges = useEdges();
+  const nodes = useNodes(); // Re-run effect when any node changes
   const mode = data.inputMode ?? "cell";
 
   // ------- Auto-seed from upstream structure/replicate/scale --------
@@ -201,38 +207,50 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
       return null;
     };
 
-    // Determine what's missing
-    const isMissing = (mode === "cell")
-      ? missing(data.a) || missing(data.b) || missing(data.c)
-      : missing(data.lx) || missing(data.ly) || missing(data.lz);
-
-    if (!isMissing) return;
-
     const edge = edges.find((e) => e.target === id);
     if (!edge) return;
     const seed = inferSeed(edge.source);
     if (!seed) return;
 
+    const lastVals = data.lastInferredFrom?.values || {};
     const next: BoxNodeData = { ...data };
-    if (mode === "cell") {
-      if (missing(data.a)) next.a = seed.a;
-      if (missing(data.b)) next.b = seed.b;
-      if (missing(data.c)) next.c = seed.c;
-      if (missing(data.alpha)) next.alpha = seed.alpha;
-      if (missing(data.beta)) next.beta = seed.beta;
-      if (missing(data.gamma)) next.gamma = seed.gamma;
-    } else {
-      if (missing(data.lx)) next.lx = seed.lx;
-      if (missing(data.ly)) next.ly = seed.ly;
-      if (missing(data.lz)) next.lz = seed.lz;
-      if (missing(data.xy)) next.xy = seed.xy;
-      if (missing(data.xz)) next.xz = seed.xz;
-      if (missing(data.yz)) next.yz = seed.yz;
-    }
+    let hasUpdates = false;
 
-    const changed = (Object.keys(next) as Array<keyof BoxNodeData>).some((k) => next[k] !== data[k]);
-    if (changed) updateNodeData(id, next);
-  }, [data, edges, getNode, id, mode, updateNodeData]);
+    // Tolerance-based comparison to handle floating point issues
+    const isSame = (v1: number | undefined, v2: number | undefined) => {
+      if (missing(v1) && missing(v2)) return true;
+      if (missing(v1) || missing(v2)) return false;
+      return Math.abs(v1! - v2!) < 0.001;
+    };
+
+    const updateIfClean = (field: keyof BoxNodeData) => {
+      const current = data[field] as number | undefined;
+      const target = seed[field] as number | undefined;
+      const last = lastVals[field] as number | undefined;
+
+      // Update if: 1. Missing, or 2. Matches our last push (user hasn't edited)
+      if (missing(current) || isSame(current, last)) {
+        if (!isSame(current, target)) {
+          (next as any)[field] = target;
+          hasUpdates = true;
+        }
+      }
+    };
+
+    const fields: Array<keyof BoxNodeData> = mode === "cell" 
+      ? ["a", "b", "c", "alpha", "beta", "gamma"] 
+      : ["lx", "ly", "lz", "xy", "xz", "yz"];
+
+    fields.forEach(updateIfClean);
+
+    if (hasUpdates) {
+      next.lastInferredFrom = { 
+        nodeId: edge.source, 
+        values: { ...seed } 
+      };
+      updateNodeData(id, next);
+    }
+  }, [data, edges, nodes, id, mode, updateNodeData]);
 
   // ------- Mode switch with live conversion --------
   const switchMode = (newMode: BoxMode) => {
@@ -364,9 +382,6 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
           </div>
         </div>
 
-        <p className="text-[9px] text-muted-foreground italic text-center leading-tight m-0">
-          Empty fields inherit from upstream. Switches retain physical consistency.
-        </p>
       </div>
 
       <Handle type="source" position={Position.Right} id="out" className="w-3 h-3 bg-primary" />

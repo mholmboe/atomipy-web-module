@@ -1,4 +1,5 @@
 flask
+flask-cors
 werkzeug
 gunicorn
 # atomipy is installed via git in the Dockerfile to get the latest version

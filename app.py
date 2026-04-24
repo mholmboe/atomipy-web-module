@@ -9,6 +9,7 @@ from uuid import uuid4
 from typing import Any
 
 from flask import Flask, jsonify, request, send_file, Response
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
 import threading
@@ -32,6 +33,7 @@ def get_ap():
     return _ap
 
 app = Flask(__name__, static_folder="dist", static_url_path="")
+CORS(app) # Enable CORS for local development
 app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024  # 128 MB
 
 # Persistent directory for build results cache (moved from RAM to disk for Render stability)
