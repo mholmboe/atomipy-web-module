@@ -29,6 +29,8 @@ type BoxNodeData = {
   };
 };
 
+type NumericBoxField = "a" | "b" | "c" | "alpha" | "beta" | "gamma" | "lx" | "ly" | "lz" | "xy" | "xz" | "yz";
+
 // --- Pure JS conversions (mirrors atomipy/cell_utils.py) ---
 
 function cellToBoxDim(a: number, b: number, c: number, alpha: number, beta: number, gamma: number) {
@@ -223,21 +225,21 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
       return Math.abs(v1! - v2!) < 0.001;
     };
 
-    const updateIfClean = (field: keyof BoxNodeData) => {
-      const current = data[field] as number | undefined;
-      const target = seed[field] as number | undefined;
+    const updateIfClean = (field: NumericBoxField) => {
+      const current = data[field];
+      const target = seed[field];
       const last = lastVals[field] as number | undefined;
 
       // Update if: 1. Missing, or 2. Matches our last push (user hasn't edited)
       if (missing(current) || isSame(current, last)) {
         if (!isSame(current, target)) {
-          (next as any)[field] = target;
+          next[field] = target;
           hasUpdates = true;
         }
       }
     };
 
-    const fields: Array<keyof BoxNodeData> = mode === "cell" 
+    const fields: NumericBoxField[] = mode === "cell"
       ? ["a", "b", "c", "alpha", "beta", "gamma"] 
       : ["lx", "ly", "lz", "xy", "xz", "yz"];
 
@@ -250,7 +252,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
       };
       updateNodeData(id, next);
     }
-  }, [data, edges, nodes, id, mode, updateNodeData]);
+  }, [data, edges, nodes, id, mode, updateNodeData, getNode]);
 
   // ------- Mode switch with live conversion --------
   const switchMode = (newMode: BoxMode) => {

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { formatPresetLabel } from "./types";
 import type { NodeComponentProps, PresetOption } from "./types";
 import { NodeHeader } from "./NodeHeader";
+import { STRUCTURE_FILE_ACCEPT, isSupportedStructureFile, uploadStructureFile } from "@/lib/uploads";
 
 type InsertNodeData = {
   source?: "preset" | "upload";
@@ -28,12 +29,6 @@ type InsertNodeData = {
   xhi?: number;
   yhi?: number;
   zhi?: number;
-};
-
-type UploadApiResponse = {
-  filename?: string;
-  originalName?: string;
-  path?: string;
 };
 
 export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
@@ -71,33 +66,26 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!isSupportedStructureFile(file.name)) {
+      toast.error("Unsupported file format.");
+      return;
+    }
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
 
     try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        throw new Error("Upload failed");
-      }
-
-      const result: UploadApiResponse = await res.json();
+      const result = await uploadStructureFile(file);
       updateNodeData(id, {
         ...data,
         source: "upload",
         filename: result.filename,
-        originalName: result.originalName || file.name,
+        originalName: result.originalName,
         path: result.path,
       });
       toast.success(`Uploaded ${file.name}`);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to upload file");
+      toast.error(err instanceof Error ? err.message : "Failed to upload file");
     } finally {
       setUploading(false);
     }
@@ -160,7 +148,7 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
               type="file"
               className="hidden"
               id={`insert-upload-${id}`}
-              accept=".pdb,.gro,.cif,.xyz,.pqr,.poscar"
+              accept={STRUCTURE_FILE_ACCEPT}
               onChange={handleFileChange}
               disabled={uploading}
             />
@@ -179,7 +167,7 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
               ) : (
                 <div className="flex flex-col items-center text-center">
                   <Upload className="w-5 h-5 text-muted-foreground mb-1" />
-                  <span className="text-[10px] text-muted-foreground">Click to upload template (.pdb, .gro, .cif, .xyz, .pqr, .poscar)</span>
+                  <span className="text-[10px] text-muted-foreground">Click to upload a structure template</span>
                 </div>
               )}
             </label>
