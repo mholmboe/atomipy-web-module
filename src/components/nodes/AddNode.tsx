@@ -1,7 +1,8 @@
+import React from "react";
+import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { Combine, ChevronDown, ChevronUp } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
-import { useReactFlow } from "@xyflow/react";
 
 type AddNodeData = {
   reorderMolids?: boolean;
