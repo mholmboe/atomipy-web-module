@@ -1,5 +1,7 @@
 import io
 import json
+import os
+import socket
 import subprocess
 import sys
 import textwrap
@@ -8,6 +10,12 @@ import traceback
 import zipfile
 from urllib import error as urlerror
 from urllib import request as urlrequest
+
+
+def find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
 
 
 def wait_for_server(url: str, retries: int = 20, delay_s: float = 1.5) -> bool:
@@ -58,10 +66,16 @@ def dump_failure_bundle(content: bytes) -> None:
 
 
 def run_test() -> bool:
-    print("Starting backend server...")
-    server_process = subprocess.Popen([sys.executable, "app.py"], cwd=".")
+    port = find_free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    env = os.environ.copy()
+    env["PORT"] = str(port)
+    env["FLASK_DEBUG"] = "0"
 
-    if not wait_for_server("http://127.0.0.1:5002/health"):
+    print("Starting backend server...")
+    server_process = subprocess.Popen([sys.executable, "app.py"], cwd=".", env=env)
+
+    if not wait_for_server(f"{base_url}/health"):
         print("Server failed to start.")
         server_process.terminate()
         return False
@@ -168,7 +182,7 @@ def run_test() -> bool:
         }
 
         print("Submitting integration payload...")
-        status_code, response_body = post_json("http://127.0.0.1:5002/api/execute-script", payload, timeout=180)
+        status_code, response_body = post_json(f"{base_url}/api/execute-script", payload, timeout=180)
 
         if status_code != 200:
             print(f"ERROR: Response status {status_code}")

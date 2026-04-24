@@ -5,17 +5,12 @@ import { NodeHeader } from "./NodeHeader";
 import { toast } from "sonner";
 import { formatPresetLabel } from "./types";
 import type { NodeComponentProps, PresetOption } from "./types";
+import { STRUCTURE_FILE_ACCEPT, isSupportedStructureFile, uploadStructureFile } from "@/lib/uploads";
 
 type StructureNodeData = {
   source?: "preset" | "upload";
   value?: string;
   presets?: PresetOption[];
-  filename?: string;
-  originalName?: string;
-  path?: string;
-};
-
-type UploadApiResponse = {
   filename?: string;
   originalName?: string;
   path?: string;
@@ -28,31 +23,25 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
   const presets = data.presets || [];
 
   const uploadFile = async (file: File) => {
+    if (!isSupportedStructureFile(file.name)) {
+      toast.error("Unsupported file format.");
+      return;
+    }
+
     setUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
 
     try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        throw new Error("Upload failed");
-      }
-
-      const result: UploadApiResponse = await res.json();
+      const result = await uploadStructureFile(file);
       updateNodeData(id, {
         source: "upload",
         filename: result.filename,
-        originalName: result.originalName || file.name,
+        originalName: result.originalName,
         path: result.path,
       });
       toast.success(`Uploaded ${file.name}`);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to upload file");
+      toast.error(err instanceof Error ? err.message : "Failed to upload file");
     } finally {
       setUploading(false);
     }
@@ -79,12 +68,10 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
 
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      const ext = file.name.split(".").pop()?.toLowerCase();
-      const validExts = ["pdb", "gro", "cif", "xyz", "pqr", "poscar"];
-      if (ext && validExts.includes(ext)) {
+      if (isSupportedStructureFile(file.name)) {
         uploadFile(file);
       } else {
-        toast.error("Unsupported file format");
+        toast.error("Unsupported file format.");
       }
     }
   };
@@ -157,7 +144,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
               type="file"
               className="hidden"
               id={`file-upload-${id}`}
-              accept=".pdb,.gro,.cif,.xyz,.pqr,.poscar"
+              accept={STRUCTURE_FILE_ACCEPT}
               onChange={handleFileChange}
               disabled={uploading}
             />
@@ -184,7 +171,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
                 <div className="flex flex-col items-center text-center">
                   <Upload className="w-6 h-6 text-muted-foreground mb-2" />
                   <span className="text-[10px] text-muted-foreground">
-                    Click to upload .pdb, .gro, .cif, .xyz, .pqr, or .poscar
+                    Click to upload a structure file
                   </span>
                 </div>
               )}

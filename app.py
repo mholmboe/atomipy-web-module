@@ -3,8 +3,10 @@ import json
 import os
 import sys
 import tempfile
+import time
 import traceback
 import zipfile
+from collections import OrderedDict
 from uuid import uuid4
 from typing import Any
 
@@ -22,6 +24,7 @@ sys.path.insert(0, BASE_DIR)
 
 # Global lock to ensure only one memory-intensive build runs at a time
 BUILD_LOCK = threading.Lock()
+CACHE_LOCK = threading.Lock()
 
 # Lazy loader for atomipy to reduce initial memory footprint
 _ap = None
@@ -39,6 +42,8 @@ app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024  # 128 MB
 # Persistent directory for build results cache (moved from RAM to disk for Render stability)
 CACHE_DIR = os.path.join(tempfile.gettempdir(), "atomipy_results_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
+BUILD_RESULTS_CACHE: OrderedDict[str, dict[str, Any]] = OrderedDict()
+MAX_CACHE_SIZE = 5  # Store fewer results on disk to save space
 
 # Serve the frontend
 @app.route("/")
@@ -47,6 +52,8 @@ def serve_index():
 
 @app.errorhandler(404)
 def not_found(e):
+    if request.path.startswith("/api/") or request.path == "/build_system":
+        return jsonify({"error": "Not found"}), 404
     # This ensures that React Router works by redirecting 404s to index.html
     return send_file(os.path.join(app.static_folder, "index.html"))
 
@@ -176,6 +183,87 @@ def _json_compatible(value):
     return str(value)
 
 
+def _existing_uc_conf_dir() -> str | None:
+    ap = get_ap()
+    ap_data_dir = os.path.dirname(ap.__file__)
+    potential_dirs = [
+        os.path.join(ap_data_dir, "structures", "minerals", "UC_conf"),
+        os.path.join(BASE_DIR, "UC_conf"),
+        os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
+    ]
+    return next((path for path in potential_dirs if os.path.exists(path)), None)
+
+
+def _safe_symlink(src: str, dst: str) -> None:
+    if os.path.lexists(dst):
+        return
+    os.symlink(src, dst)
+
+
+def _prepare_execution_workspace(work_dir: str) -> None:
+    uc_conf_src = _existing_uc_conf_dir()
+    if uc_conf_src:
+        _safe_symlink(uc_conf_src, os.path.join(work_dir, "UC_conf"))
+
+    uploads_src = os.path.join(BASE_DIR, "uploads")
+    if os.path.exists(uploads_src):
+        _safe_symlink(uploads_src, os.path.join(work_dir, "uploads"))
+
+
+def _write_execution_inputs(
+    work_dir: str,
+    script_code: str,
+    script_artifacts: dict[str, str],
+    workflow_data: Any | None = None,
+) -> None:
+    with open(os.path.join(work_dir, "build_script.py"), "w", encoding="utf-8") as f:
+        f.write(script_code)
+
+    for artifact_name, artifact_content in script_artifacts.items():
+        with open(os.path.join(work_dir, artifact_name), "w", encoding="utf-8") as f:
+            f.write(artifact_content)
+
+    if workflow_data:
+        with open(os.path.join(work_dir, "workflow.json"), "w", encoding="utf-8") as f:
+            json.dump(workflow_data, f, indent=2)
+
+
+def _iter_regular_work_dir_files(work_dir: str, excluded_names: set[str] | None = None):
+    excluded = excluded_names or set()
+    for fname in sorted(os.listdir(work_dir)):
+        if fname in excluded:
+            continue
+        path = os.path.join(work_dir, fname)
+        if os.path.isfile(path):
+            yield fname, path
+
+
+def _get_cached_result(token: str) -> dict[str, Any] | None:
+    with CACHE_LOCK:
+        data = BUILD_RESULTS_CACHE.get(token)
+        return dict(data) if data else None
+
+
+def _remember_cached_result(token: str, path: str, filename: str) -> None:
+    evicted: list[dict[str, Any]] = []
+    with CACHE_LOCK:
+        BUILD_RESULTS_CACHE[token] = {
+            "path": path,
+            "filename": filename,
+            "timestamp": time.time(),
+        }
+
+        while len(BUILD_RESULTS_CACHE) > MAX_CACHE_SIZE:
+            _, old_data = BUILD_RESULTS_CACHE.popitem(last=False)
+            evicted.append(old_data)
+
+    for old_data in evicted:
+        old_path = old_data.get("path")
+        if isinstance(old_path, str) and os.path.exists(old_path):
+            with contextlib.suppress(Exception):
+                os.remove(old_path)
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
@@ -216,21 +304,11 @@ def upload_file():
 
 @app.route("/api/presets", methods=["GET"])
 def list_presets():
-    ap = get_ap()
-    ap_data_dir = os.path.dirname(ap.__file__)
-    potential_dirs = [
-        os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
-        os.path.join(ap_data_dir, "structures", "minerals", "UC_conf"),
-    ]
-    
-    uc_conf_dir = None
-    for d in potential_dirs:
-        if os.path.exists(d):
-            uc_conf_dir = d
-            print(f"Found preset structures in: {uc_conf_dir}")
-            break
+    uc_conf_dir = _existing_uc_conf_dir()
+    if uc_conf_dir:
+        print(f"Found preset structures in: {uc_conf_dir}")
     else:
-        print(f"FAILED to find preset structures. Checked: {potential_dirs}")
+        print("FAILED to find preset structures.")
             
     presets = []
     if uc_conf_dir and os.path.exists(uc_conf_dir):
@@ -282,6 +360,7 @@ def build_system():
         if not slabs:
             return jsonify({"error": "No slabs provided."}), 400
 
+        ap = get_ap()
         box_cfg = payload.get("box", {})
         lx = float(box_cfg.get("lx", 30.0))
         ly = float(box_cfg.get("ly", 30.0))
@@ -298,7 +377,7 @@ def build_system():
         auto_gamma = bool(box_cfg.get("autoGamma", False))
         
         final_box_raw = [lx, ly, lz, alpha, beta, gamma]
-        final_box = get_ap().Cell2Box_dim(final_box_raw)
+        final_box = ap.Cell2Box_dim(final_box_raw)
 
         output_name = _safe_filename(payload.get("outputName"), "atomipy_system")
         output_format = str(payload.get("outputFormat", "gromacs")).lower()
@@ -362,7 +441,7 @@ def build_system():
                     if auto_alpha: final_box_raw[3] = slab_cell[3]
                     if auto_beta: final_box_raw[4] = slab_cell[4]
                     if auto_gamma: final_box_raw[5] = slab_cell[5]
-                    final_box = get_ap().Cell2Box_dim(final_box_raw)
+                    final_box = ap.Cell2Box_dim(final_box_raw)
 
                 resname = _safe_resname(slab.get("name", f"SLAB{idx+1}"), idx)
                 for atom in slab_atoms:
@@ -485,12 +564,10 @@ def build_system():
             # Zip all generated outputs
             memory_file = io.BytesIO()
             with zipfile.ZipFile(memory_file, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-                for fname in sorted(os.listdir(work_dir)):
+                for fname, path in _iter_regular_work_dir_files(work_dir):
                     if fname.startswith("input_"):
                         continue
-                    path = os.path.join(work_dir, fname)
-                    if os.path.isfile(path):
-                        zf.write(path, arcname=fname)
+                    zf.write(path, arcname=fname)
             memory_file.seek(0)
 
             return send_file(
@@ -514,14 +591,9 @@ def build_system():
         )
 
 
-# Global cache for build results to support async downloads (now disk-based)
-from collections import OrderedDict
-BUILD_RESULTS_CACHE = OrderedDict()
-MAX_CACHE_SIZE = 5  # Store fewer results on disk to save space
-
 @app.route("/api/download-result/<token>")
 def download_result(token):
-    res_data = BUILD_RESULTS_CACHE.get(token)
+    res_data = _get_cached_result(token)
     if not res_data or not os.path.exists(res_data["path"]):
         return jsonify({"error": "Result not found or expired. Please build again."}), 404
     
@@ -561,33 +633,8 @@ def build_stream():
         def generate():
             with tempfile.TemporaryDirectory(prefix="atomipy_stream_") as work_dir:
                 # 1. Setup Environment (Same as execute_script)
-                ap = get_ap()
-                ap_data_dir = os.path.dirname(ap.__file__)
-                potential_dirs = [
-                    os.path.join(ap_data_dir, "structures", "minerals", "UC_conf"),
-                    os.path.join(BASE_DIR, "UC_conf"),
-                    os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
-                ]
-                uc_conf_src = next((d for d in potential_dirs if os.path.exists(d)), None)
-                if uc_conf_src:
-                    os.symlink(uc_conf_src, os.path.join(work_dir, "UC_conf"))
-                
-                uploads_src = os.path.join(BASE_DIR, "uploads")
-                if os.path.exists(uploads_src):
-                    os.symlink(uploads_src, os.path.join(work_dir, "uploads"))
-
-                script_path = os.path.join(work_dir, "build_script.py")
-                with open(script_path, "w", encoding="utf-8") as f:
-                    f.write(script_code)
-
-                for artifact_name, artifact_content in script_artifacts.items():
-                    artifact_path = os.path.join(work_dir, artifact_name)
-                    with open(artifact_path, "w", encoding="utf-8") as f:
-                        f.write(artifact_content)
-                
-                if workflow_data:
-                    with open(os.path.join(work_dir, "workflow.json"), "w", encoding="utf-8") as f:
-                        json.dump(workflow_data, f, indent=2)
+                _prepare_execution_workspace(work_dir)
+                _write_execution_inputs(work_dir, script_code, script_artifacts, workflow_data)
 
                 yield SSE.status('Build initializing (Locked Mode)...')
 
@@ -691,29 +738,15 @@ def build_stream():
                 }
                 
                 with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-                    for fname in os.listdir(work_dir):
-                        if fname in {"UC_conf", "uploads"}: continue
-                        path = os.path.join(work_dir, fname)
-                        if os.path.isfile(path):
-                            zf.write(path, arcname=fname)
+                    for fname, path in _iter_regular_work_dir_files(work_dir, {"UC_conf", "uploads"}):
+                        zf.write(path, arcname=fname)
                     zf.writestr("build_summary.json", json.dumps(summary, indent=2))
 
-                BUILD_RESULTS_CACHE[token] = {
-                    "path": zip_path,
-                    "filename": "atomipy_system_bundle.zip",
-                    "timestamp": time.time()
-                }
-                
-                while len(BUILD_RESULTS_CACHE) > MAX_CACHE_SIZE:
-                    old_token, old_data = BUILD_RESULTS_CACHE.popitem(last=False)
-                    if os.path.exists(old_data["path"]):
-                        try: os.remove(old_data["path"])
-                        except: pass
+                _remember_cached_result(token, zip_path, "atomipy_system_bundle.zip")
 
                 yield SSE.complete(token, success)
                 gc.collect() # Final cleanup
 
-        import time
         return Response(
             generate(),
             mimetype="text/event-stream",
@@ -734,49 +767,13 @@ def execute_script():
         payload = _parse_payload()
         script_code = payload.get("script", "")
         script_artifacts = _extract_script_artifacts(payload)
+        workflow_data = payload.get("workflow")
         if not script_code:
             return jsonify({"error": "No script provided."}), 400
 
         with tempfile.TemporaryDirectory(prefix="atomipy_") as work_dir:
-            # Create symlink to UC_conf by checking potential locations
-            ap = get_ap()
-            ap_data_dir = os.path.dirname(ap.__file__)
-            potential_dirs = [
-                os.path.join(ap_data_dir, "structures", "minerals", "UC_conf"),
-                os.path.join(BASE_DIR, "UC_conf"),
-                os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
-            ]
-            
-            uc_conf_src = None
-            for d in potential_dirs:
-                if os.path.exists(d):
-                    uc_conf_src = d
-                    break
-            
-            if uc_conf_src:
-                os.symlink(uc_conf_src, os.path.join(work_dir, "UC_conf"))
-
-            uploads_src = os.path.join(BASE_DIR, "uploads")
-            uploads_dst = os.path.join(work_dir, "uploads")
-            if os.path.exists(uploads_src):
-                os.symlink(uploads_src, uploads_dst)
-
-            # Write the script
-            script_path = os.path.join(work_dir, "build_script.py")
-            with open(script_path, "w", encoding="utf-8") as f:
-                f.write(script_code)
-
-            for artifact_name, artifact_content in script_artifacts.items():
-                artifact_path = os.path.join(work_dir, artifact_name)
-                with open(artifact_path, "w", encoding="utf-8") as f:
-                    f.write(artifact_content)
-            
-            # Save the workflow JSON for re-importing
-            workflow_data = payload.get("workflow")
-            if workflow_data:
-                workflow_path = os.path.join(work_dir, "workflow.json")
-                with open(workflow_path, "w", encoding="utf-8") as f:
-                    json.dump(workflow_data, f, indent=2)
+            _prepare_execution_workspace(work_dir)
+            _write_execution_inputs(work_dir, script_code, script_artifacts, workflow_data)
 
             import subprocess
             # Execute script in work_dir with the current python environment
@@ -805,13 +802,9 @@ def execute_script():
             memory_file = io.BytesIO()
             included_files = []
             with zipfile.ZipFile(memory_file, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-                for fname in os.listdir(work_dir):
-                    if fname in {"UC_conf", "uploads"}:
-                        continue
-                    path = os.path.join(work_dir, fname)
-                    if os.path.isfile(path):
-                        zf.write(path, arcname=fname)
-                        included_files.append(fname)
+                for fname, path in _iter_regular_work_dir_files(work_dir, {"UC_conf", "uploads"}):
+                    zf.write(path, arcname=fname)
+                    included_files.append(fname)
                 
                 # Write stdout/stderr
                 zf.writestr("execution_stdout.txt", result.stdout)
@@ -835,15 +828,13 @@ def execute_script():
     except Exception as exc:
         return jsonify({"error": str(exc), "traceback": traceback.format_exc()}), 500
 
-
-import time
-
 def prune_cache_loop():
     """Background thread to delete result files older than 1 hour."""
     while True:
         try:
             now = time.time()
             cutoff = now - 3600 # 1 hour
+            deleted_paths = set()
             if os.path.exists(CACHE_DIR):
                 for f in os.listdir(CACHE_DIR):
                     p = os.path.join(CACHE_DIR, f)
@@ -851,9 +842,17 @@ def prune_cache_loop():
                         with contextlib.suppress(Exception):
                             if os.path.isfile(p):
                                 os.remove(p)
+                                deleted_paths.add(p)
                             elif os.path.isdir(p):
                                 import shutil
                                 shutil.rmtree(p)
+                                deleted_paths.add(p)
+
+            if deleted_paths:
+                with CACHE_LOCK:
+                    for token, data in list(BUILD_RESULTS_CACHE.items()):
+                        if data.get("path") in deleted_paths:
+                            BUILD_RESULTS_CACHE.pop(token, None)
         except Exception as e:
             print(f"Error in pruning thread: {e}")
         time.sleep(1800) # Run every 30 mins
@@ -862,6 +861,7 @@ def prune_cache_loop():
 threading.Thread(target=prune_cache_loop, daemon=True).start()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5002, debug=True)
+    debug = os.environ.get("FLASK_DEBUG", "1").lower() not in {"0", "false", "no"}
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "5002")), debug=debug)
 
 # Triggering reload for atomipy core changes

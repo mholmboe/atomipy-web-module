@@ -3,14 +3,9 @@ import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { Upload, File, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { NodeComponentProps } from "./types";
+import { STRUCTURE_FILE_ACCEPT, isSupportedStructureFile, uploadStructureFile } from "@/lib/uploads";
 
 type UploadNodeData = {
-  filename?: string;
-  originalName?: string;
-  path?: string;
-};
-
-type UploadApiResponse = {
   filename?: string;
   originalName?: string;
   path?: string;
@@ -23,31 +18,24 @@ export function UploadNode({ id, data }: NodeComponentProps<UploadNodeData>) {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!isSupportedStructureFile(file.name)) {
+      toast.error("Unsupported file format.");
+      return;
+    }
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
 
     try {
-      const res = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-      });
-
-      if (!res.ok) {
-          throw new Error("Upload failed");
-      }
-
-      const result: UploadApiResponse = await res.json();
+      const result = await uploadStructureFile(file);
       updateNodeData(id, { 
         filename: result.filename, 
-        originalName: result.originalName || file.name,
+        originalName: result.originalName,
         path: result.path 
       });
       toast.success(`Uploaded ${file.name}`);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to upload file");
+      toast.error(err instanceof Error ? err.message : "Failed to upload file");
     } finally {
       setUploading(false);
     }
@@ -66,7 +54,7 @@ export function UploadNode({ id, data }: NodeComponentProps<UploadNodeData>) {
             type="file" 
             className="hidden" 
             id={`file-upload-${id}`}
-            accept=".pdb,.gro,.cif,.xyz"
+            accept={STRUCTURE_FILE_ACCEPT}
             onChange={handleFileChange}
             disabled={uploading}
           />
@@ -84,7 +72,7 @@ export function UploadNode({ id, data }: NodeComponentProps<UploadNodeData>) {
             ) : (
               <div className="flex flex-col items-center text-center">
                 <Upload className="w-6 h-6 text-muted-foreground mb-2" />
-                <span className="text-[10px] text-muted-foreground">Click to upload .pdb, .gro, .cif, or .xyz</span>
+                <span className="text-[10px] text-muted-foreground">Click to upload a structure file</span>
               </div>
             )}
           </label>
