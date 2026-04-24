@@ -1734,7 +1734,7 @@ export default function VisualBuilder() {
               Run
             </Button>
           </div>
-          <div className="flex justify-end pr-12">
+          <div className="flex justify-end pr-6">
             <p className="text-sm font-medium text-muted-foreground text-balance text-right max-w-[300px]">
               Add and connect nodes into a workflow to build your molecular system
             </p>
