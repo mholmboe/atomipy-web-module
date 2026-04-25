@@ -72,7 +72,8 @@ export function UploadNode({ id, data }: NodeComponentProps<UploadNodeData>) {
             ) : (
               <div className="flex flex-col items-center text-center">
                 <Upload className="w-6 h-6 text-muted-foreground mb-2" />
-                <span className="text-[10px] text-muted-foreground">Click to upload a structure file</span>
+                <span className="text-[10px] text-muted-foreground font-medium">Click to upload your structure</span>
+                <span className="text-[9px] text-muted-foreground/60 mt-0.5">(.xyz, .pdb, .gro, .cif)</span>
               </div>
             )}
           </label>
