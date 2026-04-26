@@ -1730,7 +1730,7 @@ export default function VisualBuilder() {
               <Droplet className="w-4 h-4" /> Solvent
             </Button>
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("forcefield")} title="Assign Forcefield">
-              <FlaskConical className="w-4 h-4" /> FF
+              <FlaskConical className="w-4 h-4" /> Forcefield
             </Button>
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("analysis")} title="Analysis (RDF/CN/Closest/Occupancy/BVS/Stats)">
               <BarChart3 className="w-4 h-4" /> Analysis

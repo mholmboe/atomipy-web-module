@@ -6,7 +6,8 @@ const Footer = () => {
     <footer className="border-t border-border py-4 mt-8 bg-muted/30">
       <div className="container mx-auto px-6 text-center space-y-2">
         <div className="text-sm text-muted-foreground">
-          Based on <a href="https://github.com/mholmboe/atomipy" className="text-primary hover:underline font-medium" target="_blank" rel="noopener noreferrer">atomipy</a> — The atom toolbox in Python
+          Based on <a href="https://github.com/mholmboe/atomipy" className="text-primary hover:underline font-medium" target="_blank" rel="noopener noreferrer">atomipy</a> — The atom toolbox in Python. 
+          Supporting <a href="https://github.com/mholmboe/minff" className="text-primary hover:underline font-medium" target="_blank" rel="noopener noreferrer">MINFF</a> and CLAYFF.
         </div>
         <div className="text-xs text-muted-foreground/60">
           &copy; {new Date().getFullYear()} atomipy project. Open source and science-first.

@@ -31,7 +31,7 @@ const HeroSection = () => {
           transition={{ duration: 0.6, delay: 0.15 }}
           className="mx-auto mt-4 max-w-5xl text-base text-nav-foreground/85 md:text-lg"
         >
-          Build or analyze multicomponent molecular systems by adding molecules or replicate unit cells in to slabs, move them around, set the box, add ions, and solvate — then export structure and topology files.
+          Build or analyze multicomponent molecular systems by adding molecules or replicate unit cells in to slabs, move them around, set the box, add ions, and solvate — then export structure and topology files for [**MINFF**](https://github.com/mholmboe/minff) and CLAYFF.
         </motion.p>
       </div>
     </div>
