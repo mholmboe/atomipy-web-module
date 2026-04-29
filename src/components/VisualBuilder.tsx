@@ -1623,8 +1623,12 @@ export default function VisualBuilder() {
               if (statusMessage) setBuildStatus(statusMessage);
             } else if (data.type === "log") {
               const logLine = typeof data.message === "string" ? data.message.trim() : "";
-              if (logLine) {
-                setBuildLogs((prev) => [...prev.slice(-24), logLine]);
+              if (logLine && 
+                  !logLine.includes("__PLOT_") && 
+                  !logLine.includes("__VISUALIZE_") && 
+                  !logLine.includes("__NODE_START_") &&
+                  !logLine.includes("__CHARGES_")) {
+                setBuildLogs((prev) => [...prev.slice(-48), logLine]);
               }
             } else if (data.type === "progress") {
               const nodeId = typeof data.nodeId === "string" ? data.nodeId : "";
