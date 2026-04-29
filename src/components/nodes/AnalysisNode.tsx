@@ -414,6 +414,7 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
       </div>
 
       <Handle type="source" position={Position.Right} id="out" className="w-3 h-3 bg-primary" />
+      <Handle type="source" position={Position.Right} id="data" style={{ top: '70%' }} className="w-3 h-3 bg-indigo-500" title="Plot Data" />
     </div>
   );
 }

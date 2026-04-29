@@ -659,12 +659,23 @@ def build_stream():
                             with contextlib.redirect_stdout(writer), contextlib.redirect_stderr(writer):
                                 # Execute the modeling script in the current environment
                                 # Passing ap and other modules explicitly
+                                def ap_plot(node_id, x, y, title="", xlabel="", ylabel=""):
+                                    data = {
+                                        "x": x.tolist() if hasattr(x, 'tolist') else list(x),
+                                        "y": y.tolist() if hasattr(y, 'tolist') else list(y),
+                                        "title": title,
+                                        "xlabel": xlabel,
+                                        "ylabel": ylabel
+                                    }
+                                    print(f"__PLOT_{node_id}__:{json.dumps(data)}")
+
                                 exec_globals = {
                                     "__name__": "__main__",
                                     "ap": get_ap(),
                                     "os": os,
                                     "sys": sys,
                                     "json": json,
+                                    "ap_plot": ap_plot,
                                 }
                                 exec(script_code, exec_globals)
                             
@@ -708,6 +719,14 @@ def build_stream():
                                                 node_id = parts[0].replace("__VISUALIZE_", "")
                                                 pdb_data = parts[1].replace("\\n", "\n")
                                                 yield SSE.visualize(node_id, pdb_data)
+                                            except: pass
+                                        elif "__PLOT_" in curr_line:
+                                            try:
+                                                # Format: __PLOT_node_id__:[json_object]
+                                                parts = curr_line.strip().split("__:", 1)
+                                                node_id = parts[0].replace("__PLOT_", "")
+                                                plot_json = parts[1]
+                                                yield f"data: {json.dumps({'type': 'plot', 'nodeId': node_id, 'data': json.loads(plot_json)})}\n\n"
                                             except: pass
                                         elif "__CHARGES_" in curr_line:
                                             try:
