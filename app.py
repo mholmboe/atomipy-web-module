@@ -40,8 +40,9 @@ CORS(app) # Enable CORS for local development
 app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024  # 128 MB
 
 # Persistent directory for build results cache (moved from RAM to disk for Render stability)
-CACHE_DIR = os.path.join(tempfile.gettempdir(), "atomipy_results_cache")
+CACHE_DIR = os.path.abspath(os.path.join(tempfile.gettempdir(), "atomipy_results_cache"))
 os.makedirs(CACHE_DIR, exist_ok=True)
+print(f"INFO: Cache directory initialized at: {CACHE_DIR}")
 BUILD_RESULTS_CACHE: OrderedDict[str, dict[str, Any]] = OrderedDict()
 MAX_CACHE_SIZE = 5  # Store fewer results on disk to save space
 
@@ -244,15 +245,16 @@ def _get_cached_result(token: str) -> dict[str, Any] | None:
         if data:
             return dict(data)
     
-    # Fallback for multi-worker environments: check disk directly
-    # The standard path is os.path.join(CACHE_DIR, f"result_{token}.zip")
-    expected_path = os.path.join(CACHE_DIR, f"result_{token}.zip")
+    expected_path = os.path.abspath(os.path.join(CACHE_DIR, f"result_{token}.zip"))
+    print(f"DEBUG: Looking for cached result {token} at {expected_path}")
     if os.path.exists(expected_path):
+        print(f"DEBUG: Found file on disk for token {token}")
         return {
             "path": expected_path,
             "filename": "atomipy_system_bundle.zip",
             "timestamp": os.path.getmtime(expected_path)
         }
+    print(f"DEBUG: Cache miss (memory and disk) for token {token}")
     return None
 
 
@@ -761,7 +763,9 @@ def build_stream():
 
                 # 3. Package Results to Disk Cache
                 token = str(uuid4())
-                zip_path = os.path.join(CACHE_DIR, f"result_{token}.zip")
+                zip_path = os.path.abspath(os.path.join(CACHE_DIR, f"result_{token}.zip"))
+                
+                print(f"DEBUG: Packaging results for token {token} to {zip_path}")
                 
                 summary = {
                     "success": success,
@@ -772,7 +776,8 @@ def build_stream():
                     for fname, path in _iter_regular_work_dir_files(work_dir, {"UC_conf", "uploads"}):
                         zf.write(path, arcname=fname)
                     zf.writestr("build_summary.json", json.dumps(summary, indent=2))
-
+                
+                print(f"DEBUG: Zip file created, size: {os.path.getsize(zip_path)} bytes")
                 _remember_cached_result(token, zip_path, "atomipy_system_bundle.zip")
 
                 yield SSE.complete(token, success)
