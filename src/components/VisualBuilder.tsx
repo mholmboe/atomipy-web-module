@@ -58,6 +58,7 @@ import {
   Move3D,
   SlidersHorizontal,
   Atom,
+  BarChart,
   X,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -83,6 +84,7 @@ import { InsertNode } from "./nodes/InsertNode";
 import { ForcefieldNode } from "./nodes/ForcefieldNode";
 import { BondAngleNode } from "./nodes/BondAngleNode";
 import { XrdNode } from "./nodes/XrdNode";
+import { PlotNode } from "./nodes/PlotNode";
 import { ViewerNode } from "./nodes/ViewerNode";
 import { TrajectoryNode } from "./nodes/TrajectoryNode";
 // New composite nodes
@@ -140,6 +142,7 @@ const nodeTypes = {
   atomProps: AtomPropertiesNode,
   coordFrame: CoordinateFrameNode,
   xrd: XrdNode,
+  plot: PlotNode,
   viewer: ViewerNode,
   export: ExportNode,
   trajectory: TrajectoryNode,
@@ -1246,6 +1249,11 @@ export default function VisualBuilder() {
       baseData.prefK = 0;
       baseData.prefL = 1;
     }
+    if (type === "plot") {
+      baseData.title = "Data Plot";
+      baseData.xlabel = "X";
+      baseData.ylabel = "Y";
+    }
 
     const newNode: Node = {
       id: `${type}_${new Date().getTime()}`,
@@ -1659,6 +1667,22 @@ export default function VisualBuilder() {
                   return node;
                 })
               );
+            } else if (data.type === "plot") {
+              const { nodeId, data: plotData } = data;
+              setNodes((nds) =>
+                nds.map((node) => {
+                  if (node.id === nodeId) {
+                    return {
+                      ...node,
+                      data: {
+                        ...node.data,
+                        plotData,
+                      },
+                    };
+                  }
+                  return node;
+                })
+              );
             } else if (data.type === "charges") {
               const { nodeId, data: chargeData } = data;
               setNodes((nds) =>
@@ -1792,6 +1816,9 @@ export default function VisualBuilder() {
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("xrd")} title="Run XRD Simulation">
                   <BarChart3 className="w-4 h-4" /> XRD
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("plot")} title="Data Plot">
+                  <BarChart className="w-4 h-4 text-indigo-500" /> Plot
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("trajectory")} title="Trajectory">
                   <History className="w-4 h-4" /> Traj
@@ -2711,6 +2738,15 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
           const writeJson = outputMode === "json" || outputMode === "both";
           const writeCsv = outputMode === "csv" || outputMode === "both";
           pythonCode += `r_rdf, g_r = ap.calculate_rdf(${inAtoms}, ${inBox}, typeA='${typeA}', typeB='${typeB}', rmax=${rmax}, dr=${dr})\n`;
+          
+          const plotTargetIds = edges
+            .filter((e) => e.source === id && e.sourceHandle === "data")
+            .map((e) => e.target);
+          const allPlotIds = [id, ...plotTargetIds];
+          allPlotIds.forEach(pid => {
+            pythonCode += `ap_plot('${pid}', r_rdf, g_r, title="RDF: ${typeA}-${typeB}", xlabel="r (A)", ylabel="g(r)")\n`;
+          });
+
           if (writeJson) {
             pythonCode += `with open('${outputBase}.json', 'w') as _rdf_json:\n`;
             pythonCode += `    json.dump({"bins": r_rdf.tolist(), "rdf": g_r.tolist()}, _rdf_json)\n`;
@@ -3220,6 +3256,28 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
               pythonCode += `${pairListVar} = []\n`;
             }
 
+            const plotTargetIds = edges
+              .filter((e) => e.source === id && e.sourceHandle === "data")
+              .map((e) => e.target);
+            
+            if (plotTargetIds.length > 0) {
+              pythonCode += `import numpy as np\n`;
+              pythonCode += `if len(${bondIndexVar}) > 0:\n`;
+              pythonCode += `    _b_dists = [float(_b[2]) for _b in ${bondIndexVar}]\n`;
+              pythonCode += `    _b_hist, _b_bins = np.histogram(_b_dists, bins=min(50, len(_b_dists)))\n`;
+              pythonCode += `    _b_bin_centers = (_b_bins[:-1] + _b_bins[1:]) / 2\n`;
+              plotTargetIds.forEach(pid => {
+                pythonCode += `    ap_plot('${pid}', _b_bin_centers, _b_hist, title="Bond Length Distribution", xlabel="Distance (A)", ylabel="Count")\n`;
+              });
+              pythonCode += `elif len(${angleIndexVar}) > 0:\n`;
+              pythonCode += `    _a_vals = [float(_a[3]) for _a in ${angleIndexVar}]\n`;
+              pythonCode += `    _a_hist, _a_bins = np.histogram(_a_vals, bins=min(50, len(_a_vals)))\n`;
+              pythonCode += `    _a_bin_centers = (_a_bins[:-1] + _a_bins[1:]) / 2\n`;
+              plotTargetIds.forEach(pid => {
+                pythonCode += `    ap_plot('${pid}', _a_bin_centers, _a_hist, title="Angle Distribution", xlabel="Angle (deg)", ylabel="Count")\n`;
+              });
+            }
+
             pythonCode += `with open('${logFile}', 'w') as _term_log:\n`;
             pythonCode += `    _term_log.write('Bonded Terms Report\\n')\n`;
             pythonCode += `    _term_log.write('Atom indices below correspond to atom[\\'index\\'] values when available.\\n\\n')\n`;
@@ -3344,10 +3402,28 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         const prefL = getNumber(data, "prefL", 1);
 
         if (inAtoms !== "None" && inBox !== "None") {
-          pythonCode += `ap.xrd(${inAtoms}, ${inBox}, wavelength=${wavelength}, two_theta_range=(${twoThetaMin}, ${twoThetaMax}), angle_step=${angleStep}, fwhm_00l=${f00l}, fwhm_hk0=${fhk0}, fwhm_hkl=${fhkl}, b_all=${bAll}, lorentzian_factor=${lorentzian}, neutral_atoms=${neutral}, pref=${pref}, preferred_orientation=(${prefH}, ${prefK}, ${prefL}), save_output=True, plot=True)\n`;
+          const xrdResVar = `xrd_res_${index}`;
+          pythonCode += `${xrdResVar} = ap.xrd(${inAtoms}, ${inBox}, wavelength=${wavelength}, two_theta_range=(${twoThetaMin}, ${twoThetaMax}), angle_step=${angleStep}, fwhm_00l=${f00l}, fwhm_hk0=${fhk0}, fwhm_hkl=${fhkl}, b_all=${bAll}, lorentzian_factor=${lorentzian}, neutral_atoms=${neutral}, pref=${pref}, preferred_orientation=(${prefH}, ${prefK}, ${prefL}), save_output=True, plot=True)\n`;
+          pythonCode += `if isinstance(${xrdResVar}, tuple) and len(${xrdResVar}) >= 2:\n`;
+          
+          const plotTargetIds = edges
+            .filter((e) => e.source === id && e.sourceHandle === "data")
+            .map((e) => e.target);
+          const allPlotIds = [id, ...plotTargetIds];
+          allPlotIds.forEach(pid => {
+            pythonCode += `    ap_plot('${pid}', ${xrdResVar}[0], ${xrdResVar}[1], title="XRD Pattern", xlabel="2-theta (deg)", ylabel="Intensity")\n`;
+          });
         } else {
           pythonCode += `# XRD skipped: missing input atoms/box\n`;
         }
+        pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+        pythonCode += `${blockOutBox} = ${inBox}\n`;
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "plot": {
+        // Plot node is primarily a sink for visual data from other nodes
+        // but we pass through atoms/box for chainability
         pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
         pythonCode += `${blockOutBox} = ${inBox}\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
