@@ -241,7 +241,19 @@ def _iter_regular_work_dir_files(work_dir: str, excluded_names: set[str] | None 
 def _get_cached_result(token: str) -> dict[str, Any] | None:
     with CACHE_LOCK:
         data = BUILD_RESULTS_CACHE.get(token)
-        return dict(data) if data else None
+        if data:
+            return dict(data)
+    
+    # Fallback for multi-worker environments: check disk directly
+    # The standard path is os.path.join(CACHE_DIR, f"result_{token}.zip")
+    expected_path = os.path.join(CACHE_DIR, f"result_{token}.zip")
+    if os.path.exists(expected_path):
+        return {
+            "path": expected_path,
+            "filename": "atomipy_system_bundle.zip",
+            "timestamp": os.path.getmtime(expected_path)
+        }
+    return None
 
 
 def _remember_cached_result(token: str, path: str, filename: str) -> None:
