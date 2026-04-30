@@ -26,6 +26,8 @@ sys.path.insert(0, BASE_DIR)
 BUILD_LOCK = threading.Lock()
 CACHE_LOCK = threading.Lock()
 
+# Atomipy Web Module Backend
+# Build Trigger Refresh: 2026-04-30
 # Lazy loader for atomipy to reduce initial memory footprint
 _ap = None
 def get_ap():
