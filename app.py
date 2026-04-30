@@ -40,11 +40,12 @@ CORS(app) # Enable CORS for local development
 app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024  # 128 MB
 
 # Persistent directory for build results cache (moved from RAM to disk for Render stability)
-CACHE_DIR = os.path.abspath(os.path.join(tempfile.gettempdir(), "atomipy_results_cache"))
+# Persistent directory for build results cache
+CACHE_DIR = "/tmp/atomipy_results_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
-print(f"INFO: Cache directory initialized at: {CACHE_DIR}")
+print(f"INFO: Cache directory hardcoded at: {CACHE_DIR}")
 BUILD_RESULTS_CACHE: OrderedDict[str, dict[str, Any]] = OrderedDict()
-MAX_CACHE_SIZE = 5  # Store fewer results on disk to save space
+MAX_CACHE_SIZE = 50  # Store more results to prevent race conditions
 
 # Serve the frontend
 @app.route("/")
@@ -617,6 +618,29 @@ def download_result(token):
         as_attachment=True,
         download_name=res_data["filename"]
     )
+
+@app.route("/api/debug-cache")
+def debug_cache():
+    """Diagnostic route to check the state of the results cache."""
+    try:
+        files = []
+        if os.path.exists(CACHE_DIR):
+            for f in os.listdir(CACHE_DIR):
+                path = os.path.join(CACHE_DIR, f)
+                files.append({
+                    "name": f,
+                    "size": os.path.getsize(path),
+                    "mtime": time.ctime(os.path.getmtime(path))
+                })
+        
+        return jsonify({
+            "cache_dir": CACHE_DIR,
+            "memory_cache_tokens": list(BUILD_RESULTS_CACHE.keys()),
+            "disk_files": files,
+            "total_files": len(files)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 @app.route("/api/build-stream", methods=["POST"])
 def build_stream():
