@@ -1107,7 +1107,7 @@ export default function VisualBuilder() {
 
     if (type === "export") {
       baseData.outputName = "system";
-      baseData.structureFormat = "xyz";
+      baseData.structureFormat = "pdb";
       baseData.topologyFormat = "none";
       baseData.angleTerms = "500";
       baseData.writeConect = false;
@@ -3465,7 +3465,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         break;
       }
       case "export": {
-        const structureFormat = getString(data, "structureFormat", "xyz");
+        const structureFormat = getString(data, "structureFormat", "pdb");
         const topologyFormat = getString(data, "topologyFormat", "none");
         const angleTermsRaw = getString(data, "angleTerms", "500");
         const outName = pyEscape(getString(data, "outputName", "system"));
