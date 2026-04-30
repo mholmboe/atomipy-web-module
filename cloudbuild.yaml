@@ -1,0 +1,29 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/atomipy-web-module:$COMMIT_SHA', '.']
+  
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/atomipy-web-module:$COMMIT_SHA']
+    
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'atomipy-web' # Change this if your Cloud Run service is named differently
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/atomipy-web-module:$COMMIT_SHA'
+      - '--region'
+      - 'europe-west1' # Defaulting to europe-west1, adjust if needed
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+
+images:
+  - 'gcr.io/$PROJECT_ID/atomipy-web-module:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
