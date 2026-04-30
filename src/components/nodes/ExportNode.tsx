@@ -27,7 +27,7 @@ type ExportNodeData = {
 export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
   const { updateNodeData } = useReactFlow();
   const [showMore, setShowMore] = useState(false);
-  const structureFormat = data.structureFormat || "xyz";
+  const structureFormat = data.structureFormat || "pdb";
   const topologyFormat = data.topologyFormat || "none";
 
   return (
