@@ -60,7 +60,6 @@ import {
   Atom,
   BarChart,
   X,
-  Download,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
