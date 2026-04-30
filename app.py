@@ -734,6 +734,9 @@ def build_stream():
                 curr_line = ""
                 success = False
                 
+                # Collect plot/visualize data to yield AFTER zip is created
+                deferred_events = []
+                
                 with open(log_path, "w", encoding="utf-8") as log_f:
                     while True:
                         try:
@@ -754,7 +757,6 @@ def build_stream():
                                             except: pass
                                         elif "__VISUALIZE_" in curr_line:
                                             try:
-                                                # Format: __VISUALIZE_node_id__:<pdb_data_with_escaped_newlines>
                                                 parts = curr_line.strip().split("__:", 1)
                                                 node_id = parts[0].replace("__VISUALIZE_", "")
                                                 pdb_data = parts[1].replace("\\n", "\n")
@@ -762,19 +764,23 @@ def build_stream():
                                             except: pass
                                         elif "__PLOT_" in curr_line:
                                             try:
-                                                # Format: __PLOT_node_id__:[json_object]
+                                                # Defer plot data — send AFTER zip is ready
                                                 parts = curr_line.strip().split("__:", 1)
                                                 node_id = parts[0].replace("__PLOT_", "")
                                                 plot_json = parts[1]
-                                                yield f"data: {json.dumps({'type': 'plot', 'nodeId': node_id, 'data': json.loads(plot_json)})}\n\n"
+                                                deferred_events.append(
+                                                    f"data: {json.dumps({'type': 'plot', 'nodeId': node_id, 'data': json.loads(plot_json)})}\n\n"
+                                                )
+                                                yield SSE.log("Plot data ready.")
                                             except: pass
                                         elif "__CHARGES_" in curr_line:
                                             try:
-                                                # Format: __CHARGES_node_id__:[json_array]
                                                 parts = curr_line.strip().split("__:", 1)
                                                 node_id = parts[0].replace("__CHARGES_", "")
                                                 charges_json = parts[1]
-                                                yield f"data: {json.dumps({'type': 'charges', 'nodeId': node_id, 'data': json.loads(charges_json)})}\n\n"
+                                                deferred_events.append(
+                                                    f"data: {json.dumps({'type': 'charges', 'nodeId': node_id, 'data': json.loads(charges_json)})}\n\n"
+                                                )
                                             except: pass
                                         else:
                                             yield SSE.log(curr_line)
@@ -787,7 +793,7 @@ def build_stream():
                             yield SSE.log(" ") 
                             continue
 
-                # 3. Package Results to Disk Cache
+                # 3. Package Results to Disk Cache FIRST (before sending large data)
                 token = str(uuid4())
                 zip_path = os.path.abspath(os.path.join(CACHE_DIR, f"result_{token}.zip"))
                 
@@ -806,6 +812,11 @@ def build_stream():
                 print(f"DEBUG: Zip file created, size: {os.path.getsize(zip_path)} bytes")
                 _remember_cached_result(token, zip_path, "atomipy_system_bundle.zip")
 
+                # 4. Now send deferred plot/charges data (large payloads)
+                for evt in deferred_events:
+                    yield evt
+
+                # 5. Send completion with the token (zip already exists on disk)
                 yield SSE.complete(token, success)
                 gc.collect() # Final cleanup
 
