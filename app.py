@@ -733,6 +733,7 @@ def build_stream():
                 log_path = os.path.join(work_dir, "execution_stdout.txt")
                 curr_line = ""
                 success = False
+                has_plot_data = False
                 
                 # Collect plot/visualize data to yield AFTER zip is created
                 deferred_events = []
@@ -744,9 +745,6 @@ def build_stream():
                             if content.startswith("__FINISH__"):
                                 success = content.endswith(":0")
                                 break
-                            
-                            # Track if we have plot data to avoid duplicate logs
-                            has_plot_data = False
                             
                             # Log and process characters
                             for char in content:
