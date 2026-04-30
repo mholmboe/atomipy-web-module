@@ -60,6 +60,7 @@ import {
   Atom,
   BarChart,
   X,
+  Download,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -937,6 +938,7 @@ export default function VisualBuilder() {
   const [buildProgress, setBuildProgress] = useState(0);
   const [buildStatus, setBuildStatus] = useState("");
   const [buildLogs, setBuildLogs] = useState<string[]>([]);
+  const [downloadToken, setDownloadToken] = useState<string | null>(null);
   const [trackedNodeOrder, setTrackedNodeOrder] = useState<string[]>([]);
   const [nodeRunStatus, setNodeRunStatus] = useState<Record<string, RunNodeStatus>>({});
   const currentRunningNodeRef = useRef<string | null>(null);
@@ -1541,6 +1543,7 @@ export default function VisualBuilder() {
     setBuildProgress(0);
     setBuildStatus("Build queued...");
     setBuildLogs([]);
+    setDownloadToken(null);
     setIsBuilding(true);
     setShowStatusWindow(true);
     currentRunningNodeRef.current = null;
@@ -1606,16 +1609,11 @@ export default function VisualBuilder() {
                 return next;
               });
               currentRunningNodeRef.current = null;
+              setDownloadToken(data.token);
               if (data.success) {
-                if (isOutputProducing) {
-                  toast.success("Run successful! Downloading results...", { id: runToastId });
-                  window.location.href = `/api/download-result/${data.token}`;
-                } else {
-                  toast.success("Run successful!", { id: runToastId });
-                }
+                toast.success("Run successful! Download is ready.", { id: runToastId });
               } else {
-                toast.error("Run failed. Results bundle contains details.", { id: runToastId });
-                window.location.href = `/api/download-result/${data.token}`;
+                toast.error("Run failed. Download contains error details.", { id: runToastId });
               }
               return;
             } else if (data.type === "status") {
@@ -1997,6 +1995,18 @@ export default function VisualBuilder() {
                       </p>
                     ))}
                   </div>
+                </div>
+              )}
+              {downloadToken && (
+                <div className="mt-3 pt-3 border-t border-border">
+                  <a
+                    href={`/api/download-result/${downloadToken}`}
+                    download
+                    className="flex items-center justify-center gap-2 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md hover:bg-primary/90 transition-all hover:shadow-lg active:scale-[0.98]"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download Results
+                  </a>
                 </div>
               )}
             </div>
