@@ -3435,8 +3435,27 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         break;
       }
       case "plot": {
-        // Plot node is primarily a sink for visual data from other nodes
-        // but we pass through atoms/box for chainability
+        const plotFileName = pyEscape(getString(data, "fileName", "xrd.dat"));
+        const plotNodeId = pyEscape(id);
+        const plotPayloadVar = `plot_payload_${index}`;
+        
+        pythonCode += `import os\n`;
+        pythonCode += `${plotPayloadVar} = {"sourceFile": "${plotFileName}", "points": []}\n`;
+        pythonCode += `if os.path.exists("${plotFileName}"):\n`;
+        pythonCode += `    with open("${plotFileName}", "r", encoding="utf-8") as _plot_f:\n`;
+        pythonCode += `        for _line in _plot_f:\n`;
+        pythonCode += `            _line = _line.strip()\n`;
+        pythonCode += `            if _line and not _line.startswith(('#', 'index', 'x', 'y')):\n`;
+        pythonCode += `                _parts = _line.split(',') if ',' in _line else _line.split()\n`;
+        pythonCode += `                try:\n`;
+        pythonCode += `                    if len(_parts) >= 2:\n`;
+        pythonCode += `                        ${plotPayloadVar}["points"].append([float(_parts[0]), float(_parts[1])])\n`;
+        pythonCode += `                except ValueError:\n`;
+        pythonCode += `                    pass\n`;
+        pythonCode += `    _stride = max(1, len(${plotPayloadVar}["points"]) // 1000)\n`;
+        pythonCode += `    ${plotPayloadVar}["points"] = ${plotPayloadVar}["points"][::_stride]\n`;
+        pythonCode += `print("__PLOT_${plotNodeId}__:" + json.dumps(${plotPayloadVar}))\n`;
+        
         pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
         pythonCode += `${blockOutBox} = ${inBox}\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
