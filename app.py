@@ -745,53 +745,65 @@ def build_stream():
                                 success = content.endswith(":0")
                                 break
                             
+                            # Track if we have plot data to avoid duplicate logs
+                            has_plot_data = False
+                            
                             # Log and process characters
                             for char in content:
-                                log_f.write(char)
+                                curr_line += char
                                 if char in ('\n', '\r'):
-                                    if curr_line.strip():
-                                        if "__NODE_START__:" in curr_line:
+                                    stripped = curr_line.strip()
+                                    if stripped:
+                                        if "__NODE_START__:" in stripped:
                                             try:
-                                                parts = curr_line.strip().split(":")
+                                                parts = stripped.split(":")
                                                 yield SSE.progress(parts[1], parts[2])
+                                                log_f.write(curr_line)
                                             except: pass
-                                        elif "__VISUALIZE_" in curr_line:
+                                        elif "__VISUALIZE_" in stripped:
                                             try:
-                                                parts = curr_line.strip().split("__:", 1)
+                                                parts = stripped.split("__:", 1)
                                                 node_id = parts[0].replace("__VISUALIZE_", "")
                                                 pdb_data = parts[1].replace("\\n", "\n")
                                                 yield SSE.visualize(node_id, pdb_data)
+                                                # Do not write large payload to log_f
                                             except: pass
-                                        elif "__PLOT_" in curr_line:
+                                        elif "__PLOT_" in stripped:
                                             try:
                                                 # Defer plot data — send AFTER zip is ready
-                                                parts = curr_line.strip().split("__:", 1)
+                                                parts = stripped.split("__:", 1)
                                                 node_id = parts[0].replace("__PLOT_", "")
                                                 plot_json = parts[1]
                                                 deferred_events.append(
                                                     f"data: {json.dumps({'type': 'plot', 'nodeId': node_id, 'data': json.loads(plot_json)})}\n\n"
                                                 )
-                                                yield SSE.log("Plot data ready.")
+                                                has_plot_data = True
+                                                # Do not write large payload to log_f
                                             except: pass
-                                        elif "__CHARGES_" in curr_line:
+                                        elif "__CHARGES_" in stripped:
                                             try:
-                                                parts = curr_line.strip().split("__:", 1)
+                                                parts = stripped.split("__:", 1)
                                                 node_id = parts[0].replace("__CHARGES_", "")
                                                 charges_json = parts[1]
                                                 deferred_events.append(
                                                     f"data: {json.dumps({'type': 'charges', 'nodeId': node_id, 'data': json.loads(charges_json)})}\n\n"
                                                 )
+                                                # Do not write large payload to log_f
                                             except: pass
                                         else:
-                                            yield SSE.log(curr_line)
+                                            log_f.write(curr_line)
+                                            yield SSE.log(stripped)
+                                    else:
+                                        log_f.write(curr_line)
                                     curr_line = ""
-                                else:
-                                    curr_line += char
                                     
                         except queue.Empty:
                             # 15s pulse to keep Render connection alive
                             yield SSE.log(" ") 
                             continue
+
+                if has_plot_data:
+                    yield SSE.log("Plot data ready.")
 
                 # 3. Package Results to Disk Cache FIRST (before sending large data)
                 token = str(uuid4())
