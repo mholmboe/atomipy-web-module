@@ -1965,6 +1965,20 @@ export default function VisualBuilder() {
             </div>
             <Progress value={buildProgress} className="h-1 mb-2" />
             <p className="text-xs text-muted-foreground mb-2">{buildStatus || "Waiting for backend updates..."}</p>
+            
+            {downloadToken && (
+              <div className="mb-3">
+                <a
+                  href={`/api/download-result/${downloadToken}`}
+                  download
+                  className="flex items-center justify-center gap-2 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md hover:bg-primary/90 transition-all hover:shadow-lg active:scale-[0.98]"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Results
+                </a>
+              </div>
+            )}
+
             <div className="max-h-[480px] overflow-y-auto space-y-1 pr-1 scrollbar-thin" ref={scrollRef}>
               {trackedNodeOrder.length === 0 && (
                 <p className="text-xs text-muted-foreground">No tracked compute nodes in current workflow.</p>
@@ -1996,18 +2010,7 @@ export default function VisualBuilder() {
                   </div>
                 </div>
               )}
-              {downloadToken && (
-                <div className="mt-3 pt-3 border-t border-border">
-                  <a
-                    href={`/api/download-result/${downloadToken}`}
-                    download
-                    className="flex items-center justify-center gap-2 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md hover:bg-primary/90 transition-all hover:shadow-lg active:scale-[0.98]"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download Results
-                  </a>
-                </div>
-              )}
+
             </div>
           </div>
         )}
