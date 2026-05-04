@@ -42,10 +42,8 @@ CORS(app) # Enable CORS for local development
 app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024  # 128 MB
 
 # Persistent directory for build results cache (moved from RAM to disk for Render stability)
-# Persistent directory for build results cache
-CACHE_DIR = "/tmp/atomipy_results_cache"
+CACHE_DIR = os.environ.get("ATOMIPY_CACHE_DIR", "/tmp/atomipy_results_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
-print(f"INFO: Cache directory hardcoded at: {CACHE_DIR}")
 BUILD_RESULTS_CACHE: OrderedDict[str, dict[str, Any]] = OrderedDict()
 MAX_CACHE_SIZE = 50  # Store more results to prevent race conditions
 
@@ -86,6 +84,11 @@ def _safe_filename(value, fallback):
     if not text:
         text = fallback
     return secure_filename(text) or fallback
+
+
+def _get_or_create_session_id() -> str:
+    sid = request.cookies.get("atomipy_session")
+    return sid if sid else str(uuid4())
 
 
 def _parse_payload() -> dict[str, Any]:
@@ -204,14 +207,19 @@ def _safe_symlink(src: str, dst: str) -> None:
     os.symlink(src, dst)
 
 
-def _prepare_execution_workspace(work_dir: str) -> None:
+def _prepare_execution_workspace(work_dir: str, session_id: str | None = None) -> None:
     uc_conf_src = _existing_uc_conf_dir()
     if uc_conf_src:
         _safe_symlink(uc_conf_src, os.path.join(work_dir, "UC_conf"))
 
-    uploads_src = os.path.join(BASE_DIR, "uploads")
-    if os.path.exists(uploads_src):
-        _safe_symlink(uploads_src, os.path.join(work_dir, "uploads"))
+    if session_id:
+        session_uploads = os.path.join(BASE_DIR, "uploads", session_id)
+        if os.path.exists(session_uploads):
+            _safe_symlink(session_uploads, os.path.join(work_dir, "uploads"))
+    else:
+        uploads_src = os.path.join(BASE_DIR, "uploads")
+        if os.path.exists(uploads_src):
+            _safe_symlink(uploads_src, os.path.join(work_dir, "uploads"))
 
 
 def _write_execution_inputs(
@@ -261,24 +269,21 @@ def _get_cached_result(token: str) -> dict[str, Any] | None:
     return None
 
 
-def _remember_cached_result(token: str, path: str, filename: str) -> None:
-    evicted: list[dict[str, Any]] = []
+def _remember_cached_result(token: str, path: str, filename: str, session_id: str | None = None) -> None:
     with CACHE_LOCK:
         BUILD_RESULTS_CACHE[token] = {
             "path": path,
             "filename": filename,
             "timestamp": time.time(),
+            "session_id": session_id,
         }
 
         while len(BUILD_RESULTS_CACHE) > MAX_CACHE_SIZE:
             _, old_data = BUILD_RESULTS_CACHE.popitem(last=False)
-            evicted.append(old_data)
-
-    for old_data in evicted:
-        old_path = old_data.get("path")
-        if isinstance(old_path, str) and os.path.exists(old_path):
-            with contextlib.suppress(Exception):
-                os.remove(old_path)
+            old_path = old_data.get("path")
+            if isinstance(old_path, str):
+                with contextlib.suppress(Exception):
+                    os.remove(old_path)
 
 
 @app.route("/health", methods=["GET"])
@@ -292,7 +297,7 @@ def upload_file():
     file = request.files["file"]
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
-    
+
     original_name = secure_filename(file.filename)
     if "." not in original_name:
         return jsonify({"error": "Uploaded file must include an extension."}), 400
@@ -302,20 +307,21 @@ def upload_file():
     if ext not in ALLOWED_EXTENSIONS:
         return jsonify({"error": f"Unsupported extension '.{ext}'"}), 400
 
+    session_id = _get_or_create_session_id()
     filename = f"{stem}_{uuid4().hex[:12]}.{ext}"
-    upload_dir = os.path.join(BASE_DIR, "uploads")
-    if not os.path.exists(upload_dir):
-        os.makedirs(upload_dir)
-    
-    file_path = os.path.join(upload_dir, filename)
-    file.save(file_path)
-    
-    return jsonify({
+    upload_dir = os.path.join(BASE_DIR, "uploads", session_id)
+    os.makedirs(upload_dir, exist_ok=True)
+
+    file.save(os.path.join(upload_dir, filename))
+
+    resp = jsonify({
         "status": "success",
         "filename": filename,
         "originalName": original_name,
-        "path": file_path
+        "path": f"uploads/{filename}",
     })
+    resp.set_cookie("atomipy_session", session_id, httponly=True, samesite="Strict")
+    return resp
 
 
 
@@ -610,16 +616,22 @@ def build_system():
 
 @app.route("/api/download-result/<token>")
 def download_result(token):
+    requester_session = request.cookies.get("atomipy_session")
     res_data = _get_cached_result(token)
-    if not res_data or not os.path.exists(res_data["path"]):
+    if not res_data:
         return jsonify({"error": "Result not found or expired. Please build again."}), 404
-    
-    return send_file(
-        res_data["path"],
-        mimetype="application/zip",
-        as_attachment=True,
-        download_name=res_data["filename"]
-    )
+    stored_session = res_data.get("session_id")
+    if stored_session is not None and stored_session != requester_session:
+        return jsonify({"error": "Result not found or expired. Please build again."}), 404
+    try:
+        return send_file(
+            res_data["path"],
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=res_data["filename"],
+        )
+    except (FileNotFoundError, OSError):
+        return jsonify({"error": "Result not found or expired. Please build again."}), 404
 
 @app.route("/api/debug-cache")
 def debug_cache():
@@ -651,9 +663,11 @@ def build_stream():
         script_code = payload.get("script", "")
         workflow_data = payload.get("workflow")
         script_artifacts = _extract_script_artifacts(payload)
-        
+
         if not script_code:
             return jsonify({"error": "No script provided."}), 400
+
+        session_id = _get_or_create_session_id()
 
         # Helper to format SSE data
         class SSE:
@@ -670,35 +684,33 @@ def build_stream():
             @staticmethod
             def _fmt(t, d): return f"data: {json.dumps({'type': t, **d})}\n\n"
 
+        BUILD_TIMEOUT = int(os.environ.get("BUILD_TIMEOUT_SECONDS", "600"))
+
         def generate():
             with tempfile.TemporaryDirectory(prefix="atomipy_stream_") as work_dir:
-                # 1. Setup Environment (Same as execute_script)
-                _prepare_execution_workspace(work_dir)
+                # 1. Setup Environment
+                _prepare_execution_workspace(work_dir, session_id)
                 _write_execution_inputs(work_dir, script_code, script_artifacts, workflow_data)
 
                 yield SSE.status('Build initializing (Locked Mode)...')
 
                 # 2. Execute In-Process via Thread (Saves ~150MB RAM over Subprocess)
                 log_queue = queue.Queue()
-                
+
                 def run_build_in_process():
-                    # Acquire lock to ensure we don't double-dip on RAM for large systems
                     with BUILD_LOCK:
                         old_cwd = os.getcwd()
-                        # Use a custom writer to bridge stdout to our SSE stream
                         class QueueWriter:
                             def __init__(self, q): self.q = q
                             def write(self, s):
                                 if s: self.q.put(s)
                             def flush(self): pass
-                        
+
                         writer = QueueWriter(log_queue)
                         try:
                             os.chdir(work_dir)
-                            gc.collect() # Clear memory before starting
+                            gc.collect()
                             with contextlib.redirect_stdout(writer), contextlib.redirect_stderr(writer):
-                                # Execute the modeling script in the current environment
-                                # Passing ap and other modules explicitly
                                 def ap_plot(node_id, x, y, title="", xlabel="", ylabel=""):
                                     data = {
                                         "x": x.tolist() if hasattr(x, 'tolist') else list(x),
@@ -718,14 +730,14 @@ def build_stream():
                                     "ap_plot": ap_plot,
                                 }
                                 exec(script_code, exec_globals)
-                            
+
                             log_queue.put("__FINISH__:0")
                         except Exception as e:
                             writer.write(f"\nFATAL BUILD ERROR: {str(e)}\n{traceback.format_exc()}\n")
                             log_queue.put("__FINISH__:1")
                         finally:
                             os.chdir(old_cwd)
-                            gc.collect() # Clear memory after finish
+                            gc.collect()
 
                 thread = threading.Thread(target=run_build_in_process, daemon=True)
                 thread.start()
@@ -734,19 +746,24 @@ def build_stream():
                 curr_line = ""
                 success = False
                 has_plot_data = False
-                
-                # Collect plot/visualize data to yield AFTER zip is created
+
+                # Collect plot/charges/xrd data to yield AFTER zip is created
                 deferred_events = []
-                
+
+                deadline = time.time() + BUILD_TIMEOUT
                 with open(log_path, "w", encoding="utf-8") as log_f:
                     while True:
+                        remaining = deadline - time.time()
+                        if remaining <= 0:
+                            yield SSE.log(f"Build timed out after {BUILD_TIMEOUT}s.")
+                            success = False
+                            break
                         try:
-                            content = log_queue.get(timeout=15)
+                            content = log_queue.get(timeout=min(15, remaining))
                             if content.startswith("__FINISH__"):
                                 success = content.endswith(":0")
                                 break
-                            
-                            # Log and process characters
+
                             for char in content:
                                 curr_line += char
                                 if char in ('\n', '\r'):
@@ -764,29 +781,30 @@ def build_stream():
                                                 node_id = parts[0].replace("__VISUALIZE_", "")
                                                 pdb_data = parts[1].replace("\\n", "\n")
                                                 yield SSE.visualize(node_id, pdb_data)
-                                                # Do not write large payload to log_f
+                                            except: pass
+                                        elif "__XRD_DATA_" in stripped:
+                                            try:
+                                                parts = stripped.split("__:", 1)
+                                                node_id = parts[0].replace("__XRD_DATA_", "")
+                                                xrd_data = json.loads(parts[1])
+                                                yield f"data: {json.dumps({'type': 'xrd', 'nodeId': node_id, **xrd_data})}\n\n"
                                             except: pass
                                         elif "__PLOT_" in stripped:
                                             try:
-                                                # Defer plot data — send AFTER zip is ready
                                                 parts = stripped.split("__:", 1)
                                                 node_id = parts[0].replace("__PLOT_", "")
-                                                plot_json = parts[1]
                                                 deferred_events.append(
-                                                    f"data: {json.dumps({'type': 'plot', 'nodeId': node_id, 'data': json.loads(plot_json)})}\n\n"
+                                                    f"data: {json.dumps({'type': 'plot', 'nodeId': node_id, 'data': json.loads(parts[1])})}\n\n"
                                                 )
                                                 has_plot_data = True
-                                                # Do not write large payload to log_f
                                             except: pass
                                         elif "__CHARGES_" in stripped:
                                             try:
                                                 parts = stripped.split("__:", 1)
                                                 node_id = parts[0].replace("__CHARGES_", "")
-                                                charges_json = parts[1]
                                                 deferred_events.append(
-                                                    f"data: {json.dumps({'type': 'charges', 'nodeId': node_id, 'data': json.loads(charges_json)})}\n\n"
+                                                    f"data: {json.dumps({'type': 'charges', 'nodeId': node_id, 'data': json.loads(parts[1])})}\n\n"
                                                 )
-                                                # Do not write large payload to log_f
                                             except: pass
                                         else:
                                             log_f.write(curr_line)
@@ -794,10 +812,10 @@ def build_stream():
                                     else:
                                         log_f.write(curr_line)
                                     curr_line = ""
-                                    
+
                         except queue.Empty:
                             # 15s pulse to keep Render connection alive
-                            yield SSE.log(" ") 
+                            yield SSE.log(" ")
                             continue
 
                 if has_plot_data:
@@ -806,21 +824,18 @@ def build_stream():
                 # 3. Package Results to Disk Cache FIRST (before sending large data)
                 token = str(uuid4())
                 zip_path = os.path.abspath(os.path.join(CACHE_DIR, f"result_{token}.zip"))
-                
-                print(f"DEBUG: Packaging results for token {token} to {zip_path}")
-                
+
                 summary = {
                     "success": success,
                     "message": "Build succeeded." if success else "Build failed.",
                 }
-                
+
                 with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
                     for fname, path in _iter_regular_work_dir_files(work_dir, {"UC_conf", "uploads"}):
                         zf.write(path, arcname=fname)
                     zf.writestr("build_summary.json", json.dumps(summary, indent=2))
-                
-                print(f"DEBUG: Zip file created, size: {os.path.getsize(zip_path)} bytes")
-                _remember_cached_result(token, zip_path, "atomipy_system_bundle.zip")
+
+                _remember_cached_result(token, zip_path, "atomipy_system_bundle.zip", session_id=session_id)
 
                 # 4. Now send deferred plot/charges data (large payloads)
                 for evt in deferred_events:
@@ -828,17 +843,19 @@ def build_stream():
 
                 # 5. Send completion with the token (zip already exists on disk)
                 yield SSE.complete(token, success)
-                gc.collect() # Final cleanup
+                gc.collect()
 
-        return Response(
+        resp = Response(
             generate(),
             mimetype="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
                 "X-Accel-Buffering": "no",
                 "Connection": "keep-alive",
-            }
+            },
         )
+        resp.set_cookie("atomipy_session", session_id, httponly=True, samesite="Strict")
+        return resp
 
     except Exception as exc:
         return jsonify({"error": str(exc), "traceback": traceback.format_exc()}), 500
@@ -854,8 +871,9 @@ def execute_script():
         if not script_code:
             return jsonify({"error": "No script provided."}), 400
 
+        session_id = request.cookies.get("atomipy_session")
         with tempfile.TemporaryDirectory(prefix="atomipy_") as work_dir:
-            _prepare_execution_workspace(work_dir)
+            _prepare_execution_workspace(work_dir, session_id)
             _write_execution_inputs(work_dir, script_code, script_artifacts, workflow_data)
 
             import subprocess
