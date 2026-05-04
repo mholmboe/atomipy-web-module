@@ -62,7 +62,7 @@ python app.py
 ```bash
 npm run dev
 ```
-Open your browser at `http://localhost:5173`.
+Open your browser at `http://localhost:8080`.
 
 ---
 

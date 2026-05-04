@@ -26,7 +26,7 @@ describe("structure upload helpers", () => {
         JSON.stringify({
           filename: "stored_123.pdb",
           originalName: "custom.pdb",
-          path: "/uploads/stored_123.pdb",
+          path: "uploads/stored_123.pdb",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
@@ -45,7 +45,7 @@ describe("structure upload helpers", () => {
     expect(result).toEqual({
       filename: "stored_123.pdb",
       originalName: "custom.pdb",
-      path: "/uploads/stored_123.pdb",
+      path: "uploads/stored_123.pdb",
     });
   });
 

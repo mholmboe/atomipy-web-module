@@ -4,6 +4,13 @@ import { BarChart3, X } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
+type XrdPlotPoint = [number, number] | { twoTheta?: number; intensity?: number };
+
+type XrdPlotData = {
+  sourceFile?: string;
+  points?: XrdPlotPoint[];
+};
+
 export type XrdNodeData = {
   wavelength?: number;
   angleStep?: number;
@@ -19,7 +26,81 @@ export type XrdNodeData = {
   prefH?: number;
   prefK?: number;
   prefL?: number;
+  xrdPlot?: XrdPlotData;
 };
+
+const normalizePlotPoints = (points: XrdPlotPoint[] | undefined) =>
+  (points ?? [])
+    .map((point) => {
+      const twoTheta = Array.isArray(point) ? point[0] : point.twoTheta;
+      const intensity = Array.isArray(point) ? point[1] : point.intensity;
+      return {
+        twoTheta: typeof twoTheta === "number" ? twoTheta : Number.NaN,
+        intensity: typeof intensity === "number" ? intensity : Number.NaN,
+      };
+    })
+    .filter((point) => Number.isFinite(point.twoTheta) && Number.isFinite(point.intensity));
+
+function XrdInlinePlot({ plot }: { plot?: XrdPlotData }) {
+  const points = normalizePlotPoints(plot?.points);
+  if (points.length < 2) return null;
+
+  const width = 236;
+  const height = 132;
+  const left = 34;
+  const right = 8;
+  const top = 10;
+  const bottom = 24;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  const minX = Math.min(...points.map((point) => point.twoTheta));
+  const maxX = Math.max(...points.map((point) => point.twoTheta));
+  const maxY = Math.max(1, ...points.map((point) => point.intensity));
+  const xRange = Math.max(1e-9, maxX - minX);
+  const yRange = Math.max(1e-9, maxY);
+
+  const polyline = points
+    .map((point) => {
+      const x = left + ((point.twoTheta - minX) / xRange) * plotWidth;
+      const y = top + plotHeight - (Math.max(0, point.intensity) / yRange) * plotHeight;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  return (
+    <div className="pt-3 border-t border-border/50">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-bold text-blue-500 uppercase">XRD Profile</span>
+        {plot?.sourceFile && <span className="text-[9px] text-muted-foreground truncate max-w-[118px]">{plot.sourceFile}</span>}
+      </div>
+      <svg
+        className="nodrag w-full h-[132px] rounded-md border border-border bg-muted/20"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="XRD intensity profile"
+      >
+        <line x1={left} y1={top} x2={left} y2={top + plotHeight} stroke="currentColor" className="text-border" />
+        <line x1={left} y1={top + plotHeight} x2={left + plotWidth} y2={top + plotHeight} stroke="currentColor" className="text-border" />
+        <polyline points={polyline} fill="none" stroke="rgb(59 130 246)" strokeWidth="1.8" vectorEffect="non-scaling-stroke" />
+        <text x={left} y={height - 7} className="fill-muted-foreground text-[9px]">
+          {minX.toFixed(1)}°
+        </text>
+        <text x={left + plotWidth} y={height - 7} textAnchor="end" className="fill-muted-foreground text-[9px]">
+          {maxX.toFixed(1)}°
+        </text>
+        <text x={left + plotWidth / 2} y={height - 7} textAnchor="middle" className="fill-muted-foreground text-[9px]">
+          2θ
+        </text>
+        <text x={left - 5} y={top + 6} textAnchor="end" className="fill-muted-foreground text-[9px]">
+          {maxY.toFixed(0)}
+        </text>
+        <text x={left - 5} y={top + plotHeight} textAnchor="end" className="fill-muted-foreground text-[9px]">
+          0
+        </text>
+      </svg>
+    </div>
+  );
+}
 
 export function XrdNode({ id, data }: NodeComponentProps<XrdNodeData>) {
   const { updateNodeData } = useReactFlow();
@@ -193,6 +274,8 @@ export function XrdNode({ id, data }: NodeComponentProps<XrdNodeData>) {
             <label htmlFor={`${id}-neutral`} className="text-[10px] text-muted-foreground uppercase font-bold">Use Neutral Atoms</label>
           </div>
         </div>
+
+        <XrdInlinePlot plot={data.xrdPlot} />
       </div>
 
       <Handle type="source" position={Position.Right} id="out" className="w-3 h-3 bg-primary" />
