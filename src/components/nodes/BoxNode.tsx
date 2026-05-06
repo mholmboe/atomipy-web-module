@@ -284,7 +284,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
 
   const numInput = (field: keyof BoxNodeData, label: string, placeholder: string, step = "0.1") => (
     <div>
-      <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center justify-center h-4">{label}</label>
+      <label className="text-[10px] font-bold text-muted-foreground flex items-center justify-center h-4">{label}</label>
       <input
         type="number" step={step}
         className="nodrag w-full text-center text-xs bg-muted border border-border rounded-md py-1"
@@ -304,7 +304,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
 
       <div className="p-4 space-y-3 bg-background">
         {/* Mode Toggle */}
-        <div className="flex rounded-md overflow-hidden border border-border text-[10px] uppercase font-bold">
+        <div className="flex rounded-md overflow-hidden border border-border text-[10px] font-bold">
           <button
             onClick={() => switchMode("cell")}
             className={`flex-1 py-1.5 transition-all ${mode === "cell" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
@@ -340,7 +340,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
               {numInput("lz", "lz (Å)", "50.0")}
             </div>
             <div className="space-y-1">
-              <label className="text-[9px] font-bold text-muted-foreground uppercase block text-center">Tilt Factors (xy / xz / yz)</label>
+              <label className="text-[9px] font-bold text-muted-foreground block text-center">TILT FACTORS (xy / xz / yz)</label>
               <div className="grid grid-cols-3 gap-2">
                 {numInput("xy", "xy", "0", "0.001")}
                 {numInput("xz", "xz", "0", "0.001")}
