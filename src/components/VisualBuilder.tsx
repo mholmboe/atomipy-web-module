@@ -603,7 +603,7 @@ const NODE_PURPOSE_DOCS: Record<string, string> = {
   edit: "Runs structural editing operations on current atoms.",
   chemistry: "Runs chemistry operations like substitution/fusion/H-addition.",
   solvent: "Runs solvent/water-model operations.",
-  viewer: "Exports an in-memory visualization representation.",
+  viewer: "Exports an in-memory visualization representation (3Dmol or JSmol).",
   forcefield: "Assigns forcefield atom types and parameters.",
   bondAngle: "Calculates bonded terms (bonds/angles/dihedrals).",
   bvs: "Runs bond-valence analysis and summaries.",
@@ -1197,9 +1197,11 @@ export default function VisualBuilder() {
       baseData.statsLogFile = "output.log";
     }
     if (type === "viewer") {
+      baseData.renderer = "3dmol";
       baseData.title = "Structure Viewer";
       baseData.width = 500;
       baseData.height = 500;
+      baseData.computeBonds = true;
       baseData.background = "light";
       baseData.viewStyle = "both";
       baseData.showOutline = true;
@@ -3193,11 +3195,11 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
 
       case "viewer": {
         // Generate PDB snapshot for the frontend viewer
+        const writeConect = (data.computeBonds ?? true) ? "True" : "False";
         pythonCode += `import io, json\n`;
         pythonCode += `if ${inAtoms} is not None:\n`;
         pythonCode += `    _vis_buf = io.StringIO()\n`;
-        pythonCode += `    # Write with CONECT records to show bonds (and H's)\n`;
-        pythonCode += `    ap.write_pdb(${inAtoms}, ${inBox}, _vis_buf, write_conect=True)\n`;
+        pythonCode += `    ap.write_pdb(${inAtoms}, ${inBox}, _vis_buf, write_conect=${writeConect})\n`;
         pythonCode += `    _vis_pdb_str = _vis_buf.getvalue().replace('\\n', '\\\\n')\n`;
         pythonCode += `    print(f"__VISUALIZE_${id}__:{_vis_pdb_str}")\n`;
         pythonCode += `    # Stream raw high-precision charges for labeling\n`;

@@ -207,8 +207,8 @@ const nodeCategories = [
       {
         name: "Structure Viewer",
         type: "viewer",
-        desc: "Interactive 3D preview of the current atom structure in the browser using 3Dmol.js.",
-        features: ["Live 3D rendering", "Color by element or residue", "Ball-and-stick / Van der Waals styles", "Passthrough: does not alter atoms or box"],
+        desc: "Interactive 3D preview of the current atom structure using 3Dmol.js (WebGL) or JSmol (Canvas). Toggle between renderers in the node header.",
+        features: ["3Dmol: fast WebGL rendering with Ball-and-Stick/Spheres/Lines", "JSmol: Jmol scripting, symmetry & spacegroup support", "Color by element (Jmol scheme)", "Passthrough: does not alter atoms or box"],
       },
       {
         name: "Export",
