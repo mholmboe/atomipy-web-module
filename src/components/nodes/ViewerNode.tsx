@@ -327,9 +327,9 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       lines.push("set autobond on");
     }
 
-    // Load PDB inline — escape quotes and preserve newlines
+    // Load PDB inline — escape quotes and newlines for Jmol script string
     if (pdbString) {
-      const escaped = pdbString.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      const escaped = pdbString.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
       lines.push(`load inline "${escaped}"`);
     }
 
@@ -553,7 +553,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                     checked={computeBonds}
                     onCheckedChange={(checked) => setViewerOption({ computeBonds: Boolean(checked) })}
                   >
-                    Compute Bonds
+                    Compute Bonds (Requires Build)
                   </DropdownMenuCheckboxItem>
                   <DropdownMenuCheckboxItem
                     className={compactItemClass}
