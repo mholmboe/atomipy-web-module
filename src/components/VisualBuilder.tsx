@@ -923,6 +923,7 @@ const generateNotebookFromStrictScript = (nodes: Node[], strictScriptWithMarkers
 };
 
 export default function VisualBuilder() {
+  const [rfInstance, setRfInstance] = useState<any>(null);
   const [nodes, setNodes] = useNodesState(initialNodes);
   const [edges, setEdges] = useEdgesState(initialEdges);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -1258,13 +1259,38 @@ export default function VisualBuilder() {
       baseData.ylabel = "Y";
     }
 
-    const newNode: Node = {
-      id: `${type}_${new Date().getTime()}`,
-      type,
-      position: { x: 100, y: 100 },
-      data: baseData,
-    };
-    setNodes((nds) => nds.concat(newNode));
+    const newNodeId = `${type}_${new Date().getTime()}`;
+
+    let targetX = 100;
+    let targetY = 100;
+    if (rfInstance && reactFlowWrapper.current) {
+      const bounds = reactFlowWrapper.current.getBoundingClientRect();
+      const centerX = bounds.left + bounds.width / 2;
+      const centerY = bounds.top + bounds.height / 2;
+      if (typeof rfInstance.screenToFlowPosition === "function") {
+        const flowPos = rfInstance.screenToFlowPosition({ x: centerX, y: centerY });
+        targetX = Math.round(flowPos.x);
+        targetY = Math.round(flowPos.y);
+      }
+    }
+
+    setNodes((nds) => {
+      let finalX = targetX;
+      let finalY = targetY;
+      // Offset slightly if an existing node is within 20px to avoid perfectly overlapping them
+      while (nds.some((n) => Math.abs(n.position.x - finalX) < 20 && Math.abs(n.position.y - finalY) < 20)) {
+        finalX += 30;
+        finalY += 30;
+      }
+
+      const newNode: Node = {
+        id: newNodeId,
+        type,
+        position: { x: finalX, y: finalY },
+        data: baseData,
+      };
+      return nds.concat(newNode);
+    });
   };
 
   const applyWorkflowGraph = useCallback(
@@ -2030,6 +2056,7 @@ export default function VisualBuilder() {
             onNodesChange={(changes) => setNodes((nds) => applyNodeChanges(changes, nds))}
             onEdgesChange={(changes) => setEdges((eds) => applyEdgeChanges(changes, eds))}
             onConnect={onConnect}
+            onInit={setRfInstance}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             defaultEdgeOptions={{ type: "deletable" }}
