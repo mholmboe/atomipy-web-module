@@ -1269,8 +1269,9 @@ export default function VisualBuilder() {
       const centerY = bounds.top + bounds.height / 2;
       if (typeof rfInstance.screenToFlowPosition === "function") {
         const flowPos = rfInstance.screenToFlowPosition({ x: centerX, y: centerY });
-        targetX = Math.round(flowPos.x);
-        targetY = Math.round(flowPos.y);
+        // Shift left by approx. one node width (300px) and up by approx. one node height (350px)
+        targetX = Math.round(flowPos.x) - 300;
+        targetY = Math.round(flowPos.y) - 350;
       }
     }
 
