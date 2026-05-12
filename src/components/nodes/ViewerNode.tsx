@@ -203,15 +203,6 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     }
 
     if (pdb) {
-      // Skip if this PDB was already loaded for a different renderer
-      // (user just toggled; they need to rebuild to load in the new renderer)
-      const loaded = pdbLoadedRef.current;
-      if (loaded && loaded.pdb === pdb && loaded.renderer !== "3dmol") {
-        // PDB was loaded by JSmol, not us — show empty viewer
-        viewer.render();
-        viewer.resize();
-        return;
-      }
       pdbLoadedRef.current = { renderer: "3dmol", pdb };
       const model = viewer.addModel(pdb, "pdb", { keepH: true });
       
@@ -415,12 +406,10 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
           jsmolReadyRef.current = true;
           // Apply initial script once ready — but only if PDB belongs to this renderer
           if (jsmolAppletRef.current && window.Jmol) {
-            const loaded = pdbLoadedRef.current;
-            const shouldSkip = loaded && loaded.pdb === pdb && loaded.renderer !== "jsmol";
-            if (!shouldSkip && pdb) {
+            if (pdb) {
               pdbLoadedRef.current = { renderer: "jsmol", pdb };
             }
-            window.Jmol.script(jsmolAppletRef.current, buildJmolScript(shouldSkip ? "" : pdb));
+            window.Jmol.script(jsmolAppletRef.current, buildJmolScript(pdb));
           }
         },
       };
@@ -435,12 +424,6 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
         jsmolContainerRef.current.innerHTML = html;
       }
     } else if (jsmolReadyRef.current && jsmolAppletRef.current && window.Jmol) {
-      // Skip if this PDB was already loaded for a different renderer
-      const loaded = pdbLoadedRef.current;
-      if (loaded && loaded.pdb === pdb && loaded.renderer !== "jsmol") {
-        // PDB was loaded by 3Dmol, not us — don't auto-load
-        return;
-      }
       // Applet already exists and is ready — just run the updated script
       pdbLoadedRef.current = { renderer: "jsmol", pdb };
       window.Jmol.script(jsmolAppletRef.current, buildJmolScript(pdb));
