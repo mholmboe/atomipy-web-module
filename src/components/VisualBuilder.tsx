@@ -3261,7 +3261,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
           pythonCode += `${indent}_other = [a for a in _nosol if a.get('resname') not in ('ION', 'MIN')]\n`;
           pythonCode += `${indent}_ions = [a for a in _nosol if a.get('resname') == 'ION']\n`;
           pythonCode += `${indent}if _min: _min = ap.molecule(_min, molid=1, resname='MIN')\n`;
-          pythonCode += `${indent}${inAtoms} = ap.update(_other, _min, _ions, _sol)\n`;
+          pythonCode += `${indent}${inAtoms} = ap.update(_min, _other, _ions, _sol)\n`;
           if (!isMinimal) {
             pythonCode += `    except Exception as e: print(f"Warning: MolID reset failed ({e})")\n`;
           }
