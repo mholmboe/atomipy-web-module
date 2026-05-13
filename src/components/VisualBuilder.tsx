@@ -1284,13 +1284,17 @@ export default function VisualBuilder() {
         finalY += 30;
       }
 
+      // Deselect all existing nodes, and make the new node selected so it is focused and layered on top
+      const deselectedNds = nds.map((n) => ({ ...n, selected: false }));
+
       const newNode: Node = {
         id: newNodeId,
         type,
         position: { x: finalX, y: finalY },
         data: baseData,
+        selected: true,
       };
-      return nds.concat(newNode);
+      return deselectedNds.concat(newNode);
     });
   };
 
