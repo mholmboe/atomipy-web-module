@@ -3255,6 +3255,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
             pythonCode += `    try:\n`;
           }
           const indent = isMinimal ? "    " : "        ";
+          pythonCode += `${indent}for _i, _a in enumerate(${inAtoms}): _a['_orig_index'] = _i\n`;
           pythonCode += `${indent}_sol, _nosol = ap.find_H2O(${inAtoms}, ${inBox})\n`;
           pythonCode += `${indent}_nosol = ap.assign_resname(_nosol)\n`;
           pythonCode += `${indent}_min = [a for a in _nosol if a.get('resname') == 'MIN']\n`;
@@ -3262,6 +3263,9 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
           pythonCode += `${indent}_ions = [a for a in _nosol if a.get('resname') == 'ION']\n`;
           pythonCode += `${indent}if _min: _min = ap.molecule(_min, molid=1, resname='MIN')\n`;
           pythonCode += `${indent}${inAtoms} = ap.update(_min, _other, _ions, _sol)\n`;
+          pythonCode += `${indent}${inAtoms} = sorted(${inAtoms}, key=lambda a: a.get('_orig_index', 0))\n`;
+          pythonCode += `${indent}for _a in ${inAtoms}: _a.pop('_orig_index', None)\n`;
+          pythonCode += `${indent}${inAtoms} = ap.update(${inAtoms})\n`;
           if (!isMinimal) {
             pythonCode += `    except Exception as e: print(f"Warning: MolID reset failed ({e})")\n`;
           }
