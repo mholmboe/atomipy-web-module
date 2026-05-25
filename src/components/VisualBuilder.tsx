@@ -4012,8 +4012,10 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         pythonCode += `    print(f"__BOX_${id}__:" + json.dumps(_omm_box_data))\n`;
         pythonCode += `\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox, traj: writePdb ? `traj_${simType}.pdb` : undefined });
-        pythonCode += `except ImportError:\n`;
-        pythonCode += `    print('Warning: OpenMM not installed. Skipping simulation node. Install with: conda install -c conda-forge openmm')\n`;
+        pythonCode += `except Exception as _omm_err:\n`;
+        pythonCode += `    import traceback as _omm_tb\n`;
+        pythonCode += `    print(f'Warning: OpenMM failed to load or run. Error: {_omm_err}')\n`;
+        pythonCode += `    _omm_tb.print_exc()\n`;
         pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
         pythonCode += `    ${blockOutBox} = ${inBox}\n`;
         break;
