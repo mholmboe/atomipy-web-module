@@ -47,6 +47,7 @@ export function SimulateNode({ id, data }: NodeComponentProps<SimulateNodeData>)
   const pdbFreq = data.pdbFreq ?? data.dcdFreq ?? 1000;
 
   const isSimulationDisabled = (window as any).disableSimulation === true;
+  const showMdFields = simType === "nvt" || simType === "npt";
 
   return (
     <div className={`bg-card w-[260px] shadow-lg rounded-xl border ${isSimulationDisabled ? "border-amber-500/40" : "border-emerald-500/50"} overflow-hidden font-sans select-none`}>
