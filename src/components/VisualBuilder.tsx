@@ -115,6 +115,7 @@ import { StatsNode } from "./nodes/StatsNode";
 import { BendNode } from "./nodes/BendNode";
 import { CondenseNode } from "./nodes/CondenseNode";
 import { WaterModelNode } from "./nodes/WaterModelNode";
+import { SimulateNode } from "./nodes/SimulateNode";
 import type { PresetOption } from "./nodes/types";
 import DeletableEdge from "./edges/DeletableEdge";
 
@@ -146,6 +147,7 @@ const nodeTypes = {
   viewer: ViewerNode,
   export: ExportNode,
   trajectory: TrajectoryNode,
+  simulate: SimulateNode,
   // Legacy nodes (kept so saved workflows still load)
   addIons: IonsNode,
   grid: IonsNode,
@@ -341,6 +343,7 @@ const validateWorkflow = (nodes: Node[], edges: Edge[]): string[] => {
     "atomProps",
     "coordFrame",
     "export",
+    "simulate",
   ]);
 
   nodes.forEach((node) => {
@@ -609,6 +612,7 @@ const NODE_PURPOSE_DOCS: Record<string, string> = {
   bvs: "Runs bond-valence analysis and summaries.",
   xrd: "Calculates and exports simulated XRD profiles.",
   export: "Writes final coordinate/topology files.",
+  simulate: "Runs OpenMM energy minimization or MD (NVT/NPT) on the full system using CPU.",
 };
 
 const compactBlankLines = (text: string): string => text.replace(/\n{3,}/g, "\n\n");
@@ -931,6 +935,7 @@ export default function VisualBuilder() {
   const [presets, setPresets] = useState<PresetOption[]>([]);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [edgeType, setEdgeType] = useState<"bezier" | "step">("bezier");
+  const [snapToGrid, setSnapToGrid] = useState(true);
 
   // Build Progress States
   const [isBuilding, setIsBuilding] = useState(false);
@@ -1236,6 +1241,20 @@ export default function VisualBuilder() {
     if (type === "condense") {
       // no specific defaults needed
     }
+    if (type === "simulate") {
+      baseData.simType = "minimize";
+      baseData.miniSteps = 500;
+      baseData.mdSteps = 5000;
+      baseData.temperature = 298.15;
+      baseData.timestep = 1.0;
+      baseData.cutoff = 12.0;
+      baseData.constraints = "None";
+      baseData.pressure = 1.0;
+      baseData.frictionCoeff = 1.0;
+      baseData.switchDistance = 10.0;
+      baseData.writeDcd = false;
+      baseData.dcdFreq = 1000;
+    }
 
     if (type === "xrd") {
       baseData.wavelength = 1.54187;
@@ -1285,7 +1304,7 @@ export default function VisualBuilder() {
       }
 
       // Deselect all existing nodes, and make the new node selected so it is focused and layered on top
-      const deselectedNds = nds.map((n) => ({ ...n, selected: false }));
+      const deselectedNds = nds.map((n) => (n.selected ? { ...n, selected: false } : n));
 
       const newNode: Node = {
         id: newNodeId,
@@ -1304,6 +1323,9 @@ export default function VisualBuilder() {
       const cleanedNodes = deepClone(graph.nodes).map((node) => {
         if (node.data && typeof node.data === "object") {
           const { presets: _p, ...cleanData } = node.data as Record<string, unknown>;
+          if (["structure", "insert", "molecule", "preset", "upload"].includes(node.type || "")) {
+            return { ...node, data: { ...cleanData, presets } };
+          }
           return { ...node, data: cleanData };
         }
         return node;
@@ -1311,7 +1333,7 @@ export default function VisualBuilder() {
       setNodes(cleanedNodes);
       setEdges(deepClone(graph.edges));
     },
-    [setEdges, setNodes],
+    [presets, setEdges, setNodes],
   );
 
   const storeCustomTemplates = useCallback((templates: SavedWorkflow[]) => {
@@ -1377,6 +1399,174 @@ export default function VisualBuilder() {
     }
   }, [applyWorkflowGraph, customTemplates, savedWorkflows, selectedWorkflowKey]);
 
+  const handleAutoLayout = useCallback(() => {
+    // 1. Calculate incoming edge count for each node
+    const incoming: Record<string, string[]> = {};
+    const outgoing: Record<string, string[]> = {};
+    nodes.forEach((n) => {
+      incoming[n.id] = [];
+      outgoing[n.id] = [];
+    });
+    edges.forEach((e) => {
+      if (incoming[e.target]) incoming[e.target].push(e.source);
+      if (outgoing[e.source]) outgoing[e.source].push(e.target);
+    });
+
+    // 2. Find starting nodes (nodes with 0 incoming edges)
+    let queue = nodes.filter((n) => incoming[n.id].length === 0).map((n) => n.id);
+    const depths: Record<string, number> = {};
+    
+    // Initialize starting nodes at depth 0
+    queue.forEach((id) => {
+      depths[id] = 0;
+    });
+
+    // BFS or DFS to assign depths (columns)
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+
+      const currentDepth = depths[current] || 0;
+      const neighbors = outgoing[current] || [];
+      neighbors.forEach((neigh) => {
+        depths[neigh] = Math.max(depths[neigh] || 0, currentDepth + 1);
+        queue.push(neigh);
+      });
+    }
+
+    // Assign any remaining unvisited nodes (loops/islands) to depth 0
+    nodes.forEach((n) => {
+      if (depths[n.id] === undefined) {
+        depths[n.id] = 0;
+      }
+    });
+
+    // Group nodes by depth
+    const columns: Record<number, string[]> = {};
+    Object.entries(depths).forEach(([id, depth]) => {
+      if (!columns[depth]) columns[depth] = [];
+      columns[depth].push(id);
+    });
+
+    // Helper to resolve dynamic or default node widths aligned with their CSS classes
+    const getNodeWidth = (n: any) => {
+      if (n.width) return n.width;
+      if (n.style?.width) {
+        const w = parseInt(String(n.style.width));
+        if (!isNaN(w)) return w;
+      }
+      
+      const defaultWidths: Record<string, number> = {
+        viewer: 480,
+        structure: 300,
+        preset: 300,
+        upload: 300,
+        edit: 300,
+        chemistry: 300,
+        solvate: 300,
+        solvent: 300,
+        insert: 300,
+        export: 300,
+        substitute: 300,
+        analysis: 300,
+        coordFrame: 300,
+        reorder: 300,
+        merge: 280,
+        presetNode: 280,
+        atomProps: 280,
+        xrd: 280,
+        slice: 280,
+        box: 270,
+        bondAngle: 270,
+        simulate: 260,
+        ions: 260,
+        addIons: 260,
+        grid: 260,
+        stats: 260,
+        transform: 260,
+        bvs: 260,
+        trajectory: 260,
+        forcefield: 250,
+        scale: 250,
+        fuse: 240,
+        resname: 240,
+        molecule: 240,
+        position: 240,
+        addH: 240,
+        rotate: 240,
+        pbc: 240,
+        waterModel: 240,
+        remove: 330,
+        replicate: 220,
+        add: 220,
+        condense: 220,
+        wrap: 200,
+      };
+
+      return defaultWidths[n.type] ?? 260; // 260px standard fallback
+    };
+
+    // Calculate the width needed for each column/depth
+    const columnWidths: Record<number, number> = {};
+    Object.entries(columns).forEach(([depthStr, nodeIds]) => {
+      const depth = parseInt(depthStr);
+      let maxWidth = 260;
+      nodeIds.forEach((id) => {
+        const node = nodes.find((n) => n.id === id);
+        if (node) {
+          maxWidth = Math.max(maxWidth, getNodeWidth(node));
+        }
+      });
+      columnWidths[depth] = maxWidth;
+    });
+
+    // Positions mapping
+    const startX = 100;
+    const startY = 100;
+    const spacingXGap = 50; // horizontal gap between columns (fixed space)
+    const spacingY = 480;
+
+    // Calculate x-coordinate for each depth by summing up previous column widths and gaps
+    const depthXPositions: Record<number, number> = {};
+    let currentX = startX;
+    const sortedDepths = Object.keys(columns).map(Number).sort((a, b) => a - b);
+    sortedDepths.forEach((depth) => {
+      depthXPositions[depth] = currentX;
+      currentX += columnWidths[depth] + spacingXGap;
+    });
+
+    const nextNodes = nodes.map((node) => {
+      const depth = depths[node.id];
+      const idx = columns[depth].indexOf(node.id);
+      
+      // Centered Y offset
+      const totalInCol = columns[depth].length;
+      const yOffset = ((idx - (totalInCol - 1) / 2) * spacingY);
+
+      return {
+        ...node,
+        position: {
+          x: depthXPositions[depth],
+          y: startY + yOffset + 150,
+        },
+      };
+    });
+
+    setNodes(nextNodes);
+  }, [nodes, edges, setNodes]);
+
+  // Helper to strip massive runtime data from nodes before saving/exporting
+  const stripVolatileNodeData = (node: Node) => {
+    if (node.data) {
+      delete node.data.pdb;
+      delete node.data.output;
+      delete node.data.topologyText;
+    }
+    return node;
+  };
+
   const handleSaveCurrentWorkflow = useCallback(() => {
     const suggestedName = `workflow_${makeTimestampSuffix()}`;
     const rawName = window.prompt("Save workflow as:", suggestedName);
@@ -1393,7 +1583,7 @@ export default function VisualBuilder() {
       id: existing ? existing.id : `${Date.now()}`,
       name,
       updatedAt: now,
-      nodes: deepClone(nodes),
+      nodes: deepClone(nodes).map(stripVolatileNodeData),
       edges: deepClone(edges),
     };
 
@@ -1422,7 +1612,7 @@ export default function VisualBuilder() {
       id: existing ? existing.id : `${Date.now()}`,
       name,
       updatedAt: now,
-      nodes: deepClone(nodes),
+      nodes: deepClone(nodes).map(stripVolatileNodeData),
       edges: deepClone(edges),
     };
 
@@ -1500,7 +1690,7 @@ export default function VisualBuilder() {
       app: "atomipy-web-module",
       exportedAt: new Date().toISOString(),
       name: exportName,
-      nodes: deepClone(nodes),
+      nodes: deepClone(nodes).map(stripVolatileNodeData),
       edges: deepClone(edges),
     };
 
@@ -1730,6 +1920,49 @@ export default function VisualBuilder() {
                   return node;
                 })
               );
+            } else if (data.type === "box") {
+              const { nodeId, data: boxData } = data;
+              setNodes((nds) =>
+                nds.map((node) => {
+                  if (node.id === nodeId) {
+                    const a = boxData.a ?? 50, b = boxData.b ?? 50, c = boxData.c ?? 50;
+                    const alpha = boxData.alpha ?? 90, beta = boxData.beta ?? 90, gamma = boxData.gamma ?? 90;
+                    
+                    const toRad = (deg: number) => (deg * Math.PI) / 180;
+                    const isOrtho = Math.abs((alpha || 90) - 90) < 1e-6 && Math.abs((beta || 90) - 90) < 1e-6 && Math.abs((gamma || 90) - 90) < 1e-6;
+                    let bd;
+                    if (isOrtho) {
+                      bd = { lx: a, ly: b, lz: c, xy: 0, xz: 0, yz: 0 };
+                    } else {
+                      const ar = toRad(alpha || 90), br = toRad(beta || 90), gr = toRad(gamma || 90);
+                      const lx = a;
+                      const xy = b * Math.cos(gr);
+                      const ly = Math.sqrt(Math.max(0, b * b - xy * xy));
+                      const xz = c * Math.cos(br);
+                      const yz = ly !== 0 ? (b * c * Math.cos(ar) - xy * xz) / ly : 0;
+                      const lz = Math.sqrt(Math.max(0, c * c - xz * xz - yz * yz));
+                      bd = { lx, ly, lz, xy, xz, yz };
+                    }
+                    
+                    const fmtVal = (v: number) => parseFloat(v.toFixed(4));
+                    const formattedBd = {
+                      lx: fmtVal(bd.lx), ly: fmtVal(bd.ly), lz: fmtVal(bd.lz),
+                      xy: fmtVal(bd.xy), xz: fmtVal(bd.xz), yz: fmtVal(bd.yz)
+                    };
+                    
+                    return {
+                      ...node,
+                      data: {
+                        ...node.data,
+                        ...boxData,
+                        ...formattedBd,
+                        lastInferredFrom: undefined
+                      },
+                    };
+                  }
+                  return node;
+                })
+              );
             }
           } catch (err) {
             console.error("Error parsing stream chunk:", err);
@@ -1854,6 +2087,9 @@ export default function VisualBuilder() {
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("plot")} title="Data Plot">
                   <BarChart className="w-4 h-4 text-indigo-500" /> Plot
                 </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("simulate")} title="OpenMM Simulation (Minimize/NVT/NPT)">
+                  <Activity className="w-4 h-4" /> Simulate
+                </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("trajectory")} title="Trajectory">
                   <History className="w-4 h-4" /> Traj
                 </Button>
@@ -1957,6 +2193,29 @@ export default function VisualBuilder() {
                   </Button>
                 </div>
 
+                <div className="flex items-center gap-1 bg-slate-200/50 rounded-md p-1 border border-slate-300 shadow-inner">
+                  <Button 
+                    variant={snapToGrid ? "default" : "ghost"} 
+                    size="xs" 
+                    className={`h-7 text-[10px] px-3 uppercase font-black transition-all ${
+                      snapToGrid ? "shadow-sm" : "text-slate-500"
+                    }`}
+                    onClick={() => setSnapToGrid(!snapToGrid)}
+                    title="Toggle grid snapping"
+                  >
+                    Snap Grid
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="xs" 
+                    className="h-7 text-[10px] px-3 uppercase font-black text-slate-500 hover:text-slate-800 transition-all hover:bg-slate-300/40 rounded-sm"
+                    onClick={handleAutoLayout}
+                    title="Arrange nodes neatly"
+                  >
+                    Layout
+                  </Button>
+                </div>
+
                 {(selectedSavedWorkflow || selectedCustomTemplate) && (
                   <Button className="gap-1" variant="ghost" size="sm" onClick={handleDeleteSelectedEntry} title="Delete selected workflow/template">
                     <Trash2 className="w-4 h-4" /> Delete
@@ -1979,7 +2238,7 @@ export default function VisualBuilder() {
 
       <div className="flex-1 rounded-2xl overflow-hidden border border-border bg-muted/20 relative" ref={reactFlowWrapper}>
         {showStatusWindow && (
-          <div className="absolute right-3 top-3 z-20 w-[360px] rounded-xl border border-border bg-card/95 p-2.5 shadow-xl backdrop-blur-sm">
+          <div className="absolute right-3 top-3 z-20 w-[460px] rounded-xl border border-border bg-card/95 p-2.5 shadow-xl backdrop-blur-sm">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Node Status</p>
@@ -2049,14 +2308,17 @@ export default function VisualBuilder() {
         )}
         <ReactFlowProvider>
           <ReactFlow
-            nodes={nodes.map((n) => ({
-              ...n,
-              data: { ...n.data, presets },
-              style: {
-                ...(n.style || {}),
-                ...getNodeStatusStyle(nodeRunStatus[n.id]),
-              },
-            }))}
+            nodes={nodes.map((n) => {
+              const statusStyle = getNodeStatusStyle(nodeRunStatus[n.id]);
+              if (Object.keys(statusStyle).length === 0) return n;
+              return {
+                ...n,
+                style: {
+                  ...(n.style || {}),
+                  ...statusStyle,
+                },
+              };
+            })}
             edges={edges}
             onNodesChange={(changes) => setNodes((nds) => applyNodeChanges(changes, nds))}
             onEdgesChange={(changes) => setEdges((eds) => applyEdgeChanges(changes, eds))}
@@ -2065,6 +2327,8 @@ export default function VisualBuilder() {
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             defaultEdgeOptions={{ type: "deletable" }}
+            snapToGrid={snapToGrid}
+            snapGrid={[30, 30]}
             fitView
             fitViewOptions={{ padding: 0.4, maxZoom: 0.8 }}
           >
@@ -2114,6 +2378,10 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
   const isStrictMinimal = mode === "strict";
 
   let pythonCode = `import atomipy as ap\n`;
+  if (nodes.some((n) => n.type === "xrd")) {
+    pythonCode += `import matplotlib\nmatplotlib.use('Agg')\n`;
+  }
+  
   if (mode === "full") {
     pythonCode += `import json\nimport os\nimport traceback\n`;
   } else if (mode === "minimal") {
@@ -2140,7 +2408,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
     pythonCode += `open('build_errors.log', 'w', encoding='utf-8').close()\n`;
   }
 
-  const stateVars = new Map<string, { atoms: string; box: string }>();
+  const stateVars = new Map<string, { atoms: string; box: string; traj?: string }>();
 
   sorted.forEach((id, index) => {
     const n = nodeMap.get(id)!;
@@ -2151,6 +2419,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
     const incomingEdges = edges.filter((e) => e.target === id);
     let inAtoms = "None";
     let inBox = "None";
+    let inTraj: string | undefined = undefined;
 
     const isMultiInputNode = n.type === "merge" || n.type === "add";
 
@@ -2162,6 +2431,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
       if (validParents.length === 1) {
         inAtoms = validParents[0].atoms;
         inBox = validParents[0].box;
+        inTraj = validParents[0].traj;
       } else if (validParents.length > 1) {
         const atomVars = validParents.map((p) => p.atoms).join(", ");
         pythonCode += `\n# Auto-joining multiple standard inputs\n`;
@@ -3228,17 +3498,30 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
       case "viewer": {
         // Generate PDB snapshot for the frontend viewer
         const writeConect = (data.computeBonds ?? true) ? "True" : "False";
-        pythonCode += `import io, json\n`;
+        pythonCode += `import io, json, os\n`;
         pythonCode += `if ${inAtoms} is not None:\n`;
-        pythonCode += `    _vis_buf = io.StringIO()\n`;
-        pythonCode += `    ap.write_pdb(${inAtoms}, ${inBox}, _vis_buf, write_conect=${writeConect})\n`;
-        pythonCode += `    _vis_pdb_str = _vis_buf.getvalue().replace('\\n', '\\\\n')\n`;
+        pythonCode += `    _temp_atoms = list(${inAtoms}) if ${inAtoms} else []\n`;
+        pythonCode += `    if not _temp_atoms:\n`;
+        pythonCode += `        _temp_atoms = [{'index': 1, 'x': 0.0, 'y': 0.0, 'z': 0.0, 'element': 'C', 'type': 'C', 'fftype': 'C', 'resname': 'DUM', 'molid': 1, 'charge': 0.0}]\n`;
+        if (inTraj) {
+            pythonCode += `    if os.path.exists('${inTraj}'):\n`;
+            pythonCode += `        with open('${inTraj}', 'r', encoding='utf-8') as _f:\n`;
+            pythonCode += `            _vis_pdb_str = _f.read().replace('\\n', '\\\\n')\n`;
+            pythonCode += `    else:\n`;
+            pythonCode += `        _vis_buf = io.StringIO()\n`;
+            pythonCode += `        ap.write_pdb(_temp_atoms, ${inBox}, _vis_buf, write_conect=${writeConect})\n`;
+            pythonCode += `        _vis_pdb_str = _vis_buf.getvalue().replace('\\n', '\\\\n')\n`;
+        } else {
+            pythonCode += `    _vis_buf = io.StringIO()\n`;
+            pythonCode += `    ap.write_pdb(_temp_atoms, ${inBox}, _vis_buf, write_conect=${writeConect})\n`;
+            pythonCode += `    _vis_pdb_str = _vis_buf.getvalue().replace('\\n', '\\\\n')\n`;
+        }
         pythonCode += `    print(f"__VISUALIZE_${id}__:{_vis_pdb_str}")\n`;
         pythonCode += `    # Stream raw high-precision charges for labeling\n`;
-        pythonCode += `    _vis_charges = [a.get('charge', 0) for a in ${inAtoms}]\n`;
+        pythonCode += `    _vis_charges = [a.get('charge', 0) for a in _temp_atoms]\n`;
         pythonCode += `    print(f"__CHARGES_${id}__:{json.dumps(_vis_charges)}")\n`;
         // Pass atoms and box through unchanged
-        stateVars.set(id, { atoms: inAtoms, box: inBox });
+        stateVars.set(id, { atoms: inAtoms, box: inBox, traj: inTraj });
         break;
       }
       case "forcefield": {
@@ -3263,7 +3546,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
           pythonCode += `${indent}_ions = [a for a in _nosol if a.get('resname') == 'ION']\n`;
           pythonCode += `${indent}if _min: _min = ap.molecule(_min, molid=1, resname='MIN')\n`;
           pythonCode += `${indent}${inAtoms} = ap.update(_min, _other, _ions, _sol)\n`;
-          pythonCode += `${indent}${inAtoms} = sorted(${inAtoms}, key=lambda a: a.get('_orig_index', 0))\n`;
+          pythonCode += `${indent}${inAtoms} = sorted(${inAtoms}, key=lambda a: a.get('_orig_index') if (a.get('_orig_index') is not None) else 999999)\n`;
           pythonCode += `${indent}for _a in ${inAtoms}: _a.pop('_orig_index', None)\n`;
           pythonCode += `${indent}${inAtoms} = ap.update(${inAtoms})\n`;
           if (!isMinimal) {
@@ -3473,6 +3756,266 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
         pythonCode += `${blockOutBox} = ${inBox}\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "simulate": {
+        const simType = getString(data, "simType", "minimize");
+        const miniSteps = getNumber(data, "miniSteps", 500);
+        const mdSteps = getNumber(data, "mdSteps", 5000);
+        const temperature = getNumber(data, "temperature", 298.15);
+        const timestep = getNumber(data, "timestep", 1.0);
+        const cutoff = getNumber(data, "cutoff", 12.0);
+        const constraintsVal = getString(data, "constraints", "None");
+        const pressure = getNumber(data, "pressure", 1.0);
+        const frictionCoeff = getNumber(data, "frictionCoeff", 1.0);
+        const switchDist = getNumber(data, "switchDistance", 10.0);
+        const writePdb = getBoolean(data, "writePdb", getBoolean(data, "writeDcd", false));
+        const pdbFreq = getNumber(data, "pdbFreq", getNumber(data, "dcdFreq", 1000));
+        const isMD = simType === "nvt" || simType === "npt";
+
+        // Map constraint string to OpenMM class name
+        const constraintsMap: Record<string, string> = { "None": "None", "HBonds": "HBonds", "AllBonds": "AllBonds" };
+        const ommConstraints = constraintsMap[constraintsVal] || "None";
+
+        const ffMode = getString(data, "forcefieldMode", "minff").toLowerCase();
+        const prmFileChoice = getString(data, "prmFile", "minff").toLowerCase();
+
+        pythonCode += `# OpenMM Simulation (${simType.toUpperCase()}) — CPU platform\n`;
+        pythonCode += `try:\n`;
+        pythonCode += `    from openmm.app import PDBFile, Simulation, PME, StateDataReporter, PDBReporter\n`;
+        pythonCode += `    from openmm.app import HBonds as _HBonds, AllBonds as _AllBonds, NoCutoff as _NoCutoff\n`;
+        pythonCode += `    from openmm import LangevinIntegrator, MonteCarloBarostat, MonteCarloAnisotropicBarostat, Platform, Vec3\n`;
+        pythonCode += `    from openmm.unit import kelvin, picosecond, femtoseconds, nanometers, angstroms, bar, kilojoule, mole, atmosphere, degree\n`;
+        pythonCode += `    import warnings as _omm_warnings\n`;
+        pythonCode += `    _omm_warnings.filterwarnings('ignore')\n`;
+        pythonCode += `\n`;
+
+        // 1. Assign forcefield atom types (if not pre-assigned)
+        if (ffMode === "minff") {
+          pythonCode += `    # Assign MINFF forcefield atom types\n`;
+          pythonCode += `    ${inAtoms} = ap.minff(${inAtoms}, Box=${inBox})\n`;
+        } else if (ffMode === "clayff") {
+          pythonCode += `    # Assign CLAYFF forcefield atom types\n`;
+          pythonCode += `    ${inAtoms} = ap.clayff(${inAtoms}, Box=${inBox})\n`;
+        } else {
+          pythonCode += `    # Using pre-assigned forcefield atom types (from upstream FF node)\n`;
+        }
+
+        let definesArray = "['GMINFF_k500', 'OPC3_IOD_LM', 'OPC3']";
+        let topForcefieldArg = "minff";
+        let waterModel = "opc3";
+        if (ffMode === "clayff" || (ffMode === "preassigned" && prmFileChoice === "clayff")) {
+          definesArray = "['CLAYFF_EXT', 'SPCE_HFE_LM', 'SPCE']";
+          topForcefieldArg = "clayff";
+          waterModel = "spce";
+        } else {
+          // Both "minff" (assign-types) and "preassigned" mode select GMINFF variants from prmFileChoice
+          if (prmFileChoice === "minff_gminff_k0") {
+            definesArray = "['GMINFF_k0', 'OPC3_IOD_LM', 'OPC3']";
+          } else if (prmFileChoice === "minff_gminff_k250") {
+            definesArray = "['GMINFF_k250', 'OPC3_IOD_LM', 'OPC3']";
+          } else if (prmFileChoice === "minff_gminff_k1500") {
+            definesArray = "['GMINFF_k1500', 'OPC3_IOD_LM', 'OPC3']";
+          }
+        }
+
+        pythonCode += `    import os as _omm_os\n`;
+        pythonCode += `    _inc_dir = _omm_os.path.join(_omm_os.path.dirname(ap.__file__), 'ffparams')\n\n`;
+
+        pythonCode += `    # Write GROMACS topology and coordinates\n`;
+        pythonCode += `    ap.write_top(${inAtoms}, ${inBox}, 'system_${simType}.top', split_system=True, water_model='${waterModel}')\n`;
+        pythonCode += `    ap.write_gro(${inAtoms}, ${inBox}, 'system_${simType}.gro')\n\n`;
+
+        pythonCode += `    # Set periodic box dimensions from box_dim\n`;
+        pythonCode += `    _omm_cell = ap.Box_dim2Cell(${inBox})\n`;
+
+        // 5. Create system
+        const cutoffNm = cutoff / 10.0;
+        const switchNm = switchDist / 10.0;
+        pythonCode += `    # Calculate cell perpendicular widths in nm to automatically cap cutoff\n`;
+        pythonCode += `    import math as _omm_math\n`;
+        pythonCode += `    _a_nm, _b_nm, _c_nm = _omm_cell[0]*0.1, _omm_cell[1]*0.1, _omm_cell[2]*0.1\n`;
+        pythonCode += `    _alpha_rad = _omm_math.radians(_omm_cell[3])\n`;
+        pythonCode += `    _beta_rad = _omm_math.radians(_omm_cell[4])\n`;
+        pythonCode += `    _gamma_rad = _omm_math.radians(_omm_cell[5])\n`;
+        pythonCode += `    _cos_a = _omm_math.cos(_alpha_rad)\n`;
+        pythonCode += `    _cos_b = _omm_math.cos(_beta_rad)\n`;
+        pythonCode += `    _cos_g = _omm_math.cos(_gamma_rad)\n`;
+        pythonCode += `    _sin_a = _omm_math.sin(_alpha_rad)\n`;
+        pythonCode += `    _sin_b = _omm_math.sin(_beta_rad)\n`;
+        pythonCode += `    _sin_g = _omm_math.sin(_gamma_rad)\n`;
+        pythonCode += `    _val = 1.0 - _cos_a**2 - _cos_b**2 - _cos_g**2 + 2.0*_cos_a*_cos_b*_cos_g\n`;
+        pythonCode += `    _vol_factor = _omm_math.sqrt(max(0.0, _val))\n`;
+        pythonCode += `    _vol = _a_nm * _b_nm * _c_nm * _vol_factor\n`;
+        pythonCode += `    _h_a = _vol / (_b_nm * _c_nm * _sin_a) if _sin_a > 0 else _a_nm\n`;
+        pythonCode += `    _h_b = _vol / (_a_nm * _c_nm * _sin_b) if _sin_b > 0 else _b_nm\n`;
+        pythonCode += `    _h_c = _vol / (_a_nm * _b_nm * _sin_g) if _sin_g > 0 else _c_nm\n`;
+        pythonCode += `    _min_perp_width = min(_h_a, _h_b, _h_c)\n`;
+        pythonCode += `    _omm_cutoff = min(${cutoffNm}, _min_perp_width * 0.48)\n`;
+        pythonCode += `    _omm_switch = min(${switchNm}, _omm_cutoff - 0.1) if (_omm_cutoff - 0.1) > 0.5 else None\n`;
+        pythonCode += `    if _omm_cutoff < ${cutoffNm}:\n`;
+        pythonCode += `        print(f"Warning: Adjusted nonbonded cutoff to {_omm_cutoff:.3f} nm to satisfy half-box constraint.")\n`;
+        pythonCode += `\n`;
+        pythonCode += `    # Load into OpenMM using load_minff_into_openmm\n`;
+        pythonCode += `    _omm_constraints = ${ommConstraints === "None" ? "None" : `_${ommConstraints}`}\n`;
+        pythonCode += `    _omm_topology, _omm_system, _omm_positions = ap.load_minff_into_openmm(\n`;
+        pythonCode += `        top_path='system_${simType}.top',\n`;
+        pythonCode += `        gro_path='system_${simType}.gro',\n`;
+        pythonCode += `        defines=${definesArray},\n`;
+        pythonCode += `        include_dir=_inc_dir,\n`;
+        pythonCode += `        nonbonded_cutoff_nm=_omm_cutoff,\n`;
+        pythonCode += `        constraints=_omm_constraints,\n`;
+        pythonCode += `        rigid_water=True,\n`;
+        pythonCode += `    )\n`;
+        pythonCode += `\n`;
+        pythonCode += `    # Enable periodic boundaries for bonds, angles, and nonbonded exceptions (critical for periodic mineral systems!)\n`;
+        pythonCode += `    for _force in _omm_system.getForces():\n`;
+        pythonCode += `        if _force.__class__.__name__ in ('HarmonicBondForce', 'HarmonicAngleForce'):\n`;
+        pythonCode += `            _force.setUsesPeriodicBoundaryConditions(True)\n`;
+        pythonCode += `        elif _force.__class__.__name__ == 'NonbondedForce':\n`;
+        pythonCode += `            _force.setExceptionsUsePeriodicBoundaryConditions(True)\n`;
+        pythonCode += `\n`;
+
+        // 6. Add barostat for NPT
+        if (simType === "npt") {
+          pythonCode += `    # Add MonteCarloAnisotropicBarostat for NPT (allows independent X,Y,Z scaling for crystals)\n`;
+          pythonCode += `    _omm_system.addForce(MonteCarloAnisotropicBarostat(Vec3(${pressure}, ${pressure}, ${pressure})*bar, ${temperature}*kelvin, True, True, True, 100))\n`;
+          pythonCode += `\n`;
+        }
+
+        // 7. Integrator and simulation
+        const dt = isMD ? timestep : 1.0;
+        const temp = isMD ? temperature : 298.15;
+        pythonCode += `    # Set up integrator and simulation (auto-detect fastest platform)\n`;
+        pythonCode += `    _omm_integrator = LangevinIntegrator(${temp}*kelvin, ${frictionCoeff}/picosecond, ${dt}*femtoseconds)\n`;
+        pythonCode += `    _omm_platform = None\n`;
+        pythonCode += `    for _plat_name in ['CUDA', 'OpenCL', 'CPU']:\n`;
+        pythonCode += `        try:\n`;
+        pythonCode += `            _omm_platform = Platform.getPlatformByName(_plat_name)\n`;
+        pythonCode += `            break\n`;
+        pythonCode += `        except Exception:\n`;
+        pythonCode += `            pass\n`;
+        pythonCode += `    if _omm_platform is None:\n`;
+        pythonCode += `        _omm_platform = Platform.getPlatformByName('Reference')\n`;
+        pythonCode += `    print(f"Using OpenMM platform: {_omm_platform.getName()}")\n`;
+        pythonCode += `    _omm_simulation = Simulation(_omm_topology, _omm_system, _omm_integrator, _omm_platform)\n`;
+        if (writePdb) {
+          // Trajectory output
+          if (simType === "npt" || simType === "nvt") {
+            pythonCode += `    class DynamicBoxPDBReporter:\n`
+            pythonCode += `        def __init__(self, file, reportInterval):\n`
+            pythonCode += `            self._out = open(file, 'w', encoding='utf-8')\n`
+            pythonCode += `            self._reportInterval = reportInterval\n`
+            pythonCode += `            self._model = 1\n`
+            pythonCode += `            self._topology = None\n`
+            pythonCode += `        def describeNextReport(self, simulation):\n`
+            pythonCode += `            steps = self._reportInterval - simulation.currentStep % self._reportInterval\n`
+            pythonCode += `            return {'steps': steps, 'periodic': True, 'include': ['positions']}\n`
+            pythonCode += `        def report(self, simulation, state):\n`
+            pythonCode += `            _state = simulation.context.getState(getPositions=True)\n`
+            pythonCode += `            if self._topology is None:\n`
+            pythonCode += `                self._topology = simulation.topology\n`
+            pythonCode += `                self._topology.setPeriodicBoxVectors(_state.getPeriodicBoxVectors())\n`
+            pythonCode += `                PDBFile.writeHeader(self._topology, self._out)\n`
+            pythonCode += `            else:\n`
+            pythonCode += `                self._topology.setPeriodicBoxVectors(_state.getPeriodicBoxVectors())\n`
+            pythonCode += `                import io\n`
+            pythonCode += `                _tmp = io.StringIO()\n`
+            pythonCode += `                PDBFile.writeHeader(self._topology, _tmp)\n`
+            pythonCode += `                _lines = _tmp.getvalue().split('\\n')\n`
+            pythonCode += `                _cryst1 = next(l for l in _lines if l.startswith('CRYST1'))\n`
+            pythonCode += `                self._out.write(_cryst1 + '\\n')\n`
+            pythonCode += `            PDBFile.writeModel(self._topology, _state.getPositions(), self._out, self._model)\n`
+            pythonCode += `            self._model += 1\n`
+            pythonCode += `        def __del__(self):\n`
+            pythonCode += `            self._out.close()\n\n`
+            pythonCode += `    _omm_simulation.reporters.append(DynamicBoxPDBReporter('traj_${simType}.pdb', ${pdbFreq}))\n`
+          } else {
+            pythonCode += `    _omm_simulation.reporters.append(PDBReporter('traj_${simType}.pdb', ${pdbFreq}))\n`
+          }
+        }
+        pythonCode += `\n`;
+
+        // 8. Load positions
+        pythonCode += `    # Load positions\n`;
+        pythonCode += `    _omm_simulation.context.setPositions(_omm_positions)\n`;
+        pythonCode += `\n`;
+
+        // 9. Print initial energy
+        pythonCode += `    _omm_e0 = _omm_simulation.context.getState(getEnergy=True).getPotentialEnergy()\n`;
+        pythonCode += `    print(f'OpenMM initial energy: {_omm_e0}')\n`;
+        pythonCode += `\n`;
+
+        // 10. Energy minimization
+        if (simType === "minimize") {
+          pythonCode += `    # Energy minimization\n`;
+          if (writePdb) {
+            pythonCode += `    # Custom minimization loop to record trajectory frames\n`;
+            pythonCode += `    _mini_steps_per_frame = 20\n`;
+            pythonCode += `    _iterations = max(1, ${miniSteps} // _mini_steps_per_frame)\n`;
+            pythonCode += `    print(f'Running energy minimization ({_iterations} iterations, {_mini_steps_per_frame} steps/frame)...')\n`;
+            pythonCode += `    _omm_simulation.reporters[0].report(_omm_simulation, _omm_simulation.context.getState(getPositions=True, getForces=True))\n`;
+            pythonCode += `    for _it in range(_iterations):\n`;
+            pythonCode += `        _omm_simulation.minimizeEnergy(tolerance=10.0*kilojoule/mole/nanometers, maxIterations=_mini_steps_per_frame)\n`;
+            pythonCode += `        _omm_simulation.reporters[0].report(_omm_simulation, _omm_simulation.context.getState(getPositions=True, getForces=True))\n`;
+          } else {
+            pythonCode += `    print(f'Running energy minimization ({${miniSteps}} steps)...')\n`;
+            pythonCode += `    _omm_simulation.minimizeEnergy(tolerance=10.0*kilojoule/mole/nanometers, maxIterations=${miniSteps})\n`;
+          }
+          pythonCode += `    _omm_e1 = _omm_simulation.context.getState(getEnergy=True).getPotentialEnergy()\n`;
+          pythonCode += `    print(f'Post-minimization energy: {_omm_e1}')\n`;
+          pythonCode += `\n`;
+        }
+
+        // 11. MD run
+        if (isMD && mdSteps > 0) {
+          pythonCode += `    # Generate initial velocities\n`;
+          pythonCode += `    _omm_simulation.context.setVelocitiesToTemperature(${temperature}*kelvin)\n`;
+          pythonCode += `\n`;
+
+          pythonCode += `    # Progress reporters (stdout + dedicated log file)\n`;
+          pythonCode += `    import sys as _omm_sys\n`;
+          pythonCode += `    _omm_simulation.reporters.append(StateDataReporter(\n`;
+          pythonCode += `        _omm_sys.stdout, ${Math.max(100, Math.min(mdSteps, 1000))}, step=True, potentialEnergy=True,\n`;
+          pythonCode += `        temperature=True, progress=True, remainingTime=True,\n`;
+          pythonCode += `        speed=True, totalSteps=${mdSteps}, separator='\\t'\n`;
+          pythonCode += `    ))\n`;
+          pythonCode += `    _omm_simulation.reporters.append(StateDataReporter(\n`;
+          pythonCode += `        'system_${simType}.log', ${Math.max(100, Math.min(mdSteps, 1000))}, step=True, potentialEnergy=True,\n`;
+          pythonCode += `        temperature=True, progress=True, remainingTime=True,\n`;
+          pythonCode += `        speed=True, totalSteps=${mdSteps}, separator='\\t'\n`;
+          pythonCode += `    ))\n`;
+          pythonCode += `\n`;
+          pythonCode += `    # Run ${simType.toUpperCase()} dynamics\n`;
+          pythonCode += `    print(f'Running ${simType.toUpperCase()} MD ({${mdSteps}} steps, dt=${timestep} fs, T=${temperature} K)...')\n`;
+          pythonCode += `    _omm_simulation.step(${mdSteps})\n`;
+          pythonCode += `\n`;
+        }
+
+        pythonCode += `    # Write final structure and re-import into atomipy\n`;
+        pythonCode += `    _omm_state = _omm_simulation.context.getState(getPositions=True, enforcePeriodicBox=True)\n`;
+
+        pythonCode += `    _omm_topology.setPeriodicBoxVectors(_omm_state.getPeriodicBoxVectors())\n`;
+        pythonCode += `    PDBFile.writeFile(\n`;
+        pythonCode += `        _omm_topology,\n`;
+        pythonCode += `        _omm_state.getPositions(),\n`;
+        pythonCode += `        open('result_${simType}.pdb', 'w', encoding='utf-8')\n`;
+        pythonCode += `    )\n`;
+        pythonCode += `    _omm_ef = _omm_simulation.context.getState(getEnergy=True).getPotentialEnergy()\n`;
+        pythonCode += `    print(f'Final energy: {_omm_ef}')\n`;
+        pythonCode += `\n`;
+        pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.import_pdb('result_${simType}.pdb')\n`;
+        pythonCode += `    print(f'OpenMM simulation complete. {len(${blockOutAtoms})} atoms in final structure.')\n`;
+        pythonCode += `    # Stream dynamic box coordinates back to the frontend System Box size node\n`;
+        pythonCode += `    _omm_final_cell = ap.Box_dim2Cell(${blockOutBox})\n`;
+        pythonCode += `    _omm_box_data = {"a": float(_omm_final_cell[0]), "b": float(_omm_final_cell[1]), "c": float(_omm_final_cell[2]), "alpha": float(_omm_final_cell[3]), "beta": float(_omm_final_cell[4]), "gamma": float(_omm_final_cell[5])}\n`;
+        pythonCode += `    print(f"__BOX_${id}__:" + json.dumps(_omm_box_data))\n`;
+        pythonCode += `\n`;
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox, traj: writePdb ? `traj_${simType}.pdb` : undefined });
+        pythonCode += `except ImportError:\n`;
+        pythonCode += `    print('Warning: OpenMM not installed. Skipping simulation node. Install with: conda install -c conda-forge openmm')\n`;
+        pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
+        pythonCode += `    ${blockOutBox} = ${inBox}\n`;
         break;
       }
       case "plot": {

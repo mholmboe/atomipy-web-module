@@ -131,6 +131,7 @@ class AtomipyWebBackendTests(unittest.TestCase):
         self.assertIn('"type": "progress"', body)
         self.assertIn('"type": "complete"', body)
         self.assertIsNotNone(token_match)
+        assert token_match is not None
 
         download = self.client.get(f"/api/download-result/{token_match.group(1)}")
         self.assertEqual(download.status_code, 200)
@@ -152,6 +153,7 @@ class AtomipyWebBackendTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIsNotNone(token_match)
+        assert token_match is not None
         owner_download = owner.get(f"/api/download-result/{token_match.group(1)}")
         other_download = other_user.get(f"/api/download-result/{token_match.group(1)}")
         self.assertEqual(owner_download.status_code, 200)
@@ -208,6 +210,105 @@ class AtomipyWebBackendTests(unittest.TestCase):
         self.assertIn("smoke_system.pdb", names)
         self.assertIn("smoke_system.gro", names)
         self.assertIn("smoke_system.xyz", names)
+
+    def test_build_stream_handles_simulation_node_gracefully(self):
+        script = "\n".join([
+            "import atomipy as ap",
+            "print('__NODE_START__:ions_0:0')",
+            "atoms_0, box_0 = ap.create_grid('Na', 0.005, [0, 0, 0, 30, 30, 30])",
+            "print('__NODE_START__:sim_1:1')",
+            "try:",
+            "    from openmm.app import CharmmPsfFile, PDBFile, CharmmParameterSet, Simulation, PME",
+            "    from openmm import LangevinIntegrator, Platform, Vec3",
+            "    from openmm.unit import kelvin, picosecond, femtoseconds, nanometers, angstroms, kilojoule, mole",
+            "    ap.write_psf(atoms_0, box_0, 'system_minimize.psf')",
+            "    ap.write_pdb(atoms_0, box_0, 'system_minimize.pdb')",
+            "    import os as _omm_os",
+            "    _prm_candidates = [",
+            "        _omm_os.path.join(_omm_os.path.dirname(ap.__file__), 'ffparams', 'par_minff.prm'),",
+            "        'par_minff.prm',",
+            "    ]",
+            "    _prm_path = next((p for p in _prm_candidates if _omm_os.path.exists(p)), None)",
+            "    if _prm_path is None:",
+            "        raise FileNotFoundError('par_minff.prm not found')",
+            "    _omm_psf = CharmmPsfFile('system_minimize.psf')",
+            "    _omm_pdb = PDBFile('system_minimize.pdb')",
+            "    _omm_params = CharmmParameterSet(_prm_path)",
+            "    _omm_cell = ap.Box_dim2Cell(box_0)",
+            "    _omm_psf.setBox(_omm_cell[0]*angstroms, _omm_cell[1]*angstroms, _omm_cell[2]*angstroms)",
+            "    _omm_system = _omm_psf.createSystem(_omm_params, nonbondedMethod=PME, nonbondedCutoff=1.2*nanometers)",
+            "    _omm_integrator = LangevinIntegrator(298.15*kelvin, 1.0/picosecond, 1.0*femtoseconds)",
+            "    _omm_platform = Platform.getPlatformByName('CPU')",
+            "    _omm_simulation = Simulation(_omm_psf.topology, _omm_system, _omm_integrator, _omm_platform)",
+            "    _omm_pos = []",
+            "    with open('system_minimize.pdb', 'r') as _pf:",
+            "        for _line in _pf:",
+            "            if _line.startswith(('ATOM', 'HETATM')):",
+            "                _omm_pos.append(Vec3(float(_line[30:38]), float(_line[38:46]), float(_line[46:54])))",
+            "    _omm_simulation.context.setPositions(_omm_pos * angstroms)",
+            "    _omm_simulation.minimizeEnergy(tolerance=10.0*kilojoule/mole/nanometers, maxIterations=500)",
+            "    _omm_state = _omm_simulation.context.getState(getPositions=True)",
+            "    PDBFile.writeFile(_omm_psf.topology, _omm_state.getPositions(), open('result_minimize.pdb', 'w'))",
+            "    atoms_1, _ = ap.import_pdb('result_minimize.pdb')",
+            "    box_1 = box_0",
+            "    print(f'OpenMM simulation complete. {len(atoms_1)} atoms.')",
+            "except ImportError:",
+            "    print('Warning: OpenMM not installed. Skipping simulation node.')",
+            "    atoms_1 = atoms_0",
+            "    box_1 = box_0",
+        ])
+
+        response = self.client.post(
+            "/api/build-stream",
+            json={"script": script, "workflow": {"nodes": [{"id": "ions_0", "type": "ions"}, {"id": "sim_1", "type": "simulate"}], "edges": []}},
+            buffered=True,
+        )
+        body = response.get_data(as_text=True)
+        response.close()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('"type": "progress"', body)
+        self.assertIn('"nodeId": "sim_1"', body)
+        self.assertIn('"type": "complete"', body)
+
+        token_match = re.search(r'"token"\s*:\s*"([^"]+)"', body)
+        self.assertIsNotNone(token_match)
+        token = token_match.group(1)
+
+        download = self.client.get(f"/api/download-result/{token}")
+        self.assertEqual(download.status_code, 200)
+        self.assertIn("run_openmm.py", self.zip_names(download))
+        stdout_txt = self.zip_text(download, "execution_stdout.txt")
+        self.assertTrue(
+            "OpenMM simulation complete" in stdout_txt or "Warning: OpenMM not installed" in stdout_txt,
+            f"Expected either completion or warning message in execution stdout, but got:\n{stdout_txt}"
+        )
+
+    def test_write_top_generates_full_top_file(self):
+        script = "\n".join(
+            [
+                "import atomipy as ap",
+                "atoms, box = ap.create_grid('Na', 0.5, [0, 0, 0, 2, 2, 2])",
+                "ap.write_top(atoms, box, 'system.top', molecule_name='MIN')",
+            ]
+        )
+
+        response = self.client.post(
+            "/api/execute-script",
+            json={
+                "script": script,
+                "workflow": {"nodes": [], "edges": []},
+            },
+        )
+
+        self.assert_status(response, 200)
+        names = self.zip_names(response)
+        self.assertIn("system.top", names)
+        top_content = self.zip_text(response, "system.top")
+        self.assertIn('#include "min.ff/forcefield.itp"', top_content)
+        self.assertIn("[ moleculetype ]", top_content)
+        self.assertIn("[ system ]", top_content)
+        self.assertIn("[ molecules ]", top_content)
 
 
 if __name__ == "__main__":

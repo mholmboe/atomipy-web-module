@@ -8,7 +8,7 @@ import traceback
 import zipfile
 from collections import OrderedDict
 from uuid import uuid4
-from typing import Any
+from typing import Any, Union
 
 from flask import Flask, jsonify, request, send_file, Response
 from flask_cors import CORS
@@ -50,14 +50,14 @@ MAX_CACHE_SIZE = 50  # Store more results to prevent race conditions
 # Serve the frontend
 @app.route("/")
 def serve_index():
-    return send_file(os.path.join(app.static_folder, "index.html"))
+    return send_file(os.path.join(app.static_folder or "dist", "index.html"))
 
 @app.errorhandler(404)
 def not_found(e):
     if request.path.startswith("/api/") or request.path == "/build_system":
         return jsonify({"error": "Not found"}), 404
     # This ensures that React Router works by redirecting 404s to index.html
-    return send_file(os.path.join(app.static_folder, "index.html"))
+    return send_file(os.path.join(app.static_folder or "dist", "index.html"))
 
 ALLOWED_EXTENSIONS = {"pdb", "gro", "xyz", "cif", "mmcif", "mcif", "pqr", "poscar", "contcar", "sdf"}
 
@@ -295,7 +295,7 @@ def upload_file():
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
     file = request.files["file"]
-    if file.filename == "":
+    if not file.filename:
         return jsonify({"error": "No selected file"}), 400
 
     original_name = secure_filename(file.filename)
@@ -522,8 +522,10 @@ def build_system():
                 for region in regions:
                     wrapped_solute = ap.wrap(all_atoms, final_box) if all_atoms else []
                     limits = _normalize_limits(region.get("limits"), final_box)
-                    max_solvent = region.get("maxSolvent", solvation_cfg.get("maxSolvent", "max"))
-                    min_distance = float(region.get("minDistance", 2.0))
+                    val_max_solvent = region.get("maxSolvent", solvation_cfg.get("maxSolvent", "max"))
+                    max_solvent: Union[str, int] = val_max_solvent if isinstance(val_max_solvent, (int, str)) else "max"
+                    val_min_dist = region.get("minDistance", 2.0)
+                    min_distance = float(val_min_dist) if isinstance(val_min_dist, (int, float, str)) else 2.0
                     solvent_atoms = ap.solvate(
                         limits=limits,
                         density=density_kg_m3,
@@ -569,7 +571,6 @@ def build_system():
                     out_itp = os.path.join(work_dir, f"{output_name}.itp")
                     ap.write_itp(all_atoms, final_box, out_itp)
                 except Exception as exc:
-                    import traceback
                     warnings.append(f"ITP generation failed: {exc}\n{traceback.format_exc()}")
             elif output_format == "none":
                 pass  # Skip topologies
@@ -680,6 +681,8 @@ def build_stream():
             @staticmethod
             def visualize(node_id, data): return SSE._fmt("visualize", {"nodeId": node_id, "data": data})
             @staticmethod
+            def box(node_id, data): return SSE._fmt("box", {"nodeId": node_id, "data": data})
+            @staticmethod
             def complete(token, success): return SSE._fmt("complete", {"token": token, "success": success})
             @staticmethod
             def _fmt(t, d): return f"data: {json.dumps({'type': t, **d})}\n\n"
@@ -702,8 +705,9 @@ def build_stream():
                         old_cwd = os.getcwd()
                         class QueueWriter:
                             def __init__(self, q): self.q = q
-                            def write(self, s):
+                            def write(self, s: str) -> int:
                                 if s: self.q.put(s)
+                                return len(s)
                             def flush(self): pass
 
                         writer = QueueWriter(log_queue)
@@ -782,6 +786,13 @@ def build_stream():
                                                 pdb_data = parts[1].replace("\\n", "\n")
                                                 yield SSE.visualize(node_id, pdb_data)
                                             except: pass
+                                        elif "__BOX_" in stripped:
+                                            try:
+                                                parts = stripped.split("__:", 1)
+                                                node_id = parts[0].replace("__BOX_", "")
+                                                box_data = json.loads(parts[1])
+                                                yield SSE.box(node_id, box_data)
+                                            except: pass
                                         elif "__XRD_DATA_" in stripped:
                                             try:
                                                 parts = stripped.split("__:", 1)
@@ -824,6 +835,13 @@ def build_stream():
                 # 3. Package Results to Disk Cache FIRST (before sending large data)
                 token = str(uuid4())
                 zip_path = os.path.abspath(os.path.join(CACHE_DIR, f"result_{token}.zip"))
+
+                # Copy executing script to run_openmm.py for absolute clarity in download bundle
+                _script_src = os.path.join(work_dir, "build_script.py")
+                if os.path.exists(_script_src):
+                    import shutil as _app_shutil
+                    _app_shutil.copy(_script_src, os.path.join(work_dir, "run_openmm.py"))
+
 
                 summary = {
                     "success": success,
@@ -891,7 +909,7 @@ def execute_script():
             )
 
             success = result.returncode == 0
-            summary = {
+            summary: dict[str, Any] = {
                 "success": success,
                 "exit_code": result.returncode,
                 "message": "Build succeeded." if success else "Build failed. See execution logs.",
@@ -902,6 +920,13 @@ def execute_script():
             # Zip all generated files and execution artifacts (success and failure)
             memory_file = io.BytesIO()
             included_files = []
+            
+            # Copy executing script to run_openmm.py for absolute clarity in download bundle
+            _script_src = os.path.join(work_dir, "build_script.py")
+            if os.path.exists(_script_src):
+                import shutil as _app_shutil
+                _app_shutil.copy(_script_src, os.path.join(work_dir, "run_openmm.py"))
+
             with zipfile.ZipFile(memory_file, "w", compression=zipfile.ZIP_DEFLATED) as zf:
                 for fname, path in _iter_regular_work_dir_files(work_dir, {"UC_conf", "uploads"}):
                     zf.write(path, arcname=fname)
