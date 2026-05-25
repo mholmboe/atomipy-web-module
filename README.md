@@ -31,6 +31,15 @@ Use the hosted version directly at:
 
 ---
 
+### ⚡ GPU-Accelerated Google Colab Access (Recommended for Simulations)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mholmboe/atomipy-web-module/blob/main/ColabLaunchGuide.ipynb)
+
+If you plan to run large molecular dynamics simulations, you can launch the Visual Builder with **free hardware GPU acceleration** via Google Colab!
+1. Click the **"Open in Colab"** badge above to load the notebook directly in Google Colab.
+2. Follow the simple steps inside the notebook to launch your private, GPU-accelerated cloud instance!
+
+---
+
 ### Local Installation
 
 You will need **Node.js (v20+)** and **Python (3.11+)** installed on your system.
