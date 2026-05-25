@@ -15,6 +15,16 @@ def is_solvent_or_ion(atom):
         res = ''
     res = res.upper()
     
+    # If the residue is a mineral residue, it is never a solvent or ion
+    solvent_ion_resnames = {
+        'SOL', 'WAT', 'HOH', 'TIP3', 'OPC', 'OPC3', 'SPC', 'SPCE', 'TIP4', 'TIP5',
+        'ION', 'NA', 'CL', 'K', 'LI', 'CS', 'RB', 'F', 'BR', 'I', 'CA', 'MG', 'ZN',
+        'NA+', 'CL-', 'CL−', 'K+', 'LI+', 'CS+', 'RB+', 'F-', 'F−', 'BR-', 'BR−',
+        'I-', 'I−', 'CA2+', 'MG2+', 'ZN2+'
+    }
+    if res and res not in solvent_ion_resnames:
+        return False
+
     atype = atom.get('type', '')
     if atype is None:
         atype = ''
