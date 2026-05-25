@@ -3835,7 +3835,11 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
 
         pythonCode += `    # Write GROMACS topology and coordinates (using PDB for robust coordinate parsing)\n`;
         pythonCode += `    ap.write_top(${inAtoms}, ${inBox}, 'system_${simType}.top', split_system=True, water_model='${waterModel}')\n`;
-        pythonCode += `    ap.write_pdb(${inAtoms}, ${inBox}, 'system_${simType}.pdb')\n\n`;
+        pythonCode += `    from atomipy.write_top import is_solvent_or_ion as _omm_is_sol\n`;
+        pythonCode += `    _omm_min_atoms = [a for a in ${inAtoms} if not _omm_is_sol(a)]\n`;
+        pythonCode += `    _omm_sol_atoms = [a for a in ${inAtoms} if _omm_is_sol(a)]\n`;
+        pythonCode += `    _omm_reordered_atoms = _omm_min_atoms + _omm_sol_atoms\n`;
+        pythonCode += `    ap.write_pdb(_omm_reordered_atoms, ${inBox}, 'system_${simType}.pdb')\n\n`;
 
         pythonCode += `    # Set periodic box dimensions from box_dim\n`;
         pythonCode += `    _omm_cell = ap.Box_dim2Cell(${inBox})\n`;
