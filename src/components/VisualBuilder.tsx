@@ -3953,6 +3953,9 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
 
         // 8. Load positions
         pythonCode += `    # Load positions\n`;
+        pythonCode += `    print(f"[DIAGNOSTIC] Topology atoms: {_omm_topology.getNumAtoms()}")\n`;
+        pythonCode += `    print(f"[DIAGNOSTIC] System particles: {_omm_system.getNumParticles()}")\n`;
+        pythonCode += `    print(f"[DIAGNOSTIC] Position coordinates: {len(_omm_positions)}")\n`;
         pythonCode += `    _omm_simulation.context.setPositions(_omm_positions)\n`;
         pythonCode += `\n`;
 
