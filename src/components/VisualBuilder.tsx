@@ -935,7 +935,7 @@ export default function VisualBuilder() {
   const [presets, setPresets] = useState<PresetOption[]>([]);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [edgeType, setEdgeType] = useState<"bezier" | "step">("bezier");
-  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [snapToGrid, setSnapToGrid] = useState(false);
 
   // Build Progress States
   const [isBuilding, setIsBuilding] = useState(false);
