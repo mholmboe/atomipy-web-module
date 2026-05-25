@@ -1,4 +1,4 @@
-# Logs
+# Logs and Debug
 logs
 *.log
 npm-debug.log*
@@ -6,16 +6,18 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.dev-logs/
 
-node_modules
-dist
-dist-ssr
+# Dependency directories
+node_modules/
+dist/
+dist-ssr/
 *.local
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
@@ -23,7 +25,20 @@ dist-ssr
 *.sln
 *.sw?
 
-# Python cache/bytecode
+# Python cache/bytecode & virtual envs
 __pycache__/
 *.py[cod]
 .venv/
+venv/
+
+# App Runtime Uploads and Temporary simulation files
+uploads/
+output.zip
+*.pdb
+*.psf
+*.gro
+*.top
+*.itp
+test_jmol.html
+test_payload.json
+.vite_from_old_dir_20260417/
