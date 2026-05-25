@@ -372,7 +372,11 @@ def list_presets():
                         "alpha": alpha, "beta": beta, "gamma": gamma
                     }
                 })
-    return jsonify({"presets": sorted(presets, key=lambda x: x["name"])})
+    disable_sim = os.environ.get("DISABLE_SIMULATION", "false").lower() == "true"
+    return jsonify({
+        "presets": sorted(presets, key=lambda x: x["name"]),
+        "disableSimulation": disable_sim
+    })
 
 
 @app.route("/build_system", methods=["POST"])
@@ -668,6 +672,9 @@ def build_stream():
         if not script_code:
             return jsonify({"error": "No script provided."}), 400
 
+        if os.environ.get("DISABLE_SIMULATION", "false").lower() == "true" and "load_minff_into_openmm" in script_code:
+            return jsonify({"error": "Simulation execution is disabled on this server instance. Run locally or in Google Colab to execute simulations."}), 403
+
         session_id = _get_or_create_session_id()
 
         # Helper to format SSE data
@@ -888,6 +895,9 @@ def execute_script():
         workflow_data = payload.get("workflow")
         if not script_code:
             return jsonify({"error": "No script provided."}), 400
+
+        if os.environ.get("DISABLE_SIMULATION", "false").lower() == "true" and "load_minff_into_openmm" in script_code:
+            return jsonify({"error": "Simulation execution is disabled on this server instance. Run locally or in Google Colab to execute simulations."}), 403
 
         session_id = request.cookies.get("atomipy_session")
         with tempfile.TemporaryDirectory(prefix="atomipy_") as work_dir:

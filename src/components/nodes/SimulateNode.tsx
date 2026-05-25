@@ -46,15 +46,28 @@ export function SimulateNode({ id, data }: NodeComponentProps<SimulateNodeData>)
   const writePdb = data.writePdb ?? data.writeDcd ?? false;
   const pdbFreq = data.pdbFreq ?? data.dcdFreq ?? 1000;
 
-  const showMdFields = simType === "nvt" || simType === "npt";
+  const isSimulationDisabled = (window as any).disableSimulation === true;
 
   return (
-    <div className="bg-card w-[260px] shadow-lg rounded-xl border border-emerald-500/50 overflow-hidden font-sans select-none">
+    <div className={`bg-card w-[260px] shadow-lg rounded-xl border ${isSimulationDisabled ? "border-amber-500/40" : "border-emerald-500/50"} overflow-hidden font-sans select-none`}>
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <NodeHeader id={id} title="Simulate (OpenMM)" Icon={Activity} colorClass="text-emerald-600" className="bg-emerald-500/10" />
+      <NodeHeader 
+        id={id} 
+        title={isSimulationDisabled ? "Simulate (Colab/Local)" : "Simulate (OpenMM)"} 
+        Icon={Activity} 
+        colorClass={isSimulationDisabled ? "text-amber-600" : "text-emerald-600"} 
+        className={isSimulationDisabled ? "bg-amber-500/10" : "bg-emerald-500/10"} 
+      />
 
       <div className="p-4 space-y-3 bg-background">
+        {isSimulationDisabled && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 text-[10px] text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
+            ⚡ <strong>Colab/Local Execution Mode</strong><br />
+            Simulation is paused on this CPU instance. Configure the parameters here, then download the Python script to run on **Google Colab (GPU)** for 100x speed!
+          </div>
+        )}
+
         {/* Forcefield selection */}
         <div>
           <label className="text-xs font-semibold text-muted-foreground block mb-1">Forcefield</label>

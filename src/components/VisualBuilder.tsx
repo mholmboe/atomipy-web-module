@@ -933,6 +933,7 @@ export default function VisualBuilder() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const workflowImportInputRef = useRef<HTMLInputElement>(null);
   const [presets, setPresets] = useState<PresetOption[]>([]);
+  const [disableSimulation, setDisableSimulation] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [edgeType, setEdgeType] = useState<"bezier" | "step">("bezier");
   const [snapToGrid, setSnapToGrid] = useState(false);
@@ -968,9 +969,12 @@ export default function VisualBuilder() {
   useEffect(() => {
     fetch("/api/presets")
       .then((res) => res.json())
-      .then((data: { presets?: PresetOption[] }) =>
-        setPresets(Array.isArray(data.presets) ? data.presets : []),
-      )
+      .then((data: { presets?: PresetOption[]; disableSimulation?: boolean }) => {
+        setPresets(Array.isArray(data.presets) ? data.presets : []);
+        const disabled = !!data.disableSimulation;
+        setDisableSimulation(disabled);
+        (window as any).disableSimulation = disabled;
+      })
       .catch((err) => console.error("Failed to load presets", err));
   }, []);
 
@@ -2087,8 +2091,15 @@ export default function VisualBuilder() {
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("plot")} title="Data Plot">
                   <BarChart className="w-4 h-4 text-indigo-500" /> Plot
                 </Button>
-                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("simulate")} title="OpenMM Simulation (Minimize/NVT/NPT)">
-                  <Activity className="w-4 h-4" /> Simulate
+                <Button
+                  className={`gap-1 ${disableSimulation ? "opacity-75 hover:opacity-100" : ""}`}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => addNode("simulate")}
+                  title={disableSimulation ? "OpenMM Simulation (Server-side execution disabled; placement enables local/Colab Python code download)" : "OpenMM Simulation (Minimize/NVT/NPT)"}
+                >
+                  <Activity className={`w-4 h-4 ${disableSimulation ? "text-amber-500" : "text-emerald-500"}`} />
+                  Simulate {disableSimulation && "(Colab)"}
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("trajectory")} title="Trajectory">
                   <History className="w-4 h-4" /> Traj
