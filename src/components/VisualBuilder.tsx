@@ -3822,9 +3822,9 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         pythonCode += `    import os as _omm_os\n`;
         pythonCode += `    _inc_dir = _omm_os.path.join(_omm_os.path.dirname(ap.__file__), 'ffparams')\n\n`;
 
-        pythonCode += `    # Write GROMACS topology and coordinates\n`;
+        pythonCode += `    # Write GROMACS topology and coordinates (using PDB for robust coordinate parsing)\n`;
         pythonCode += `    ap.write_top(${inAtoms}, ${inBox}, 'system_${simType}.top', split_system=True, water_model='${waterModel}')\n`;
-        pythonCode += `    ap.write_gro(${inAtoms}, ${inBox}, 'system_${simType}.gro')\n\n`;
+        pythonCode += `    ap.write_pdb(${inAtoms}, ${inBox}, 'system_${simType}.pdb')\n\n`;
 
         pythonCode += `    # Set periodic box dimensions from box_dim\n`;
         pythonCode += `    _omm_cell = ap.Box_dim2Cell(${inBox})\n`;
@@ -3860,7 +3860,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         pythonCode += `    _omm_constraints = ${ommConstraints === "None" ? "None" : `_${ommConstraints}`}\n`;
         pythonCode += `    _omm_topology, _omm_system, _omm_positions = ap.load_minff_into_openmm(\n`;
         pythonCode += `        top_path='system_${simType}.top',\n`;
-        pythonCode += `        gro_path='system_${simType}.gro',\n`;
+        pythonCode += `        gro_path='system_${simType}.pdb',\n`;
         pythonCode += `        defines=${definesArray},\n`;
         pythonCode += `        include_dir=_inc_dir,\n`;
         pythonCode += `        nonbonded_cutoff_nm=_omm_cutoff,\n`;
