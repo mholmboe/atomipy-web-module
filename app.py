@@ -41,6 +41,14 @@ app = Flask(__name__, static_folder="dist", static_url_path="")
 CORS(app) # Enable CORS for local development
 app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024  # 128 MB
 
+# Disable browser caching of frontend static assets permanently
+@app.after_request
+def add_header(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
 # Persistent directory for build results cache (moved from RAM to disk for Render stability)
 CACHE_DIR = os.environ.get("ATOMIPY_CACHE_DIR", "/tmp/atomipy_results_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
