@@ -22,8 +22,8 @@ RUN npm run build
 # --- Stage 2: Final image with Python backend ---
 FROM python:3.11-slim
 
-# Install git needed for atomipy, and OpenCL/GL system libraries required by OpenMM
-RUN apt-get update && apt-get install -y git ocl-icd-libopencl1 libgl1 && rm -rf /var/lib/apt/lists/*
+# Install git needed for atomipy, and OpenCL/GL system libraries required by OpenMM (including CPU POCL platform)
+RUN apt-get update && apt-get install -y git ocl-icd-opencl-dev pocl-opencl-icd libgl1 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
