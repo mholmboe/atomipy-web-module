@@ -125,6 +125,25 @@ def itp(atoms, Box=None, file_path=None, molecule_name=None, nrexcl=1, comment=N
         mineral_atoms = [atom for atom in atoms if not is_solvent_or_ion(atom)]
         solvent_or_ion_atoms = [atom for atom in atoms if is_solvent_or_ion(atom)]
         
+        # Dynamically assign correct contiguous molids to ensure they never lump together
+        for a in mineral_atoms:
+            a['molid'] = 1
+            
+        curr_molid = 2
+        prev_resname = None
+        prev_resnum = None
+        for a in solvent_or_ion_atoms:
+            resname = a.get('resname', 'SOL')
+            resnum = a.get('resnum', 1)
+            if resname != prev_resname or resnum != prev_resnum:
+                curr_molid += 1
+                prev_resname = resname
+                prev_resnum = resnum
+            a['molid'] = curr_molid
+            
+        # Re-construct atoms list in the exact reordered order (mineral first, then solvent/ions)
+        atoms = mineral_atoms + solvent_or_ion_atoms
+        
         # Determine paths
         dir_name = os.path.dirname(file_path)
         base_name = os.path.basename(file_path)
