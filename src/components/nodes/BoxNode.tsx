@@ -200,7 +200,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
         "position", "rotate", "wrap", "addIons", "ions", "solvate", "bondAngle", "bvs", "slice", "insert", 
         "substitute", "fuse", "resname", "molecule", "merge", "add", "transform", "pbc", "edit", 
         "chemistry", "solvent", "analysis", "forcefield", "bend", "atomProps", "coordFrame", 
-        "xrd", "viewer", "trajectory", "export"
+        "xrd", "viewer", "trajectory", "export", "simulate"
       ]);
       if (passthroughTypes.has(node.type ?? "")) {
         const up = getPrimary(node.id);
@@ -209,9 +209,50 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
       return null;
     };
 
+    // Dynamically search upstream for any computed PDB coordinate string containing runtime CRYST1 box metrics
+    const findDynamicBoxFromPdb = (nodeId: string, visited = new Set<string>()): BoxSeed | null => {
+      if (visited.has(nodeId)) return null;
+      visited.add(nodeId);
+      const node = getNode(nodeId);
+      if (!node) return null;
+      
+      const nd = (node.data ?? {}) as Record<string, unknown>;
+      // If this node contains dynamic run-time PDB coordinate data, parse its CRYST1 line!
+      if (typeof nd.pdb === "string" && nd.pdb.trim()) {
+        const lines = nd.pdb.split("\n");
+        // Loop backwards to read the CRYST1 line of the last/current frame
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const line = lines[i].trim();
+          if (line.startsWith("CRYST1")) {
+            const a = parseFloat(line.substring(6, 15).trim());
+            const b = parseFloat(line.substring(15, 24).trim());
+            const c = parseFloat(line.substring(24, 33).trim());
+            const alpha = parseFloat(line.substring(33, 40).trim()) || 90.0;
+            const beta = parseFloat(line.substring(40, 47).trim()) || 90.0;
+            const gamma = parseFloat(line.substring(47, 54).trim()) || 90.0;
+            if (Number.isFinite(a) && Number.isFinite(b) && Number.isFinite(c)) {
+              const seed = { a, b, c, alpha, beta, gamma };
+              const bd = cellToBoxDim(a, b, c, alpha, beta, gamma);
+              return { ...seed, ...bd };
+            }
+          }
+        }
+      }
+      
+      // Keep traversing backwards
+      const incoming = edges.filter((e) => e.target === nodeId);
+      if (incoming.length > 0) {
+        const inA = incoming.find((e) => e.targetHandle === "inA") || incoming[0];
+        return findDynamicBoxFromPdb(inA.source, visited);
+      }
+      return null;
+    };
+
     const edge = edges.find((e) => e.target === id);
     if (!edge) return;
-    const seed = inferSeed(edge.source);
+    
+    // First prioritize dynamic run-time box coordinates from upstream simulation PDB, falling back to static trace
+    const seed = findDynamicBoxFromPdb(edge.source) || inferSeed(edge.source);
     if (!seed) return;
 
     const lastVals = data.lastInferredFrom?.values || {};
@@ -300,7 +341,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
     <div className="bg-card w-[270px] shadow-lg rounded-xl border border-indigo-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <NodeHeader id={id} title="Set System Box" Icon={Box} colorClass="text-indigo-500" className="bg-indigo-500/10" />
+      <NodeHeader id={id} title="System Box size" Icon={Box} colorClass="text-indigo-500" className="bg-indigo-500/10" />
 
       <div className="p-4 space-y-3 bg-background">
         {/* Mode Toggle */}

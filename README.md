@@ -6,10 +6,15 @@ A powerful, node-based visual programming environment for designing, manipulatin
 
 ## 🚀 Key Features
 
-- **Visual Workflow**: Build systems by connecting nodes: Import → Replicate → Solvate → Add Ions → Export.
+- **Visual Workflow**: Build systems by connecting nodes: Import → Replicate → Solvate → Add Ions → Run Simulation → Export.
 - **Structure Library**: Built-in 100+ mineral preset structures (Pyrophyllite, Kaolinite, Montmorillonite, etc.).
 - **3D Visualization**: Real-time 3D structure previewing with integrated NGL/3Dmol viewers.
 - **Forcefield Generation**: Streamlined assignment of **MINFF** and **CLAYFF** parameters.
+- **Interactive MD Simulations**:
+    - **Simulation Node**: Execute Molecular Dynamics (NVT) simulations directly in the node workspace.
+    - **GPU Acceleration**: Utilizes hardware GPU acceleration (via OpenMM's OpenCL/Metal/CUDA platforms) automatically when available, falling back to CPU or Reference platforms seamlessly.
+    - **Live Trajectory Plotting**: Real-time graphing of potential energy and temperature progress directly in the web UI.
+    - **Auto-Unzipping & Download**: Download the completed trajectory, topology, and state files in an automatically unzipped structural bundle.
 - **Advanced Analysis**:
     - **XRD Patterns**: Simulate high-performance X-ray diffraction patterns.
     - **BVS/GII Analysis**: Calculate Bond Valence Sums and Global Instability Index.

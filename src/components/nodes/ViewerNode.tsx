@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Handle, NodeResizer, Position, useReactFlow } from "@xyflow/react";
-import { Eye, RotateCw, Settings2, Palette, Box as BoxIcon, X } from "lucide-react";
+import { Eye, RotateCw, Settings2, Palette, Box as BoxIcon, X, Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -60,6 +60,10 @@ type ViewerApi = {
   clear: () => void;
   setProjection?: (projection: ViewerProjection) => void;
   addModel: (pdb: string, format: string, options?: { keepH?: boolean }) => ViewerModel;
+  addModelsAsFrames?: (pdb: string, format: string, options?: { keepH?: boolean }) => ViewerModel | ViewerModel[];
+  animate?: (options: { loop?: string; step?: number; interval?: number; reps?: number }) => void;
+  pauseAnimate?: () => void;
+  setFrame?: (frame: number) => void;
   setStyle: (selection: ViewerSelection, style: ViewerStyle) => void;
   addUnitCell: (model: ViewerModel, options: Record<string, unknown>) => void;
   addPropertyLabels?: (property: string, selection: ViewerSelection, options: Record<string, unknown>) => void;
@@ -146,6 +150,19 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const nodeHeight = Math.max(320, Number.isFinite(data.height) ? Number(data.height) : 500);
   const chargeValues = useMemo(() => (Array.isArray(data.charges) ? data.charges : []), [data.charges]);
 
+  // Trajectory animation state
+  const [currentFrame, setCurrentFrame] = React.useState(0);
+  const [isPlaying, setIsPlaying] = React.useState(true);
+  const numFrames = useMemo(() => {
+    if (!pdb) return 1;
+    // Count ENDMDL tags. If none, it's a single frame.
+    const count = pdb.split("ENDMDL").length - 1;
+    return Math.max(1, count);
+  }, [pdb]);
+  const isMulti = numFrames > 1;
+
+
+
   const setViewerOption = (patch: Partial<ViewerNodeData>) => {
     updateNodeData(id, { ...data, ...patch });
   };
@@ -202,9 +219,34 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       viewer.setProjection(projection);
     }
 
+
     if (pdb) {
-      pdbLoadedRef.current = { renderer: "3dmol", pdb };
-      const model = viewer.addModel(pdb, "pdb", { keepH: true });
+      let processedPdb = pdb;
+      if (isMulti && renderer === "3dmol") {
+        // PDB files often only have one CRYST1 at the top. 3Dmol needs it per MODEL.
+        const crystMatch = pdb.match(/^CRYST1.*$/m);
+        if (crystMatch) {
+          const crystStr = crystMatch[0];
+          // Inject CRYST1 after each MODEL if not already there
+          processedPdb = pdb.replace(/^(MODEL\s+\d+)\r?\n(?!CRYST1)/gm, `$1\n${crystStr}\n`);
+        }
+      }
+      pdbLoadedRef.current = { renderer: "3dmol", pdb: processedPdb };
+
+      let model;
+      let models: any[] = [];
+      if (isMulti && viewer.addModelsAsFrames) {
+        const rawModels = viewer.addModelsAsFrames(processedPdb, "pdb", { keepH: true });
+        models = Array.isArray(rawModels) ? rawModels : [rawModels];
+        model = models[0];
+        
+        // Stop native animation since we will control it manually with our own interval
+        if (viewer.pauseAnimate) viewer.pauseAnimate();
+        if (viewer.setFrame) viewer.setFrame(currentFrame);
+      } else {
+        model = viewer.addModel(processedPdb, "pdb", { keepH: true });
+        models = [model];
+      }
       
       const styleConfig: ViewerStyle = {};
       if (viewStyle === "stick" || viewStyle === "both") {
@@ -228,10 +270,26 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
         );
       }
       
-      if (showUnitCell) {
-        viewer.addUnitCell(model, {
-          box: { color: "#6366f1", linewidth: 1.5 },
-          label: { color: "#6366f1" }
+      let shouldShowUnitCell = showUnitCell;
+      if (showUnitCell && processedPdb) {
+        const crystLines = processedPdb.match(/^CRYST1.*$/gm);
+        if (crystLines && crystLines.length > 1) {
+          const firstCryst = crystLines[0];
+          const hasDifferentCryst = crystLines.some((line) => line !== firstCryst);
+          if (hasDifferentCryst) {
+            shouldShowUnitCell = false; // Hide because 3Dmol can't animate dynamic boxes natively
+          }
+        }
+      }
+
+      if (shouldShowUnitCell) {
+        models.forEach((m) => {
+          if (m) {
+            viewer.addUnitCell(m, {
+              box: { color: "#6366f1", linewidth: 1.5 },
+              label: { color: "#6366f1" }
+            });
+          }
         });
       }
 
@@ -300,7 +358,38 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     stickRadius,
     sphereScale,
     lineWidth,
+    isMulti,
+    // Note: Do not include currentFrame here, or else it will re-render the whole model 10 times a second!
   ]);
+
+  // ─── Custom Trajectory Animation Loop ─────────────────────────────────────
+  useEffect(() => {
+    if (!isMulti || renderer !== "3dmol" || !viewerInstance.current || !viewerInstance.current.setFrame) return;
+    
+    let interval: NodeJS.Timeout;
+    if (isPlaying) {
+      interval = setInterval(() => {
+        setCurrentFrame((prev) => {
+          const next = (prev + 1) % numFrames;
+          if (viewerInstance.current?.setFrame) {
+            viewerInstance.current.setFrame(next);
+            viewerInstance.current.render();
+          }
+          return next;
+        });
+      }, 100); // ~10 fps playback
+    }
+    return () => clearInterval(interval);
+  }, [isPlaying, isMulti, numFrames, renderer]);
+
+  const handleFrameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const frame = parseInt(e.target.value) || 0;
+    setCurrentFrame(frame);
+    if (viewerInstance.current?.setFrame) {
+      viewerInstance.current.setFrame(frame);
+      viewerInstance.current.render();
+    }
+  };
 
   // ─── JSmol rendering effect ───────────────────────────────────────────────
 
@@ -655,6 +744,67 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
             <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground bg-muted/10 pointer-events-none">
               <Eye className="w-8 h-8 opacity-20 mb-2" />
               <p className="text-xs font-medium">Click 'Build' to view structure</p>
+            </div>
+          )}
+
+          {/* Trajectory Controls Overlay */}
+          {isMulti && renderer === "3dmol" && (
+            <div 
+              className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-card/90 backdrop-blur-sm border border-border rounded-lg shadow-lg flex items-center gap-2 p-1.5 nodrag pointer-events-auto select-none"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <button 
+                onClick={() => {
+                  const next = (currentFrame - 1 + numFrames) % numFrames;
+                  setCurrentFrame(next);
+                  if (viewerInstance.current?.setFrame) {
+                    viewerInstance.current.setFrame(next);
+                    viewerInstance.current.render();
+                  }
+                }}
+                className="p-1 hover:bg-muted rounded-md text-muted-foreground transition-colors"
+                title="Previous Frame"
+              >
+                <SkipBack className="w-4 h-4" />
+              </button>
+              
+              <button 
+                onClick={() => setIsPlaying(!isPlaying)}
+                className="p-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md transition-colors"
+                title={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+              </button>
+              
+              <button 
+                onClick={() => {
+                  const next = (currentFrame + 1) % numFrames;
+                  setCurrentFrame(next);
+                  if (viewerInstance.current?.setFrame) {
+                    viewerInstance.current.setFrame(next);
+                    viewerInstance.current.render();
+                  }
+                }}
+                className="p-1 hover:bg-muted rounded-md text-muted-foreground transition-colors"
+                title="Next Frame"
+              >
+                <SkipForward className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-2 px-2 border-l border-border ml-1">
+                <span className="text-[10px] font-mono text-muted-foreground w-8 text-right">{currentFrame + 1}</span>
+                <input 
+                  type="range" 
+                  min={0} 
+                  max={numFrames - 1} 
+                  value={currentFrame}
+                  onChange={handleFrameChange}
+                  className="w-24 accent-indigo-500 cursor-pointer h-1.5 bg-muted rounded-lg appearance-none"
+                />
+                <span className="text-[10px] font-mono text-muted-foreground w-8">{numFrames}</span>
+              </div>
+
+
             </div>
           )}
         </CardContent>
