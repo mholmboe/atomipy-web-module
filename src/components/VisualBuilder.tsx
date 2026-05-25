@@ -4035,12 +4035,12 @@ function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode
         pythonCode += `    print(f'Warning: OpenMM failed to load or run. Error: {_omm_err}')\n`;
         pythonCode += `    _omm_tb.print_exc()\n`;
         pythonCode += `    try:\n`;
-        pythonCode += `        print("--- DIAGNOSTIC: GRO FILE HEAD & TAIL ---")\n`;
-        pythonCode += `        with open('system_${simType}.gro', 'r') as _df:\n`;
+        pythonCode += `        print("--- DIAGNOSTIC: PDB FILE HEAD & TAIL ---")\n`;
+        pythonCode += `        with open('system_${simType}.pdb', 'r') as _df:\n`;
         pythonCode += `            _lines = _df.readlines()\n`;
-        pythonCode += `            print(f"Total lines in GRO: {len(_lines)}")\n`;
-        pythonCode += `            print("First 10 lines:")\n`;
-        pythonCode += `            for _l in _lines[:10]: print(_l.strip())\n`;
+        pythonCode += `            print(f"Total lines in PDB: {len(_lines)}")\n`;
+        pythonCode += `            print("First 20 lines:")\n`;
+        pythonCode += `            for _l in _lines[:20]: print(_l.strip())\n`;
         pythonCode += `            print("Last 10 lines:")\n`;
         pythonCode += `            for _l in _lines[-10:]: print(_l.strip())\n`;
         pythonCode += `    except Exception as _diag_err:\n`;
