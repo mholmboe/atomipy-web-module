@@ -13,3 +13,7 @@ tqdm
 gemmi>=0.7.0
 numba>=0.50.0
 openmm
+openff-toolkit
+openff-interchange
+openff-forcefields
+parmed
