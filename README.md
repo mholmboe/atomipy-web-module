@@ -7,6 +7,15 @@ A powerful, node-based visual programming environment for designing, manipulatin
 ## 🚀 Key Features
 
 - **Visual Workflow**: Build systems by connecting nodes: Import → Replicate → Solvate → Add Ions → Run Simulation → Export.
+- **Undo & Redo Capabilities**: Unlimited layout timeline history (up to 50 snapshots) with full `Cmd+Z` / `Cmd+Y` (or `Ctrl+Z` / `Ctrl+Y`) keyboard shortcut integration.
+- **Session Auto-save & Restore**: Debounced local storage caching preserves the complete workflow layout across page refreshes or unexpected crashes.
+- **Topological Warnings Alert**: Active rule-based prerequisite check validation (e.g. alerts when a Forcefield node is missing before a Simulation).
+- **Trajectory Frame Extraction**: Advanced trajectory parser allowing standard pass-through of coordinates and single-frame snapshot extraction.
+- **Strict Backend Safety Limits**: Enforced safety boundaries on system sizes and parameters:
+    - **Replication Limits**: Maximum grid replication size capped at $15 \times 15 \times 15$.
+    - **Spacing Safeguards**: Early errors for non-positive or abnormal solvate/ion minimum distances.
+    - **Ion Thresholds**: Capped maximum ionization count at $10,000$ to prevent out-of-memory overheads.
+    - **Path Traversal Shields**: Basename-scoped path parsing blocking folder traversal attempts (`..` or absolute prefixes).
 - **Structure Library**: Built-in 100+ mineral preset structures (Pyrophyllite, Kaolinite, Montmorillonite, etc.).
 - **3D Visualization**: Real-time 3D structure previewing with integrated NGL/3Dmol viewers.
 - **Forcefield Generation**: Streamlined assignment of **MINFF** and **CLAYFF** parameters.

@@ -43,7 +43,8 @@ export function StatsNode({ id, data, isConnectable = true }: StatsNodeProps) {
           Auto-calculates coordination
         </div>
       </CardContent>
-      <Handle type="source" position={Position.Right} isConnectable={isConnectable} className="w-3 h-3 bg-primary/80" />
+      <Handle type="source" position={Position.Right} id="out" isConnectable={isConnectable} className="w-3 h-3 bg-primary/80" />
+      <Handle type="source" position={Position.Right} id="data" style={{ top: '70%' }} isConnectable={isConnectable} className="w-3 h-3 bg-indigo-500" title="Plot Data" />
     </Card>
   );
 }

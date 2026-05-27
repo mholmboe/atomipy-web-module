@@ -310,6 +310,95 @@ class AtomipyWebBackendTests(unittest.TestCase):
         self.assertIn("[ system ]", top_content)
         self.assertIn("[ molecules ]", top_content)
 
+    def test_build_system_bounds_checks(self):
+        # 1. Test replication limits validation
+        payload_invalid_replicate = {
+            "box": {"lx": 30, "ly": 30, "lz": 80, "alpha": 90, "beta": 90, "gamma": 90},
+            "slabs": [
+                {
+                    "name": "Pyrophyllite",
+                    "source": "preset",
+                    "presetId": "pyrophyllite",
+                    "replicate": {"x": 16, "y": 1, "z": 1},
+                    "position": {"x": 0, "y": 0, "z": 0, "mode": "absolute"},
+                }
+            ],
+            "ions": [],
+            "solvation": {"enabled": False},
+            "postprocess": {"wrap": False},
+            "outputFormat": "none",
+            "outputName": "smoke_system",
+        }
+        resp = self.client.post("/build_system", json=payload_invalid_replicate)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Replication grid dimensions cannot exceed 15x15x15", resp.get_json()["error"])
+
+        # 2. Test path traversal on presetId
+        payload_traversal = {
+            "box": {"lx": 30, "ly": 30, "lz": 80, "alpha": 90, "beta": 90, "gamma": 90},
+            "slabs": [
+                {
+                    "name": "Pyrophyllite",
+                    "source": "preset",
+                    "presetId": "../../etc/passwd",
+                    "replicate": {"x": 1, "y": 1, "z": 1},
+                    "position": {"x": 0, "y": 0, "z": 0, "mode": "absolute"},
+                }
+            ],
+            "ions": [],
+            "solvation": {"enabled": False},
+            "postprocess": {"wrap": False},
+            "outputFormat": "none",
+            "outputName": "smoke_system",
+        }
+        resp = self.client.post("/build_system", json=payload_traversal)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Invalid preset ID", resp.get_json()["error"])
+
+        # 3. Test solvation negative spacing
+        payload_invalid_solvate = {
+            "box": {"lx": 30, "ly": 30, "lz": 80, "alpha": 90, "beta": 90, "gamma": 90},
+            "slabs": [
+                {
+                    "name": "Pyrophyllite",
+                    "source": "preset",
+                    "presetId": "pyrophyllite",
+                    "replicate": {"x": 1, "y": 1, "z": 1},
+                    "position": {"x": 0, "y": 0, "z": 0, "mode": "absolute"},
+                }
+            ],
+            "ions": [],
+            "solvation": {"enabled": True, "waterModel": "spce", "density": 1.0, "minDistance": -1.0},
+            "postprocess": {"wrap": False},
+            "outputFormat": "none",
+            "outputName": "smoke_system",
+        }
+        resp = self.client.post("/build_system", json=payload_invalid_solvate)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Solvation minimum distance must be positive", resp.get_json()["error"])
+
+        # 4. Test ion limits
+        payload_invalid_ions = {
+            "box": {"lx": 30, "ly": 30, "lz": 80, "alpha": 90, "beta": 90, "gamma": 90},
+            "slabs": [
+                {
+                    "name": "Pyrophyllite",
+                    "source": "preset",
+                    "presetId": "pyrophyllite",
+                    "replicate": {"x": 1, "y": 1, "z": 1},
+                    "position": {"x": 0, "y": 0, "z": 0, "mode": "absolute"},
+                }
+            ],
+            "ions": [{"ion": "Na", "count": 15000, "minDistance": 3.0}],
+            "solvation": {"enabled": False},
+            "postprocess": {"wrap": False},
+            "outputFormat": "none",
+            "outputName": "smoke_system",
+        }
+        resp = self.client.post("/build_system", json=payload_invalid_ions)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Maximum ion count limit of 10000 exceeded", resp.get_json()["error"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

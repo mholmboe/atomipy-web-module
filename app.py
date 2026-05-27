@@ -437,19 +437,28 @@ def build_system():
                     preset_id = slab.get("presetId")
                     if not preset_id:
                         raise ValueError(f"Preset slab at index {idx} has no presetId.")
-                    slab_path = os.path.join(BASE_DIR, "UC_conf", str(preset_id))
+                    preset_id_str = str(preset_id)
+                    preset_basename = os.path.basename(preset_id_str)
+                    if preset_basename != preset_id_str or ".." in preset_id_str or preset_id_str.startswith("/") or preset_id_str.startswith("\\"):
+                        raise ValueError(f"Invalid preset ID (potential path traversal path): {preset_id_str}")
+                    slab_path = os.path.join(BASE_DIR, "UC_conf", preset_basename)
                     if not os.path.exists(slab_path):
-                        rel = get_preset_slabs().get(str(preset_id))
+                        rel = get_preset_slabs().get(preset_basename)
                         if rel:
                             slab_path = rel
                         else:
-                            raise ValueError(f"Preset file not found: {preset_id}")
+                            raise ValueError(f"Preset file not found: {preset_basename}")
 
                 slab_atoms, slab_box = _import_structure(slab_path)
                 rep = slab.get("replicate", {})
-                nx = max(1, int(rep.get("x", 1)))
-                ny = max(1, int(rep.get("y", 1)))
-                nz = max(1, int(rep.get("z", 1)))
+                nx = int(rep.get("x", 1))
+                ny = int(rep.get("y", 1))
+                nz = int(rep.get("z", 1))
+                if nx > 15 or ny > 15 or nz > 15:
+                    raise ValueError(f"Replication grid dimensions cannot exceed 15x15x15. Got {nx}x{ny}x{nz}.")
+                if nx <= 0 or ny <= 0 or nz <= 0:
+                    raise ValueError(f"Replication grid dimensions must be positive integers. Got {nx}x{ny}x{nz}.")
+                
                 if [nx, ny, nz] != [1, 1, 1]:
                     slab_atoms, slab_box, _ = ap.replicate_system(
                         slab_atoms, slab_box, replicate=[nx, ny, nz]
@@ -497,12 +506,22 @@ def build_system():
             # Add ions (region defaults to full box)
             for ion in ions_cfg:
                 ion_type = str(ion.get("ion", "")).strip()
-                count = max(0, int(ion.get("count", 0)))
+                count = int(ion.get("count", 0))
                 if not ion_type or count <= 0:
                     continue
+                if count > 10000:
+                    raise ValueError(f"Maximum ion count limit of 10000 exceeded. Got {count}.")
+                if count < 0:
+                    raise ValueError(f"Ion count cannot be negative. Got {count}.")
+                
                 wrapped_solute = ap.wrap(all_atoms, final_box) if all_atoms else []
                 limits = _normalize_limits(ion.get("limits"), final_box)
                 min_distance = float(ion.get("minDistance", 3.0))
+                if min_distance <= 0:
+                    raise ValueError(f"Ion minimum distance must be positive. Got {min_distance}.")
+                if min_distance > 20.0:
+                    raise ValueError(f"Ion minimum distance is abnormally large: {min_distance}. Must be <= 20.0.")
+                
                 placement = str(ion.get("placement", "random"))
 
                 ion_atoms = ap.ionize(
@@ -536,8 +555,13 @@ def build_system():
                     limits = _normalize_limits(region.get("limits"), final_box)
                     val_max_solvent = region.get("maxSolvent", solvation_cfg.get("maxSolvent", "max"))
                     max_solvent: Union[str, int] = val_max_solvent if isinstance(val_max_solvent, (int, str)) else "max"
-                    val_min_dist = region.get("minDistance", 2.0)
+                    val_min_dist = region.get("minDistance", solvation_cfg.get("minDistance", 2.0))
                     min_distance = float(val_min_dist) if isinstance(val_min_dist, (int, float, str)) else 2.0
+                    if min_distance <= 0:
+                        raise ValueError(f"Solvation minimum distance must be positive. Got {min_distance}.")
+                    if min_distance > 20.0:
+                        raise ValueError(f"Solvation minimum distance is abnormally large: {min_distance}. Must be <= 20.0.")
+                    
                     solvent_atoms = ap.solvate(
                         limits=limits,
                         density=density_kg_m3,
