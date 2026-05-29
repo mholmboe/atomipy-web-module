@@ -63,10 +63,8 @@ export function SolventNode({ id, data }: NodeComponentProps<SolventNodeData>) {
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">Water Model</label>
               <select className={selectCls} value={data.waterModel ?? "spce"} onChange={(e) => set("waterModel", e.target.value)} onPointerDown={(e) => e.stopPropagation()}>
-                <option value="spce">SPC/E</option>
-                <option value="spc">SPC</option>
-                <option value="tip3p">TIP3P</option>
-                <option value="tip4p">TIP4P</option>
+                <option value="spce">3-site (SPC/E, TIP3P, OPC3)</option>
+                <option value="tip4p">4-site (TIP4P, OPC)</option>
               </select>
             </div>
             <div>

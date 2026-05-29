@@ -4,11 +4,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="${ROOT_DIR}/.dev-logs"
 
-BACKEND_PORT=5002
+CORE_PORT=8000
+OPENFF_PORT=8001
 FRONTEND_PORT=8080
-BACKEND_URL="http://127.0.0.1:${BACKEND_PORT}"
+
+CORE_URL="http://127.0.0.1:${CORE_PORT}"
+OPENFF_URL="http://127.0.0.1:${OPENFF_PORT}"
 FRONTEND_URL="http://127.0.0.1:${FRONTEND_PORT}"
-PYTHON_BIN=""
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -39,8 +41,8 @@ kill_port() {
 wait_for_url() {
   local url="$1"
   local label="$2"
-  local tries="${3:-40}"
-  local delay="${4:-0.5}"
+  local tries="${3:-60}"
+  local delay="${4:-1}"
   local i
 
   for ((i = 1; i <= tries; i++)); do
@@ -55,36 +57,54 @@ wait_for_url() {
   return 1
 }
 
-find_python_for_backend() {
-  local candidates=()
+setup_conda_envs() {
+  require_cmd conda
 
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    candidates+=("${PYTHON_BIN}")
-  fi
-  if [[ -n "${ATOMIPY_PYTHON:-}" ]]; then
-    candidates+=("${ATOMIPY_PYTHON}")
+  if ! conda env list | grep -q "atomipy-core"; then
+    echo "Creating atomipy-core conda environment..."
+    conda env create -f envs/atomipy-core.yml
   fi
 
-  candidates+=(
-    "${ROOT_DIR}/.venv/bin/python"
-    "${ROOT_DIR}/venv/bin/python"
-    "${ROOT_DIR}/env/bin/python"
-    "${ROOT_DIR}/../.venv/bin/python"
-  )
-
-  if command -v python3 >/dev/null 2>&1; then
-    candidates+=("$(command -v python3)")
+  if ! conda env list | grep -q "atomipy-openff"; then
+    echo "Creating atomipy-openff conda environment..."
+    conda env create -f envs/atomipy-openff.yml
   fi
+}
 
-  local candidate
-  for candidate in "${candidates[@]}"; do
-    if [[ -x "${candidate}" ]] && "${candidate}" -c "import flask" >/dev/null 2>&1; then
-      PYTHON_BIN="${candidate}"
-      return 0
-    fi
-  done
+update_conda_envs() {
+  require_cmd conda
+  echo "Updating atomipy-core environment..."
+  conda env update -n atomipy-core -f envs/atomipy-core.yml --prune
+  echo "Updating atomipy-openff environment..."
+  conda env update -n atomipy-openff -f envs/atomipy-openff.yml --prune
+}
 
-  return 1
+check_acpype() {
+  if conda run -n atomipy-openff acpype --version >/dev/null 2>&1; then
+    echo "ACPYPE available in atomipy-openff — GAFF/GAFF2 parametrization enabled."
+  else
+    echo ""
+    echo "⚠️  WARNING: ACPYPE not found in atomipy-openff environment."
+    echo "   GAFF/GAFF2 parametrization will fail until you run:"
+    echo "   conda env update -n atomipy-openff -f envs/atomipy-openff.yml --prune"
+    echo "   (or pass --update-envs to this script)"
+    echo ""
+  fi
+}
+
+start_redis() {
+  if ! command -v redis-server >/dev/null 2>&1; then
+    echo "redis-server not found! Please install it (e.g. 'brew install redis')"
+    exit 1
+  fi
+  
+  if ! redis-cli ping >/dev/null 2>&1; then
+    echo "Starting Redis server in background..."
+    redis-server --daemonize yes
+    sleep 1
+  else
+    echo "Redis is already running."
+  fi
 }
 
 main() {
@@ -92,6 +112,11 @@ main() {
   require_cmd curl
   require_cmd npm
   require_cmd nohup
+
+  local update_envs=false
+  for arg in "$@"; do
+    [[ "${arg}" == "--update-envs" ]] && update_envs=true
+  done
 
   cd "${ROOT_DIR}"
   mkdir -p "${LOG_DIR}"
@@ -101,28 +126,58 @@ main() {
     exit 1
   fi
 
-  if ! find_python_for_backend; then
-    echo "Could not find a Python interpreter with Flask installed."
-    echo "Set ATOMIPY_PYTHON=/path/to/python or install Flask in your active environment."
-    exit 1
+  if [[ "${update_envs}" == "true" ]]; then
+    update_conda_envs
+  else
+    setup_conda_envs
   fi
 
+  check_acpype
+  start_redis
+
   kill_port "${FRONTEND_PORT}"
-  kill_port "${BACKEND_PORT}"
+  kill_port "${CORE_PORT}"
+  kill_port "${OPENFF_PORT}"
 
   local timestamp
   timestamp="$(date +%Y%m%d-%H%M%S)"
-  local backend_log="${LOG_DIR}/backend-${timestamp}.log"
+  local core_log="${LOG_DIR}/core-${timestamp}.log"
+  local openff_log="${LOG_DIR}/openff-${timestamp}.log"
+  local celery_log="${LOG_DIR}/celery-${timestamp}.log"
   local frontend_log="${LOG_DIR}/frontend-${timestamp}.log"
 
-  echo "Starting backend on ${BACKEND_PORT}..."
-  nohup "${PYTHON_BIN}" app.py >"${backend_log}" 2>&1 &
-  local backend_pid=$!
+  echo "Starting OpenFF Worker on port ${OPENFF_PORT}..."
+  export INTERCHANGE_EXPERIMENTAL=1
+  # PYTHONPATH = ROOT_DIR so that the local atomipy/ package inside atomipy-web-module is used
+  export PYTHONPATH="${ROOT_DIR}"
+  nohup conda run --cwd workers/openff_worker -n atomipy-openff \
+    env PYTHONPATH="${PYTHONPATH}" INTERCHANGE_EXPERIMENTAL=1 \
+    uvicorn main:app --reload --port "${OPENFF_PORT}" >"${openff_log}" 2>&1 &
+  local openff_pid=$!
 
-  if ! wait_for_url "${BACKEND_URL}/health" "Backend"; then
-    echo "Backend failed to start. Last log lines:"
-    tail -n 80 "${backend_log}" || true
+  echo "Starting Core Backend on port ${CORE_PORT}..."
+  export OPENFF_WORKER_URL="${OPENFF_URL}"
+  nohup conda run --cwd backend/core -n atomipy-core \
+    env PYTHONPATH="${PYTHONPATH}" OPENFF_WORKER_URL="${OPENFF_URL}" \
+    uvicorn main:app --reload --port "${CORE_PORT}" >"${core_log}" 2>&1 &
+  local core_pid=$!
+
+  echo "Starting Celery Worker..."
+  export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+  nohup conda run --cwd backend/core -n atomipy-core \
+    env PYTHONPATH="${PYTHONPATH}" OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES \
+    celery -A celery_app.app worker --loglevel=info >"${celery_log}" 2>&1 &
+  local celery_pid=$!
+
+  if ! wait_for_url "${CORE_URL}/health" "Core Backend"; then
+    echo "Core Backend failed to start. Last log lines:"
+    tail -n 80 "${core_log}" || true
     exit 1
+  fi
+  
+  if ! wait_for_url "${OPENFF_URL}/docs" "OpenFF Worker"; then
+    echo "OpenFF Worker failed to start. Last log lines:"
+    tail -n 80 "${openff_log}" || true
   fi
 
   echo "Starting frontend on ${FRONTEND_PORT}..."
@@ -135,31 +190,29 @@ main() {
     exit 1
   fi
 
-  echo "Running smoke checks..."
-  curl -fsS "${BACKEND_URL}/health" >/dev/null
-  curl -fsS "${BACKEND_URL}/api/presets" >/dev/null
-  curl -fsS "${FRONTEND_URL}/health" >/dev/null
-  curl -fsS "${FRONTEND_URL}/api/presets" >/dev/null
-
   cat <<EOF
-Restart complete.
+
+✅ Restart complete! The new modern stack is running natively.
 
 Frontend: ${FRONTEND_URL}
-Backend:  ${BACKEND_URL}
-Python:   ${PYTHON_BIN}
+Core API: ${CORE_URL}
+OpenFF:   ${OPENFF_URL}
 
 PIDs:
-  Backend PID:  ${backend_pid}
-  Frontend PID: ${frontend_pid}
+  Core Backend:   ${core_pid}
+  OpenFF Worker:  ${openff_pid}
+  Celery Worker:  ${celery_pid}
+  Frontend:       ${frontend_pid}
 
-Logs:
-  ${backend_log}
-  ${frontend_log}
-
-Useful commands:
-  tail -f "${backend_log}"
+Logs in .dev-logs/:
+  tail -f "${core_log}"
+  tail -f "${openff_log}"
+  tail -f "${celery_log}"
   tail -f "${frontend_log}"
-  lsof -ti tcp:${BACKEND_PORT} | xargs kill
+
+Useful commands to stop services:
+  lsof -ti tcp:${CORE_PORT} | xargs kill
+  lsof -ti tcp:${OPENFF_PORT} | xargs kill
   lsof -ti tcp:${FRONTEND_PORT} | xargs kill
 EOF
 }

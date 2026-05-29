@@ -1208,12 +1208,18 @@ def ionize(ion_type, resname, limits, num_ions, Box=None, min_distance=None, sol
                 z = direction_value
         
         # Create ion atom
+        ion_charge_map = {
+            'Na': 1.0, 'K': 1.0, 'Li': 1.0, 'Cs': 1.0, 'Rb': 1.0,
+            'Cl': -1.0, 'F': -1.0, 'Br': -1.0, 'I': -1.0,
+            'Ca': 2.0, 'Mg': 2.0, 'Zn': 2.0, 'Ba': 2.0,
+        }
         ion = {
             'index': len(ions) + 1,
             'molid': len(ions) + 1,  # Each ion is its own molecule
             'resname': resname,
             'type': ion_type,
             'element': ion_type,  # Assume type is element
+            'charge': ion_charge_map.get(ion_type, 0.0),
             'x': x,
             'y': y,
             'z': z

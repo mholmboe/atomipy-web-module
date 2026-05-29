@@ -108,12 +108,60 @@
 
 @layer components {
   .react-flow__handle {
-    width: 14px !important;
-    height: 14px !important;
+    width: 18px !important;
+    height: 18px !important;
+    background-color: hsl(var(--primary)) !important;
+    border: 3px solid hsl(var(--card)) !important;
+    box-shadow: 0 0 0 1px hsl(var(--border)), 0 2px 4px rgba(0,0,0,0.08) !important;
+    transition: all 0.15s ease-in-out !important;
+  }
+
+  .react-flow__handle.target {
+    background-color: #cbd5e1 !important; /* Brighter, crisp silver-slate gray for receiving handles in light mode */
+  }
+
+  .dark .react-flow__handle.target {
+    background-color: #f1f5f9 !important; /* Brighter slate-white for receiving handles in dark mode */
+  }
+
+  .react-flow__handle:hover {
+    transform: scale(1.2) !important;
+    box-shadow: 0 0 8px hsl(var(--primary) / 0.6) !important;
+  }
+
+  .react-flow__handle.target:hover {
+    background-color: #404040 !important;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  .dark .react-flow__handle.target:hover {
+    background-color: #ffffff !important;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.4) !important;
   }
 
   .react-flow__node:not(.react-flow__node-viewer) > * {
     width: var(--builder-node-width) !important;
     min-width: var(--builder-node-width) !important;
+  }
+
+  /* Prevent React Flow handles from being clipped into half-circles */
+  .react-flow__node,
+  .react-flow__node > div,
+  .react-flow__node-default,
+  .react-flow__node-input,
+  .react-flow__node-output,
+  .react-flow__node-custom,
+  .react-flow__node .bg-card {
+    overflow: visible !important;
+  }
+
+  /* Clip first/last child backgrounds inside rounded nodes since parent overflow is visible */
+  .bg-card > div:first-child {
+    border-top-left-radius: 11px !important;
+    border-top-right-radius: 11px !important;
+  }
+  .bg-card > div:not(.react-flow__handle):not(:first-child) {
+    border-bottom-left-radius: 11px !important;
+    border-bottom-right-radius: 11px !important;
   }
 }

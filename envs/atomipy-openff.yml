@@ -1,0 +1,17 @@
+name: atomipy-openff
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - openff-toolkit>=0.17
+  - openff-interchange>=0.5
+  - openff-forcefields          # Sage, Rosemary etc.
+  - openff-units
+  - openmm>=8.1
+  - acpype                      # GAFF/GAFF2 — bundles antechamber binaries
+  - openbabel                   # SMILES → mol2 fallback for ACPYPE
+  - rdkit
+  - fastapi
+  - uvicorn
+  # NOTE: NO parmed — intentional isolation
+  # NOTE: NO openmmforcefields — replaced by acpype for GAFF

@@ -400,5 +400,24 @@ class AtomipyWebBackendTests(unittest.TestCase):
         self.assertIn("Maximum ion count limit of 10000 exceeded", resp.get_json()["error"])
 
 
+    def test_organic_ff_options(self):
+        response = self.client.get("/api/organic/ff-options")
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn("options", data)
+        self.assertTrue(len(data["options"]) > 0)
+        self.assertEqual(data["options"][0]["id"], "gaff-2.11")
+
+    def test_organic_parametrize_missing_smiles(self):
+        response = self.client.post("/api/organic/parametrize", json={"forcefield": "gaff-2.11"})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.get_json())
+        
+    def test_organic_mix_missing_payload(self):
+        response = self.client.post("/api/organic/mix", json={})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.get_json())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

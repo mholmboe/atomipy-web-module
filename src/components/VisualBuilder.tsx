@@ -60,6 +60,7 @@ import {
   Atom,
   BarChart,
   X,
+  Hexagon,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -69,7 +70,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Loader2, Terminal, AlertTriangle } from "lucide-react";
+import { Loader2, Terminal, AlertTriangle, Square, OctagonX } from "lucide-react";
 import { toast } from "sonner";
 import { isValidConnection } from "./graph/connectionValidation";
 import { useGraphHistory } from "./graph/useGraphHistory";
@@ -151,6 +152,7 @@ const nodeTypes = {
   export: ExportNode,
   trajectory: TrajectoryNode,
   simulate: SimulateNode,
+  organic: StructureNode,
   // Legacy nodes (kept so saved workflows still load)
   addIons: IonsNode,
   grid: IonsNode,
@@ -368,8 +370,8 @@ const validateWorkflow = (nodes: Node[], edges: Edge[]): string[] => {
     if (node.type === "add") {
       const possibleHandles = ["inA", "inB", "in1", "in2", "in3", "in4", "in5", "in6"];
       const connectedHandles = incoming.filter(e => possibleHandles.includes(e.targetHandle || "")).length;
-      if (connectedHandles < 2) {
-        errors.push(`Node "add" (Join Branches) requires at least two inputs to join.`);
+      if (connectedHandles < 1) {
+        errors.push(`Node "add" (Join Branches) requires at least one input.`);
       }
     }
 
@@ -378,8 +380,17 @@ const validateWorkflow = (nodes: Node[], edges: Edge[]): string[] => {
       if (source === "upload" && !getString(data, "filename", "").trim()) {
         errors.push(`Node "structure" (upload) is missing file upload.`);
       }
-      if (source !== "upload" && !getString(data, "value", "").trim()) {
+      if (source === "preset" && !getString(data, "value", "").trim()) {
         errors.push(`Node "structure" (preset) has no selected preset.`);
+      }
+      if (source === "organic") {
+        const inputMode = getString(data, "inputMode", "smiles");
+        if (inputMode === "smiles" && !getString(data, "smiles", "").trim()) {
+          errors.push(`Node "structure" (organic) is missing SMILES string.`);
+        }
+        if (inputMode === "file" && !getString(data, "uploadedFilePath", "").trim()) {
+          errors.push(`Node "structure" (organic) is missing structure file upload.`);
+        }
       }
     }
 
@@ -616,6 +627,7 @@ const NODE_PURPOSE_DOCS: Record<string, string> = {
   xrd: "Calculates and exports simulated XRD profiles.",
   export: "Writes final coordinate/topology files.",
   simulate: "Runs OpenMM energy minimization or MD (NVT/NPT) on the full system using CPU.",
+  organic: "Parametrizes an organic molecule from a SMILES string.",
 };
 
 const compactBlankLines = (text: string): string => text.replace(/\n{3,}/g, "\n\n");
@@ -929,30 +941,26 @@ const generateNotebookFromStrictScript = (nodes: Node[], strictScriptWithMarkers
   );
 };
 
+const cleanNodesForStorage = (nds: any[]): any[] => {
+  return nds.map((node) => {
+    if (!node || !node.data) return node;
+    const { pdb, plotData, charges, ...restData } = node.data;
+    return {
+      ...node,
+      data: restData,
+    };
+  });
+};
+
 export default function VisualBuilder() {
   const [rfInstance, setRfInstance] = useState<any>(null);
   const [nodes, setNodes] = useNodesState(initialNodes);
   const [edges, setEdges] = useEdgesState(initialEdges);
-  
+
   const { undo, redo, pushState, resetHistory, canUndo, canRedo } = useGraphHistory(initialNodes, initialEdges);
 
-  // Load initially or restore last active workflow session
-  useEffect(() => {
-    const raw = localStorage.getItem("atomipy_active_workflow");
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
-          setNodes(parsed.nodes);
-          setEdges(parsed.edges);
-          resetHistory(parsed.nodes, parsed.edges);
-          toast.success("Restored previous session workflow successfully!");
-          return;
-        }
-      } catch (err) {
-        console.error("Failed to restore last active workflow session", err);
-      }
-    }
+  const initialViewport = React.useMemo(() => {
+    return { x: 0, y: 0, zoom: 1 };
   }, []);
 
   // Keyboard listener for Cmd/Ctrl + Z (Undo) and Cmd/Ctrl + Y (Redo)
@@ -976,8 +984,13 @@ export default function VisualBuilder() {
   // Auto-save nodes/edges to localStorage on updates, and push to undo/redo history (debounced)
   useEffect(() => {
     if (nodes.length > 0) {
-      localStorage.setItem("atomipy_active_workflow", JSON.stringify({ nodes, edges }));
-      
+      try {
+        const cleanedNodes = cleanNodesForStorage(nodes);
+        localStorage.setItem("atomipy_active_workflow", JSON.stringify({ nodes: cleanedNodes, edges }));
+      } catch (err) {
+        console.warn("Failed to auto-save workflow to localStorage:", err);
+      }
+
       const timer = setTimeout(() => {
         pushState(nodes, edges);
       }, 500);
@@ -992,9 +1005,13 @@ export default function VisualBuilder() {
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [edgeType, setEdgeType] = useState<"bezier" | "step">("bezier");
   const [snapToGrid, setSnapToGrid] = useState(false);
+  const [verboseLog, setVerboseLog] = useState(false);
+  const [isWarningsMinimized, setIsWarningsMinimized] = useState(true);
 
   // Build Progress States
   const [isBuilding, setIsBuilding] = useState(false);
+  const [currentBuildId, setCurrentBuildId] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [showStatusWindow, setShowStatusWindow] = useState(false);
   const [buildProgress, setBuildProgress] = useState(0);
   const [buildStatus, setBuildStatus] = useState("");
@@ -1107,6 +1124,9 @@ export default function VisualBuilder() {
 
     if (type === "forcefield") {
       baseData.forcefield = "minff";
+      baseData.minffVariant = "500";
+      baseData.waterModel = "OPC3";
+      baseData.ionSet = "IOD_LM";
       baseData.rmaxLong = 2.45;
       baseData.rmaxH = 1.2;
       baseData.log = false;
@@ -1193,6 +1213,9 @@ export default function VisualBuilder() {
       baseData.rx = 0; baseData.ry = 0; baseData.rz = 0;
       baseData.sx = 1.0; baseData.sy = 1.0; baseData.sz = 1.0;
       baseData.radius = 50;
+      baseData.useBox = true;
+      baseData.centerDim = "xyz";
+      baseData.centerResname = "";
     }
     if (type === "pbc") {
       baseData.mode = "wrap";
@@ -1313,6 +1336,7 @@ export default function VisualBuilder() {
       baseData.switchDistance = 10.0;
       baseData.writeDcd = false;
       baseData.dcdFreq = 1000;
+      baseData.wrapTrajectory = true;
     }
 
     if (type === "xrd") {
@@ -1391,23 +1415,38 @@ export default function VisualBuilder() {
       });
       setNodes(cleanedNodes);
       setEdges(deepClone(graph.edges));
+      if (rfInstance) {
+        setTimeout(() => {
+          rfInstance.fitView({ padding: 0.4, maxZoom: 0.8 });
+        }, 50);
+      }
     },
-    [presets, setEdges, setNodes],
+    [presets, setEdges, setNodes, rfInstance],
   );
 
   const storeCustomTemplates = useCallback((templates: SavedWorkflow[]) => {
-    setCustomTemplates(templates);
+    const cleaned = templates.map(t => ({
+      ...t,
+      nodes: cleanNodesForStorage(t.nodes),
+      edges: t.edges,
+    }));
+    setCustomTemplates(cleaned);
     try {
-      localStorage.setItem(WORKFLOW_TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+      localStorage.setItem(WORKFLOW_TEMPLATE_STORAGE_KEY, JSON.stringify(cleaned));
     } catch {
       console.error("Failed to persist templates in local storage.");
     }
   }, []);
 
   const storeSavedWorkflows = useCallback((workflows: SavedWorkflow[]) => {
-    setSavedWorkflows(workflows);
+    const cleaned = workflows.map(w => ({
+      ...w,
+      nodes: cleanNodesForStorage(w.nodes),
+      edges: w.edges,
+    }));
+    setSavedWorkflows(cleaned);
     try {
-      localStorage.setItem(WORKFLOW_SAVED_STORAGE_KEY, JSON.stringify(workflows));
+      localStorage.setItem(WORKFLOW_SAVED_STORAGE_KEY, JSON.stringify(cleaned));
     } catch {
       console.error("Failed to persist workflows in local storage.");
     }
@@ -1474,7 +1513,7 @@ export default function VisualBuilder() {
     // 2. Find starting nodes (nodes with 0 incoming edges)
     let queue = nodes.filter((n) => incoming[n.id].length === 0).map((n) => n.id);
     const depths: Record<string, number> = {};
-    
+
     // Initialize starting nodes at depth 0
     queue.forEach((id) => {
       depths[id] = 0;
@@ -1516,7 +1555,7 @@ export default function VisualBuilder() {
         const w = parseInt(String(n.style.width));
         if (!isNaN(w)) return w;
       }
-      
+
       const defaultWidths: Record<string, number> = {
         viewer: 480,
         structure: 300,
@@ -1599,7 +1638,7 @@ export default function VisualBuilder() {
     const nextNodes = nodes.map((node) => {
       const depth = depths[node.id];
       const idx = columns[depth].indexOf(node.id);
-      
+
       // Centered Y offset
       const totalInCol = columns[depth].length;
       const yOffset = ((idx - (totalInCol - 1) / 2) * spacingY);
@@ -1801,7 +1840,27 @@ export default function VisualBuilder() {
       return;
     }
 
-    const validationErrors = validateWorkflow(nodes, edges);
+    let activeNodes = nodes;
+    let activeEdges = edges;
+    const selectedNodes = nodes.filter((n) => n.selected);
+    if (selectedNodes.length > 0) {
+      const visited = new Set<string>();
+      const queue = selectedNodes.map((n) => n.id);
+      while (queue.length > 0) {
+        const curId = queue.shift()!;
+        if (visited.has(curId)) continue;
+        visited.add(curId);
+        const parents = edges
+          .filter((e) => e.target === curId)
+          .map((e) => e.source);
+        queue.push(...parents);
+      }
+      activeNodes = nodes.filter((n) => visited.has(n.id));
+      activeEdges = edges.filter((e) => visited.has(e.source) && visited.has(e.target));
+      toast.info(`Running ${activeNodes.length} selected node(s) & upstream dependencies...`);
+    }
+
+    const validationErrors = validateWorkflow(activeNodes, activeEdges);
     if (validationErrors.length > 0) {
       console.error("Workflow validation errors:", validationErrors);
       toast.error("Workflow validation failed", {
@@ -1810,12 +1869,12 @@ export default function VisualBuilder() {
       return;
     }
 
-    const runToastId = toast.loading("Running your system... this may take a minute.");
-    const isOutputProducing = nodes.some((n) =>
+    const runToastId = toast.loading(selectedNodes.length > 0 ? "Running selected subgraph..." : "Running your system... this may take a minute.");
+    const isOutputProducing = activeNodes.some((n) =>
       ["export", "xrd", "bvs", "bondAngle", "stats"].includes(n.type || "")
     );
-    const nodeById = new Map(nodes.map((node) => [node.id, node]));
-    const topoOrder = topologicalSortNodeIds(nodes, edges);
+    const nodeById = new Map(activeNodes.map((node) => [node.id, node]));
+    const topoOrder = topologicalSortNodeIds(activeNodes, activeEdges);
     const trackedOrder = topoOrder.filter((nodeId) => shouldTrackNodeStatus(nodeById.get(nodeId)?.type || ""));
     setTrackedNodeOrder(trackedOrder);
     setNodeRunStatus(
@@ -1832,11 +1891,14 @@ export default function VisualBuilder() {
     try {
       // Default to minimalistic execution for cleaner generated scripts
       const useMinimalExecution = true;
-      const fullScript = generatePythonCode(nodes, edges, "full");
-      const runtimeScript = useMinimalExecution ? generatePythonCode(nodes, edges, "minimal") : fullScript;
-      const strictScriptWithMarkers = generatePythonCode(nodes, edges, "strict");
+      const fullScript = generatePythonCode(activeNodes, activeEdges, "full");
+      const runtimeScript = useMinimalExecution ? generatePythonCode(activeNodes, activeEdges, "minimal") : fullScript;
+      const strictScriptWithMarkers = generatePythonCode(activeNodes, activeEdges, "strict");
       const strictScript = stripOperationMarkers(strictScriptWithMarkers);
-      const notebookScript = generateNotebookFromStrictScript(nodes, strictScriptWithMarkers);
+      const notebookScript = generateNotebookFromStrictScript(activeNodes, strictScriptWithMarkers);
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       const response = await fetch("/api/build-stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1848,7 +1910,9 @@ export default function VisualBuilder() {
             "build_script_strict_minimal.py": strictScript,
             "build_script_notebook.ipynb": notebookScript,
           },
+          verbose_log: verboseLog,
         }),
+        signal: abortController.signal,
       });
 
       if (!response.ok) throw new Error(`Run request failed: ${response.status}`);
@@ -1873,6 +1937,7 @@ export default function VisualBuilder() {
             const data = JSON.parse(rawLine.slice(6));
             if (data.type === "complete") {
               setIsBuilding(false);
+              setCurrentBuildId(null);
               setBuildStatus(data.success ? "Build completed." : "Build failed.");
               setBuildProgress((prev) => (data.success ? 100 : prev));
               setNodeRunStatus((prev) => {
@@ -1897,16 +1962,18 @@ export default function VisualBuilder() {
                 toast.error("Run failed. Download contains error details.", { id: runToastId });
               }
               return;
+            } else if (data.type === "build_id") {
+              setCurrentBuildId(data.buildId as string);
             } else if (data.type === "status") {
               const statusMessage = typeof data.message === "string" ? data.message.trim() : "";
               if (statusMessage) setBuildStatus(statusMessage);
             } else if (data.type === "log") {
               const logLine = typeof data.message === "string" ? data.message.trim() : "";
-              if (logLine && 
-                  !logLine.includes("__PLOT_") && 
-                  !logLine.includes("__VISUALIZE_") && 
-                  !logLine.includes("__NODE_START_") &&
-                  !logLine.includes("__CHARGES_")) {
+              if (logLine &&
+                !logLine.includes("__PLOT_") &&
+                !logLine.includes("__VISUALIZE_") &&
+                !logLine.includes("__NODE_START_") &&
+                !logLine.includes("__CHARGES_")) {
                 setBuildLogs((prev) => [...prev.slice(-48), logLine]);
               }
             } else if (data.type === "progress") {
@@ -1986,7 +2053,7 @@ export default function VisualBuilder() {
                   if (node.id === nodeId) {
                     const a = boxData.a ?? 50, b = boxData.b ?? 50, c = boxData.c ?? 50;
                     const alpha = boxData.alpha ?? 90, beta = boxData.beta ?? 90, gamma = boxData.gamma ?? 90;
-                    
+
                     const toRad = (deg: number) => (deg * Math.PI) / 180;
                     const isOrtho = Math.abs((alpha || 90) - 90) < 1e-6 && Math.abs((beta || 90) - 90) < 1e-6 && Math.abs((gamma || 90) - 90) < 1e-6;
                     let bd;
@@ -2002,13 +2069,13 @@ export default function VisualBuilder() {
                       const lz = Math.sqrt(Math.max(0, c * c - xz * xz - yz * yz));
                       bd = { lx, ly, lz, xy, xz, yz };
                     }
-                    
+
                     const fmtVal = (v: number) => parseFloat(v.toFixed(4));
                     const formattedBd = {
                       lx: fmtVal(bd.lx), ly: fmtVal(bd.ly), lz: fmtVal(bd.lz),
                       xy: fmtVal(bd.xy), xz: fmtVal(bd.xz), yz: fmtVal(bd.yz)
                     };
-                    
+
                     return {
                       ...node,
                       data: {
@@ -2030,8 +2097,14 @@ export default function VisualBuilder() {
       }
 
       setIsBuilding(false);
+      setCurrentBuildId(null);
     } catch (error: unknown) {
+      // If the build was aborted intentionally, don't show an error toast
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
       setIsBuilding(false);
+      setCurrentBuildId(null);
       setBuildStatus("Build request failed.");
       setNodeRunStatus((prev) => {
         const next = { ...prev };
@@ -2049,47 +2122,74 @@ export default function VisualBuilder() {
     }
   };
 
+  const handleStopBuild = async () => {
+    // 1. Abort the SSE stream immediately so the UI resets
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+
+    // 2. Signal the backend to kill the worker thread
+    const bid = currentBuildId;
+    if (bid) {
+      try {
+        await fetch(`/api/stop-build/${bid}`, { method: "POST" });
+      } catch {
+        // Ignore — server may already have cleaned up
+      }
+    }
+
+    // 3. Reset UI state
+    setIsBuilding(false);
+    setCurrentBuildId(null);
+    setBuildStatus("Build stopped by user.");
+    setNodeRunStatus((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((nodeId) => {
+        if (next[nodeId] === "running" || next[nodeId] === "queued") {
+          next[nodeId] = "skipped";
+        }
+      });
+      return next;
+    });
+    toast.warning("Build stopped.");
+  };
+
   return (
-    <section className="mx-auto w-full max-w-[1700px] py-2 px-4 h-[1100px] flex flex-col space-y-1">
-      <div className="flex justify-between items-start bg-card/50 backdrop-blur-md p-1.5 rounded-2xl border border-border shadow-2xl">
-        <div className="grid grid-cols-[max-content_theme(spacing.28)_1fr] gap-x-2 gap-y-1 items-center w-full">
-          {/* Row 1: Main Ribbon + Run + Help Text */}
-          <div className="flex bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto w-max">
+    <section className="mx-auto w-full py-2 px-4 h-[1100px] flex flex-col space-y-1">
+      <div className="flex justify-between items-center bg-card/50 backdrop-blur-md py-1 px-1.5 rounded-2xl border border-border shadow-2xl w-full">
+        <div className="grid grid-cols-[1fr_theme(spacing.28)_theme(spacing.48)] gap-x-4 gap-y-1 items-center w-full">
+          <div className="flex items-center gap-1 bg-muted p-1 rounded-lg flex-nowrap overflow-x-auto w-full min-w-0">
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("structure")} title="Import Structure">
-              <FileInput className="w-4 h-4" /> Import
+              <FileInput className="w-4 h-4 text-slate-500" /> Import
             </Button>
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("replicate")} title="Replicate">
-              <Grid3x3 className="w-4 h-4" /> Rep
+              <Grid3x3 className="w-4 h-4 text-slate-500" /> Rep
             </Button>
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("box")} title="Box Settings">
-              <Box className="w-4 h-4" /> Box
+              <Box className="w-4 h-4 text-slate-500" /> Box
             </Button>
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("transform")} title="Spatial Ops (Translate/Rotate/Scale/Bend)">
-              <Move3D className="w-4 h-4" /> Spatial
+              <Move3D className="w-4 h-4 text-slate-500" /> Spatial
             </Button>
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("add")} title="Join branches">
-              <Combine className="w-4 h-4" /> Join
+              <Combine className="w-4 h-4 text-slate-500" /> Join
             </Button>
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("insert")} title="Insert Molecule">
-              <PackagePlus className="w-4 h-4" /> Insert
+              <PackagePlus className="w-4 h-4 text-slate-500" /> Insert
             </Button>
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("ions")} title="Add Ions (Random or Grid)">
-              <BadgePlus className="w-4 h-4" /> Ions
+              <BadgePlus className="w-4 h-4 text-slate-500" /> Ions
             </Button>
-            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("solvent")} title="Solvent (Solvate / Convert Water Model)">
-              <Droplet className="w-4 h-4" /> Solvent
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("solvent")} title="Add Solvent / Water Models">
+              <Droplet className="w-4 h-4 text-slate-500" /> Solvent
             </Button>
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("forcefield")} title="Assign Forcefield">
-              <FlaskConical className="w-4 h-4" /> Forcefield
-            </Button>
-            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("analysis")} title="Analysis (RDF/CN/Closest/Occupancy/BVS/Stats)">
-              <BarChart3 className="w-4 h-4" /> Analysis
+              <FlaskConical className="w-4 h-4 text-slate-500" /> Forcefield
             </Button>
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("viewer")} title="3D Preview Structure">
-              <Eye className="w-4 h-4" /> View
+              <Eye className="w-4 h-4 text-slate-500" /> View
             </Button>
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
-              <FileOutput className="w-4 h-4" /> Export
+              <FileOutput className="w-4 h-4 text-slate-500" /> Export
             </Button>
             <Button
               variant="ghost"
@@ -2099,68 +2199,63 @@ export default function VisualBuilder() {
               title="Toggle Advanced Operations Toolbar"
             >
               <SlidersHorizontal className="w-4 h-4 mr-1" />
-              Advanced
+              More
             </Button>
           </div>
-          <div className="w-28 shrink-0">
-            <Button className="shadow-lg shadow-primary/20 w-full h-11" onClick={handleCompileAndRun}>
-              <Play className="w-4 h-4 mr-2" />
-              Run
-            </Button>
+          <div className="w-full flex justify-center">
+            {isBuilding ? (
+              <Button
+                id="stop-build-btn"
+                className="shadow-lg shadow-destructive/30 w-full h-11 bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                onClick={handleStopBuild}
+                title="Stop the running build"
+              >
+                <OctagonX className="w-4 h-4 mr-2" />
+                Stop
+              </Button>
+            ) : (
+              <Button className="shadow-lg shadow-primary/20 w-full h-11" onClick={handleCompileAndRun}>
+                <Play className="w-4 h-4 mr-2" />
+                Run
+              </Button>
+            )}
           </div>
-          <div className="flex justify-end pr-6">
-            <p className="text-sm font-medium text-muted-foreground text-balance text-right max-w-[300px]">
-              Add and connect nodes into a workflow to build your molecular system
-            </p>
-          </div>
+          <div /> {/* Grid spacer */}
 
-          {/* Row 2: Floating Warnings Alert Banner */}
-          {(() => {
-            const prerequisiteWarnings = checkWorkflowPrerequisites(nodes, edges);
-            if (prerequisiteWarnings.length === 0) return null;
-            return (
-              <div className="w-full mt-2 bg-amber-500/10 border border-amber-500/30 text-amber-500 rounded-xl p-3 text-xs space-y-1 backdrop-blur-sm shadow-md transition-all duration-300">
-                <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[10px]">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  Workflow Configuration Warnings
-                </div>
-                {prerequisiteWarnings.map((warn, i) => (
-                  <p key={i} className="pl-5 list-disc leading-relaxed">• {warn}</p>
-                ))}
-              </div>
-            );
-          })()}
 
           {/* Row 3 content (if expanded) */}
           {showMoreOptions && (
             <>
-              <div className="flex bg-muted p-1 rounded-lg flex-wrap w-full min-w-0">
+              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg flex-wrap w-full min-w-0">
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("merge")} title="Merge with overlap removal">
-                  <GitMerge className="w-4 h-4" /> Merge
+                  <GitMerge className="w-4 h-4 text-slate-500" /> Merge
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("pbc")} title="PBC Tools (Wrap/Unwrap/Condense)">
-                  <Minimize className="w-4 h-4" /> PBC
+                  <Minimize className="w-4 h-4 text-slate-500" /> PBC
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("edit")} title="Edit Atoms (Slice/Remove/Resname/Reorder)">
-                  <SlidersHorizontal className="w-4 h-4" /> Edit
+                  <SlidersHorizontal className="w-4 h-4 text-slate-500" /> Edit
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("atomProps")} title="Atom Properties (Element/Charge/Mass/COM)">
-                  <Atom className="w-4 h-4" /> Props
+                  <Atom className="w-4 h-4 text-slate-500" /> Props
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("coordFrame")} title="Transform (Coordinate Frame Tools)">
-                  <Move3D className="w-4 h-4" /> Transform
+                  <Move3D className="w-4 h-4 text-slate-500" /> Transform
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("chemistry")} title="Chemistry (Substitute/Fuse/AddH)">
-                  <FlaskConical className="w-4 h-4" /> Chem
+                  <FlaskConical className="w-4 h-4 text-slate-500" /> Chem
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("analysis")} title="Analysis (RDF/CN/Closest/Occupancy/BVS/Stats)">
+                  <BarChart3 className="w-4 h-4 text-slate-500" /> Analysis
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("bondAngle")} title="Bond and angle statistics">
-                  <Waypoints className="w-4 h-4" /> B/A
+                  <Waypoints className="w-4 h-4 text-slate-500" /> B/A
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("xrd")} title="Run XRD Simulation">
-                  <BarChart3 className="w-4 h-4" /> XRD
+                  <BarChart3 className="w-4 h-4 text-slate-500" /> XRD
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("plot")} title="Data Plot">
-                  <BarChart className="w-4 h-4 text-indigo-500" /> Plot
+                  <BarChart className="w-4 h-4 text-slate-500" /> Plot
                 </Button>
                 <Button
                   className={`gap-1 ${disableSimulation ? "opacity-75 hover:opacity-100" : ""}`}
@@ -2169,14 +2264,14 @@ export default function VisualBuilder() {
                   onClick={() => addNode("simulate")}
                   title={disableSimulation ? "OpenMM Simulation (Server-side execution disabled; placement enables local/Colab Python code download)" : "OpenMM Simulation (Minimize/NVT/NPT)"}
                 >
-                  <Activity className={`w-4 h-4 ${disableSimulation ? "text-amber-500" : "text-emerald-500"}`} />
+                  <Activity className={`w-4 h-4 ${disableSimulation ? "text-amber-500" : "text-slate-500"}`} />
                   Simulate {disableSimulation && "(Colab)"}
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("trajectory")} title="Trajectory">
-                  <History className="w-4 h-4" /> Traj
+                  <History className="w-4 h-4 text-slate-500" /> Traj
                 </Button>
               </div>
-              <div className="w-28 shrink-0">
+              <div className="w-full flex justify-center">
                 <Button
                   variant="destructive"
                   className="shadow-lg shadow-destructive/20 w-full h-11 text-xs font-bold uppercase tracking-wider"
@@ -2194,7 +2289,7 @@ export default function VisualBuilder() {
           {/* Row 4 content (if expanded) */}
           {showMoreOptions && (
             <>
-              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg w-full min-w-0">
+              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg w-full min-w-0 overflow-x-auto">
                 <select
                   className="nodrag min-w-[270px] text-xs bg-background border border-border rounded-md px-2 py-1.5 h-8"
                   value={selectedWorkflowKey}
@@ -2249,83 +2344,95 @@ export default function VisualBuilder() {
                 <Button className="gap-1" variant="ghost" size="sm" onClick={handleImportWorkflowClick} title="Upload workflow JSON file">
                   <Upload className="w-4 h-4" /> Upload
                 </Button>
-                
+
                 <div className="h-6 w-[1px] bg-border mx-1" /> {/* Separator */}
-                
-                <Button 
-                  className="gap-1 h-8 text-slate-500 hover:text-foreground disabled:opacity-30" 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => undo(setNodes, setEdges)} 
-                  disabled={!canUndo} 
+
+                <Button
+                  className="gap-1 h-8 text-slate-500 hover:text-foreground disabled:opacity-30"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => undo(setNodes, setEdges)}
+                  disabled={!canUndo}
                   title="Undo last change (Cmd+Z / Ctrl+Z)"
                 >
                   <History className="w-4 h-4 rotate-180" /> Undo
                 </Button>
-                <Button 
-                  className="gap-1 h-8 text-slate-500 hover:text-foreground disabled:opacity-30" 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => redo(setNodes, setEdges)} 
-                  disabled={!canRedo} 
+                <Button
+                  className="gap-1 h-8 text-slate-500 hover:text-foreground disabled:opacity-30"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => redo(setNodes, setEdges)}
+                  disabled={!canRedo}
                   title="Redo last undone change (Cmd+Y / Ctrl+Y)"
                 >
                   <History className="w-4 h-4" /> Redo
-                </Button>
-
-                <div className="h-6 w-[1px] bg-border mx-1" /> {/* Separator */}
-                
-                <div className="flex items-center gap-1 bg-slate-200/50 rounded-md p-1 border border-slate-300 shadow-inner">
-                  <Button 
-                    variant={edgeType === "bezier" ? "default" : "ghost"} 
-                    size="xs" 
-                    className={`h-7 text-[10px] px-3 uppercase font-black transition-all ${
-                      edgeType === "bezier" ? "shadow-sm" : "text-slate-500"
-                    }`}
-                    onClick={() => setEdgeType("bezier")}
-                  >
-                    Smooth
-                  </Button>
-                  <Button 
-                    variant={edgeType === "step" ? "default" : "ghost"} 
-                    size="xs" 
-                    className={`h-7 text-[10px] px-3 uppercase font-black transition-all ${
-                      edgeType === "step" ? "shadow-sm" : "text-slate-500"
-                    }`}
-                    onClick={() => setEdgeType("step")}
-                  >
-                    Step
-                  </Button>
-                </div>
-
-                <div className="flex items-center gap-1 bg-slate-200/50 rounded-md p-1 border border-slate-300 shadow-inner">
-                  <Button 
-                    variant={snapToGrid ? "default" : "ghost"} 
-                    size="xs" 
-                    className={`h-7 text-[10px] px-3 uppercase font-black transition-all ${
-                      snapToGrid ? "shadow-sm" : "text-slate-500"
-                    }`}
-                    onClick={() => setSnapToGrid(!snapToGrid)}
-                    title="Toggle grid snapping"
-                  >
-                    Snap Grid
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="xs" 
-                    className="h-7 text-[10px] px-3 uppercase font-black text-slate-500 hover:text-slate-800 transition-all hover:bg-slate-300/40 rounded-sm"
-                    onClick={handleAutoLayout}
-                    title="Arrange nodes neatly"
-                  >
-                    Layout
-                  </Button>
-                </div>
-
-                {(selectedSavedWorkflow || selectedCustomTemplate) && (
+                </Button>                {(selectedSavedWorkflow || selectedCustomTemplate) && (
                   <Button className="gap-1" variant="ghost" size="sm" onClick={handleDeleteSelectedEntry} title="Delete selected workflow/template">
                     <Trash2 className="w-4 h-4" /> Delete
                   </Button>
                 )}
+
+                {/* TOGGLES CONTAINER */}
+                <div className="ml-auto flex items-center gap-2">
+                  {/* SMOOTH STEP Toggle */}
+                  <div className="flex items-center gap-1 bg-slate-200/50 rounded-md p-1 border border-slate-300 shadow-inner nodrag">
+                    <Button
+                      variant={edgeType === "bezier" ? "default" : "ghost"}
+                      size="xs"
+                      className={`h-7 text-[10px] w-[58px] justify-center uppercase font-black transition-all ${edgeType === "bezier" ? "shadow-sm" : "text-slate-500"
+                        }`}
+                      onClick={() => setEdgeType("bezier")}
+                    >
+                      Smooth
+                    </Button>
+                    <Button
+                      variant={edgeType === "step" ? "default" : "ghost"}
+                      size="xs"
+                      className={`h-7 text-[10px] w-[58px] justify-center uppercase font-black transition-all ${edgeType === "step" ? "shadow-sm" : "text-slate-500"
+                        }`}
+                      onClick={() => setEdgeType("step")}
+                    >
+                      Step
+                    </Button>
+                  </div>
+
+                  {/* SNAP GRID LAYOUT Toggle */}
+                  <div className="flex items-center gap-1 bg-slate-200/50 rounded-md p-1 border border-slate-300 shadow-inner nodrag">
+                    <Button
+                      variant={snapToGrid ? "default" : "ghost"}
+                      size="xs"
+                      className={`h-7 text-[10px] w-[68px] justify-center uppercase font-black transition-all ${snapToGrid ? "shadow-sm" : "text-slate-500"
+                        }`}
+                      onClick={() => setSnapToGrid(!snapToGrid)}
+                      title="Toggle grid snapping"
+                    >
+                      Snap Grid
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="h-7 text-[10px] w-[68px] justify-center uppercase font-black text-slate-500 hover:text-slate-800 transition-all hover:bg-slate-300/40 rounded-sm"
+                      onClick={handleAutoLayout}
+                      title="Arrange nodes neatly"
+                    >
+                      Layout
+                    </Button>
+                  </div>
+
+                  {/* VERBOSE Toggle */}
+                  <div className="flex items-center gap-1 bg-slate-200/50 rounded-md p-1 border border-slate-300 shadow-inner nodrag">
+                    <Button
+                      variant={verboseLog ? "default" : "ghost"}
+                      size="xs"
+                      className={`h-7 text-[10px] w-[64px] justify-center uppercase font-black transition-all ${verboseLog ? "shadow-sm" : "text-slate-500"}`}
+                      onClick={() => setVerboseLog(!verboseLog)}
+                      title="Include protocol lines (visualize/charges/box) in execution.log"
+                    >
+                      Verbose
+                    </Button>
+                  </div>
+                </div>
+
                 <input
                   ref={workflowImportInputRef}
                   type="file"
@@ -2342,6 +2449,47 @@ export default function VisualBuilder() {
       </div>
 
       <div className="flex-1 rounded-2xl overflow-hidden border border-border bg-muted/20 relative" ref={reactFlowWrapper}>
+        {/* Floating Warnings Alert Banner */}
+        {(() => {
+          const prerequisiteWarnings = checkWorkflowPrerequisites(nodes, edges);
+          if (prerequisiteWarnings.length === 0) return null;
+          
+          if (isWarningsMinimized) {
+            return (
+              <button
+                onClick={() => setIsWarningsMinimized(false)}
+                className="absolute top-3 left-3 z-20 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full py-1.5 px-4 text-[10px] uppercase tracking-wider shadow-lg flex items-center gap-1.5 hover:scale-105 active:scale-95 transition-all duration-200 nodrag"
+                title="Expand workflow warnings"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                {prerequisiteWarnings.length} Warnings (Expand)
+              </button>
+            );
+          }
+
+          return (
+            <div className="absolute top-3 left-3 z-20 w-[640px] max-w-[calc(100%-300px)] bg-amber-500/10 border border-amber-500/30 text-amber-600 rounded-xl p-4 text-xs space-y-2 backdrop-blur-md shadow-xl transition-all duration-300 nodrag">
+              <div className="flex items-center justify-between font-bold uppercase tracking-wider text-[11px] border-b border-amber-500/20 pb-1.5 mb-1">
+                <div className="flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4" />
+                  Workflow Configuration Warnings
+                </div>
+                <button
+                  onClick={() => setIsWarningsMinimized(true)}
+                  className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 rounded text-amber-700 hover:text-amber-800 transition-all font-sans font-bold normal-case text-[10px]"
+                >
+                  Collapse
+                </button>
+              </div>
+              <div className="space-y-1 max-h-[160px] overflow-y-auto">
+                {prerequisiteWarnings.map((warn, i) => (
+                  <p key={i} className="pl-2 leading-relaxed font-medium">• {warn}</p>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {showStatusWindow && (
           <div className="absolute right-3 top-3 z-20 w-[460px] rounded-xl border border-border bg-card/95 p-2.5 shadow-xl backdrop-blur-sm">
             <div className="flex items-center justify-between mb-2">
@@ -2362,7 +2510,7 @@ export default function VisualBuilder() {
             </div>
             <Progress value={buildProgress} className="h-1 mb-2" />
             <p className="text-xs text-muted-foreground mb-2">{buildStatus || "Waiting for backend updates..."}</p>
-            
+
             {downloadToken && (
               <div className="mb-3">
                 <a
@@ -2429,14 +2577,23 @@ export default function VisualBuilder() {
             onEdgesChange={(changes) => setEdges((eds) => applyEdgeChanges(changes, eds))}
             onConnect={onConnect}
             isValidConnection={isValidConnection}
-            onInit={setRfInstance}
+            onInit={(instance) => {
+              setRfInstance(instance);
+              if (!localStorage.getItem("atomipy_active_workflow_viewport") && !localStorage.getItem("atomipy_active_workflow")) {
+                setTimeout(() => instance.fitView({ padding: 0.4, maxZoom: 0.8 }), 50);
+              }
+            }}
+            onMoveEnd={(event, viewport) => {
+              localStorage.setItem("atomipy_active_workflow_viewport", JSON.stringify(viewport));
+            }}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             defaultEdgeOptions={{ type: "deletable" }}
             snapToGrid={snapToGrid}
             snapGrid={[30, 30]}
-            fitView
-            fitViewOptions={{ padding: 0.4, maxZoom: 0.8 }}
+            defaultViewport={initialViewport}
+            minZoom={0.1}
+            maxZoom={2.5}
           >
             <Controls />
             <Background gap={20} size={1} color="rgba(0,0,0,0.1)" />

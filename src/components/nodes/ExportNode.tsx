@@ -7,7 +7,7 @@ import type { NodeComponentProps } from "./types";
 type ExportNodeData = {
   outputName?: string;
   structureFormat?: "xyz" | "gro" | "pdb" | "cif" | "pqr" | "poscar" | "sdf";
-  topologyFormat?: "none" | "itp" | "lmp" | "psf";
+  topologyFormat?: "none" | "itp" | "lmp" | "psf" | "prmtop";
   angleTerms?: "none" | "0" | "250" | "500" | "1500";
   writeConect?: boolean;
   writeElement?: boolean;
@@ -22,6 +22,7 @@ type ExportNodeData = {
   writeN2T?: boolean;
   n2tFilename?: string;
   minimalisticScript?: boolean;
+  isMinffTailored?: boolean;
 };
 
 export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
@@ -31,7 +32,7 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
   const topologyFormat = data.topologyFormat || "none";
 
   return (
-    <div className="bg-card w-[300px] shadow-lg rounded-xl border border-destructive/50 overflow-hidden font-sans select-none relative">
+    <div className="bg-card w-[300px] shadow-lg rounded-xl border border-destructive/50 overflow-visible font-sans select-none relative">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
       <NodeHeader id={id} title="Export Settings" Icon={FileOutput} colorClass="text-indigo-500" className="bg-indigo-500/10" />
@@ -65,10 +66,29 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
           </select>
         </div>
 
+        <div className="flex items-center justify-between mt-3 mb-2 px-1">
+          <label className="text-xs font-semibold text-muted-foreground flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="nodrag w-3.5 h-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              checked={data.isMinffTailored || false}
+              onChange={(e) => updateNodeData(id, { ...data, isMinffTailored: e.target.checked })}
+              onPointerDown={(e) => e.stopPropagation()}
+            />
+            MINFF tailored system
+          </label>
+        </div>
+
+        {data.isMinffTailored && (
+            <div className="text-[10px] text-amber-700 bg-amber-100 p-1.5 rounded-md mt-1 mb-2 border border-amber-300">
+              ⚠️ <b>Warning:</b> AMBER and NAMD topology exports are disabled for MINFF tailored systems to prevent loss of custom angle terms.
+            </div>
+        )}
+
         <div>
           <label className="text-xs font-semibold text-muted-foreground block mb-1 mt-2">Topology File (Optional)</label>
           <select
-            className="nodrag w-full text-sm bg-background border border-border rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-destructive h-8"
+            className="nodrag w-full text-sm bg-background border border-border rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-destructive h-8 disabled:opacity-50"
             value={topologyFormat}
             onChange={(e) => updateNodeData(id, { ...data, topologyFormat: e.target.value })}
             onPointerDown={(e) => e.stopPropagation()}
@@ -76,9 +96,16 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
             <option value="none">None</option>
             <option value="itp">GROMACS topology (.itp)</option>
             <option value="lmp">LAMMPS data (.data)</option>
-            <option value="psf">NAMD/OPENMM topology (.psf)</option>
+            <option value="psf" disabled={data.isMinffTailored}>NAMD/OPENMM topology (.psf)</option>
+            <option value="prmtop" disabled={data.isMinffTailored}>AMBER topology (.prmtop)</option>
           </select>
         </div>
+
+        {topologyFormat === "psf" && (
+            <div className="text-[10px] text-muted-foreground bg-muted/50 p-1.5 rounded-md mt-1 border border-border">
+              💡 <b>Tip:</b> NAMD3 reads GROMACS topology files natively — no PSF needed!
+            </div>
+        )}
 
         {topologyFormat !== "none" && (
           <div>

@@ -1,0 +1,14 @@
+name: atomipy-core
+channels:
+  - conda-forge
+  - mosdef
+dependencies:
+  - python=3.11
+  - pip
+  - openmm>=8.1
+  - numpy
+  - scipy
+  - fastapi
+  - uvicorn
+  - celery
+  - redis-py

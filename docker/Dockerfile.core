@@ -1,0 +1,9 @@
+FROM mambaorg/micromamba:1.5
+COPY envs/atomipy-core.yml /tmp/env.yml
+RUN micromamba install -f /tmp/env.yml -n base --yes && \
+    micromamba clean --all --yes
+COPY backend/core /app
+COPY atomipy /app/atomipy
+WORKDIR /app
+ENV PYTHONPATH=/app
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

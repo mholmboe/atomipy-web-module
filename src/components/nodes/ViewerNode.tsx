@@ -271,24 +271,18 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       }
       
       let shouldShowUnitCell = showUnitCell;
-      if (showUnitCell && processedPdb) {
-        const crystLines = processedPdb.match(/^CRYST1.*$/gm);
-        if (crystLines && crystLines.length > 1) {
-          const firstCryst = crystLines[0];
-          const hasDifferentCryst = crystLines.some((line) => line !== firstCryst);
-          if (hasDifferentCryst) {
-            shouldShowUnitCell = false; // Hide because 3Dmol can't animate dynamic boxes natively
-          }
-        }
-      }
 
       if (shouldShowUnitCell) {
         models.forEach((m) => {
           if (m) {
-            viewer.addUnitCell(m, {
-              box: { color: "#6366f1", linewidth: 1.5 },
-              label: { color: "#6366f1" }
-            });
+            try {
+              viewer.addUnitCell(m, {
+                box: { color: "#6366f1", linewidth: 1.5 },
+                label: { color: "#6366f1" }
+              });
+            } catch {
+              // Model has no crystal data (e.g. MD trajectory frame without CRYST1) — skip silently
+            }
           }
         });
       }
@@ -564,8 +558,8 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
           setViewerOption({ width: Math.round(params.width), height: Math.round(params.height) })
         }
       />
-      <Handle type="target" position={Position.Left} className="w-3.5 h-3.5 bg-secondary border-2 border-background z-50" />
-      <Handle type="source" position={Position.Right} className="w-3.5 h-3.5 bg-indigo-500 border-2 border-background z-50" />
+      <Handle type="target" position={Position.Left} id="in" className="w-3.5 h-3.5 bg-secondary border-2 border-background z-50" />
+      <Handle type="source" position={Position.Right} id="out" className="w-3.5 h-3.5 bg-indigo-500 border-2 border-background z-50" />
       
       <Card
         className="w-full h-full shadow-2xl transition-all border-indigo-500/50 bg-card/95 backdrop-blur-md overflow-hidden flex flex-col"

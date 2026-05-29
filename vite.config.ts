@@ -9,15 +9,15 @@ export default defineConfig(() => ({
     port: 8080,
     proxy: {
       "/build_system": {
-        target: "http://127.0.0.1:5002",
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
       },
       "/health": {
-        target: "http://127.0.0.1:5002",
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
       },
       "/api": {
-        target: "http://127.0.0.1:5002",
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
       },
     },

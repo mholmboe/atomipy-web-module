@@ -1,0 +1,39 @@
+version: "3.9"
+services:
+
+  frontend:
+    build: ./
+    ports: ["80:80", "443:443"]
+    depends_on: [backend]
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.core
+    environment:
+      OPENFF_WORKER_URL: http://openff-worker:8001
+      GROMACS_INCLUDE_DIR: /opt/conda/share/gromacs/top
+    ports: ["8000:8000"]
+    volumes:
+      - ./backend/core/data:/app/data:ro
+      - job_outputs:/app/outputs
+    depends_on: [openff-worker, redis]
+
+
+  openff-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.openff
+    ports: ["8001:8001"]
+    environment:
+      INTERCHANGE_EXPERIMENTAL: "1"
+      OPENFF_GROMACS_STABLE: ""
+    volumes:
+      - job_outputs:/tmp
+
+  redis:
+    image: redis:7-alpine
+
+
+volumes:
+  job_outputs:

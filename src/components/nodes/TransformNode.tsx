@@ -4,7 +4,7 @@ import { Move3D } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
-type TransformMode = "translate" | "rotate" | "scale" | "bend";
+type TransformMode = "translate" | "rotate" | "scale" | "bend" | "center";
 
 type TransformNodeData = {
   mode?: TransformMode;
@@ -26,6 +26,10 @@ type TransformNodeData = {
   scaleResname?: string;
   // Bend
   radius?: number;
+  // Center
+  useBox?: boolean;
+  centerResname?: string;
+  centerDim?: string;
 };
 
 const TRANSLATE_AXES: ReadonlyArray<{ key: "tx" | "ty" | "tz"; label: string }> = [
@@ -68,9 +72,10 @@ export function TransformNode({ id, data }: NodeComponentProps<TransformNodeData
           <label className="text-xs font-semibold text-muted-foreground block mb-1">Operation</label>
           <select className={selectCls} value={mode} onChange={(e) => set("mode", e.target.value as TransformMode)} onPointerDown={(e) => e.stopPropagation()}>
             <option value="translate">Translate / Position</option>
+            <option value="center">Center</option>
             <option value="rotate">Rotate</option>
             <option value="scale">Scale</option>
-            <option value="bend">Bend (Cylinder)</option>
+            <option value="bend">Bend</option>
           </select>
         </div>
 
@@ -167,6 +172,40 @@ export function TransformNode({ id, data }: NodeComponentProps<TransformNodeData
               onPointerDown={(e) => e.stopPropagation()} />
             <p className="text-[10px] text-muted-foreground mt-1">Transforms structure into a cylindrical geometry.</p>
           </div>
+        )}
+
+        {/* CENTER */}
+        {mode === "center" && (
+          <>
+            <div className="flex items-center gap-2 py-1">
+              <input type="checkbox" id={`useBox-${id}`} className="nodrag rounded border-border bg-muted text-emerald-500 focus:ring-emerald-500"
+                checked={data.useBox ?? true}
+                onChange={(e) => set("useBox", e.target.checked)}
+                onPointerDown={(e) => e.stopPropagation()} />
+              <label htmlFor={`useBox-${id}`} className="text-xs font-semibold text-muted-foreground cursor-pointer select-none">
+                Center to Simulation Box
+              </label>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Dimensions</label>
+              <select className={selectCls} value={data.centerDim ?? "xyz"} onChange={(e) => set("centerDim", e.target.value)} onPointerDown={(e) => e.stopPropagation()}>
+                <option value="xyz">X, Y, Z</option>
+                <option value="xy">X, Y (Plane)</option>
+                <option value="xz">X, Z (Plane)</option>
+                <option value="yz">Y, Z (Plane)</option>
+                <option value="x">X only</option>
+                <option value="y">Y only</option>
+                <option value="z">Z only</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Only Resname (optional)</label>
+              <input type="text" className={inputCls} placeholder="e.g. SOL (leave empty for all)"
+                value={data.centerResname ?? ""}
+                onChange={(e) => set("centerResname", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()} />
+            </div>
+          </>
         )}
       </div>
 

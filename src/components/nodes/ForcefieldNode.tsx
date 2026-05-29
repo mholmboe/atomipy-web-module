@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp, FlaskConical } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
-type ForcefieldType = "minff" | "clayff";
+type ForcefieldType = "minff" | "clayff" | "openff_sage" | "openff_parsley" | "gaff";
 
 type ForcefieldNodeData = {
   forcefield?: ForcefieldType;
@@ -14,16 +14,26 @@ type ForcefieldNodeData = {
   status?: string;
   rmaxLong?: number;
   rmaxH?: number;
+  chargeMethod?: "am1bcc" | "gasteiger" | "none";
+  minffVariant?: "0" | "250" | "500" | "1500";
+  waterModel?: "SPCE" | "OPC3" | "TIP3P" | "OPC" | "TIP4PEW" | "SPC";
+  ionSet?: "HFE_LM" | "IOD_LM" | "CM_LM" | "JC";
 };
 
-export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeData>) {
+export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldNodeData>) {
   const { updateNodeData } = useReactFlow();
   const [showMore, setShowMore] = useState(false);
 
-  const forcefield = data.forcefield ?? "minff";
-  const log = data.log ?? false;
-  const logFile = data.logFile ?? `${forcefield}.log`;
-  const resetMolid = data.resetMolid ?? true;
+  const forcefield = data?.forcefield ?? "minff";
+  const log = data?.log ?? false;
+  const logFile = data?.logFile ?? `${forcefield}.log`;
+  const resetMolid = data?.resetMolid ?? true;
+  const chargeMethod = data?.chargeMethod ?? "am1bcc";
+  const isOrganic = ["openff_sage", "openff_parsley", "gaff"].includes(forcefield);
+  const waterModel = data?.waterModel ?? (forcefield === "clayff" ? "SPCE" : "OPC3");
+  const ionSet = data?.ionSet ?? (forcefield === "clayff" ? "HFE_LM" : "IOD_LM");
+
+  const [activeTab, setActiveTab] = useState<"inorganic" | "organic">(isOrganic ? "organic" : "inorganic");
 
   return (
     <div className="bg-card w-[250px] shadow-lg rounded-xl border border-amber-500/50 overflow-hidden font-sans select-none">
@@ -32,33 +42,140 @@ export function ForcefieldNode({ id, data }: NodeComponentProps<ForcefieldNodeDa
       <NodeHeader id={id} title="Forcefield" Icon={FlaskConical} colorClass="text-yellow-600" className="bg-yellow-500/10" />
 
       <div className="p-4 space-y-3 bg-background">
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground block mb-1">Atomtype Scheme</label>
-          <select
-            className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
-            value={forcefield}
-            onChange={(e) => {
-              const newValue = e.target.value as ForcefieldType;
-              const updates: Partial<ForcefieldNodeData> = { forcefield: newValue };
-              if (log && (!data.logFile || data.logFile === `${forcefield}.log`)) {
-                updates.logFile = `${newValue}.log`;
-              }
-              updateNodeData(id, { ...data, ...updates });
-            }}
+        <div className="flex border-b border-border/50 mb-3">
+          <button
+            type="button"
+            className={`flex-1 pb-1.5 text-xs font-semibold ${activeTab === 'inorganic' ? 'text-amber-600 border-b-2 border-amber-500' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={() => setActiveTab('inorganic')}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <option value="minff">MINFF</option>
-            <option value="clayff">CLAYFF</option>
-          </select>
+            Inorganic
+          </button>
+          <button
+            type="button"
+            className={`flex-1 pb-1.5 text-xs font-semibold ${activeTab === 'organic' ? 'text-amber-600 border-b-2 border-amber-500' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={() => setActiveTab('organic')}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            Organic
+          </button>
         </div>
+
+        {activeTab === 'inorganic' ? (
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1">Mineral Forcefield</label>
+            <select
+              className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+              value={forcefield}
+              onChange={(e) => {
+                const newValue = e.target.value as ForcefieldType;
+                const updates: Partial<ForcefieldNodeData> = { forcefield: newValue };
+                if (log && (!data.logFile || data.logFile === `${forcefield}.log`)) {
+                  updates.logFile = `${newValue}.log`;
+                }
+                updateNodeData(id, { ...data, ...updates });
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <option value="minff">MINFF</option>
+              <option value="clayff">CLAYFF</option>
+            </select>
+
+            {forcefield === "minff" && (
+              <div className="mt-2.5">
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">MINFF Variant (Ka)</label>
+                <select
+                  className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+                  value={data.minffVariant ?? "500"}
+                  onChange={(e) => updateNodeData(id, { ...data, minffVariant: e.target.value as any })}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <option value="0">Ka = 0 (Unbonded/Intercalated)</option>
+                  <option value="250">Ka = 250 (Soft bonded)</option>
+                  <option value="500">Ka = 500 (Standard default)</option>
+                  <option value="1500">Ka = 1500 (Rigid framework)</option>
+                </select>
+              </div>
+            )}
+
+            <div className="mt-2.5">
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Water Model</label>
+              <select
+                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+                value={waterModel}
+                onChange={(e) => updateNodeData(id, { ...data, waterModel: e.target.value as any })}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <option value="SPCE">SPC/E (Standard mineral water)</option>
+                <option value="OPC3">OPC3 3-site (Optimized for MINFF)</option>
+                <option value="TIP3P">TIP3P (Standard organic/biological)</option>
+                <option value="OPC">OPC 4-site (High-precision liquid)</option>
+                <option value="TIP4PEW">TIP4P-Ewald (Four-site Ewald)</option>
+                <option value="SPC">SPC (Simple Point Charge)</option>
+              </select>
+            </div>
+
+            <div className="mt-2.5">
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Ion parameters</label>
+              <select
+                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+                value={ionSet}
+                onChange={(e) => updateNodeData(id, { ...data, ionSet: e.target.value as any })}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <option value="HFE_LM">HFE (Hydration Free Energy, LM)</option>
+                <option value="IOD_LM">IOD (Ion-Oxygen Distance, LM)</option>
+                <option value="CM_LM">Crystal Metric (Combined, LM)</option>
+                <option value="JC">JC (Joung-Cheatham standard)</option>
+              </select>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Organic Forcefield</label>
+              <select
+                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+                value={forcefield}
+                onChange={(e) => {
+                  const newValue = e.target.value as ForcefieldType;
+                  const updates: Partial<ForcefieldNodeData> = { forcefield: newValue };
+                  if (log && (!data.logFile || data.logFile === `${forcefield}.log`)) {
+                    updates.logFile = `${newValue}.log`;
+                  }
+                  updateNodeData(id, { ...data, ...updates });
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <option value="openff_sage">OpenFF Sage</option>
+                <option value="openff_parsley">OpenFF Parsley</option>
+                <option value="gaff">GAFF</option>
+              </select>
+            </div>
+            
+            <div className="border-t border-border/50 pt-2">
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Organic Charge Method</label>
+              <select
+                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1.5 py-1"
+                value={chargeMethod}
+                onChange={(e) => updateNodeData(id, { ...data, chargeMethod: e.target.value as any })}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <option value="am1bcc">AM1-BCC (Recommended)</option>
+                <option value="gasteiger">Gasteiger (Fast)</option>
+                <option value="none">None (Neutral / Preassigned)</option>
+              </select>
+            </div>
+          </div>
+        )}
 
         <button
           type="button"
-          className="nodrag w-full flex items-center justify-between text-xs font-semibold text-muted-foreground border border-border rounded-md px-2 py-1.5 bg-background hover:bg-muted/50"
+          className="nodrag w-full flex items-center justify-between text-xs font-semibold text-muted-foreground border border-border rounded-md px-2 py-1.5 bg-background hover:bg-muted/50 mt-2"
           onClick={() => setShowMore((prev) => !prev)}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          More options
+          Global options
           {showMore ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
 

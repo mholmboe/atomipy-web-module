@@ -70,7 +70,7 @@ function fmt(v: number) {
 // ----------------------------------------------------------------
 
 export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
-  const { updateNodeData, getNode } = useReactFlow();
+  const { updateNodeData, getNode, setNodes } = useReactFlow();
   const edges = useEdges();
   const nodes = useNodes(); // Re-run effect when any node changes
   const mode = data.inputMode ?? "cell";
@@ -318,6 +318,25 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
     updateNodeData(id, { ...data, ...update });
   };
 
+  const handleDuplicate = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const parent = getNode(id);
+    if (!parent) return;
+    const newId = `box_${new Date().getTime()}`;
+    const newPosition = { x: parent.position.x + 30, y: parent.position.y + 30 };
+    const newNode = {
+      id: newId,
+      type: "box",
+      position: newPosition,
+      data: {
+        ...data,
+        lastInferredFrom: undefined
+      },
+      selected: true,
+    };
+    setNodes((nds) => nds.map((n) => n.selected ? { ...n, selected: false } : n).concat(newNode));
+  };
+
   const setField = (field: keyof BoxNodeData, raw: string) => {
     const v = parseFloat(raw);
     updateNodeData(id, { ...data, [field]: Number.isFinite(v) ? v : undefined });
@@ -391,38 +410,49 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
           </>
         )}
 
-        {/* Live Conversion Preview */}
-        <div className="bg-indigo-500/5 rounded-lg p-2 border border-indigo-500/20">
-          <label className="text-[9px] font-bold text-indigo-500/70 uppercase block mb-1">
-            {mode === "cell" ? "Equivalent Box Dims" : "Equivalent Cell Params"}
-          </label>
-          <div className="text-[10px] text-foreground/80 font-mono text-center leading-relaxed">
-            {mode === "cell" ? (() => {
-              const bd = cellToBoxDim(data.a ?? 50, data.b ?? 50, data.c ?? 50, data.alpha ?? 90, data.beta ?? 90, data.gamma ?? 90);
-              return (
-                <>
-                  <div className="border-b border-indigo-500/10 pb-0.5 mb-0.5">
-                    {fmt(bd.lx)}, {fmt(bd.ly)}, {fmt(bd.lz)}
-                  </div>
-                  <div>
-                    {fmt(bd.xy)}, {fmt(bd.xz)}, {fmt(bd.yz)}
-                  </div>
-                </>
-              );
-            })() : (() => {
-              const c = boxDimToCell(data.lx ?? 50, data.ly ?? 50, data.lz ?? 50, data.xy ?? 0, data.xz ?? 0, data.yz ?? 0);
-              return (
-                <>
-                  <div className="border-b border-indigo-500/10 pb-0.5 mb-0.5">
-                    {fmt(c.a)}, {fmt(c.b)}, {fmt(c.c)}
-                  </div>
-                  <div>
-                    {fmt(c.alpha)}°, {fmt(c.beta)}°, {fmt(c.gamma)}°
-                  </div>
-                </>
-              );
-            })()}
+        {/* Equivalent Preview & Duplicate Button Row */}
+        <div className="flex gap-2 items-stretch">
+          <div className="flex-1 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-lg p-2 border border-indigo-500/20 flex flex-col justify-center">
+            <label className="text-[8px] font-bold text-indigo-500/70 uppercase block mb-1 text-center">
+              {mode === "cell" ? "Equivalent Box Dims" : "Equivalent Cell Params"}
+            </label>
+            <div className="text-[10px] text-foreground/80 font-mono text-center leading-relaxed">
+              {mode === "cell" ? (() => {
+                const bd = cellToBoxDim(data.a ?? 50, data.b ?? 50, data.c ?? 50, data.alpha ?? 90, data.beta ?? 90, data.gamma ?? 90);
+                return (
+                  <>
+                    <div className="border-b border-indigo-500/10 pb-0.5 mb-0.5">
+                      {fmt(bd.lx)}, {fmt(bd.ly)}, {fmt(bd.lz)}
+                    </div>
+                    <div>
+                      {fmt(bd.xy)}, {fmt(bd.xz)}, {fmt(bd.yz)}
+                    </div>
+                  </>
+                );
+              })() : (() => {
+                const c = boxDimToCell(data.lx ?? 50, data.ly ?? 50, data.lz ?? 50, data.xy ?? 0, data.xz ?? 0, data.yz ?? 0);
+                return (
+                  <>
+                    <div className="border-b border-indigo-500/10 pb-0.5 mb-0.5">
+                      {fmt(c.a)}, {fmt(c.b)}, {fmt(c.c)}
+                    </div>
+                    <div>
+                      {fmt(c.alpha)}°, {fmt(c.beta)}°, {fmt(c.gamma)}°
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
           </div>
+
+          <button
+            onClick={handleDuplicate}
+            className="px-2 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-lg text-[10px] font-bold transition-all flex flex-col items-center justify-center gap-0.5 shadow-md shadow-indigo-500/15 shrink-0 w-[60px] text-center"
+            title="Duplicate Box Size"
+          >
+            <span>Copy</span>
+            <span>Box</span>
+          </button>
         </div>
 
       </div>

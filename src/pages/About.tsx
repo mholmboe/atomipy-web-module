@@ -1,8 +1,7 @@
 import {
-  Atom, ExternalLink, ArrowRight, BookOpen, Layers, BarChart3, Zap, Bug,
-  FileInput, Grid3x3, Box, Move3D, Combine, PackagePlus, BadgePlus, Droplet,
-  FlaskConical, Eye, FileOutput, GitMerge, Minimize, SlidersHorizontal,
-  Waypoints, History, ChevronRight, AlertCircle, MessageSquare,
+  ExternalLink, ArrowRight, BookOpen, Layers, BarChart3, Zap, Bug,
+  FileInput, Box, Combine, Droplet, FlaskConical, FileOutput,
+  ChevronRight, AlertCircle, MessageSquare, Play,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -24,7 +23,18 @@ const nodeCategories = [
         name: "Import Structure",
         type: "structure",
         desc: "Load a molecular structure from a built-in preset library (.cif) or upload your own file (.pdb, .gro, .xyz, .cif, .sdf, .poscar).",
-        features: ["Preset library (clay minerals, water models, molecules)", "Custom file upload", "Outputs atoms + box"],
+        features: ["Preset library (minerals, water models, molecules)", "Custom file upload", "Outputs atoms + box"],
+      },
+      {
+        name: "Organic Molecule",
+        type: "organic",
+        desc: "Parametrize an organic molecule for simulation. Accepts a SMILES string or an uploaded structure file (.mol2, .sdf, .mol, .pdb).",
+        features: [
+          "Input: SMILES string or uploaded file",
+          "GAFF 2.11 / GAFF 1 via ACPYPE (bundles antechamber — no separate AmberTools install)",
+          "OpenFF Sage 2.3 via pure-Python OpenFF Interchange",
+          "Outputs native atomipy dictionaries + ITP data for downstream MD or mixing with minerals",
+        ],
       },
     ],
   },
@@ -155,10 +165,10 @@ const nodeCategories = [
     Icon: FlaskConical,
     nodes: [
       {
-        name: "Assign Forcefield",
+        name: "Assign Forcefield (Inorganic)",
         type: "forcefield",
-        desc: "Assign atom types, partial charges, and bonded parameters using MINFF or CLAYFF forcefield schemes.",
-        features: ["MINFF / CLAYFF atom typing", "Charge assignment", "Configurable k_angle for bonded terms", "Writes .itp, .data, or .psf topology"],
+        desc: "Assign atom types, partial charges, and bonded parameters for mineral systems using MINFF or CLAYFF. Requires a mineral structure with a simulation box — cannot be connected directly to an Organic Molecule node.",
+        features: ["MINFF / CLAYFF atom typing", "Per-atom charge assignment", "Configurable k_angle for bonded terms", "Outputs atoms with FF types for downstream MD or export"],
       },
     ],
   },
@@ -197,6 +207,29 @@ const nodeCategories = [
     ],
   },
   {
+    id: "simulation",
+    label: "Simulation",
+    color: "violet",
+    colorClass: "bg-violet-500/10 border-violet-500/30 text-violet-400",
+    badgeClass: "bg-violet-500/20 text-violet-300",
+    Icon: Play,
+    nodes: [
+      {
+        name: "Simulate",
+        type: "simulate",
+        desc: "Run an OpenMM molecular-dynamics simulation directly from the workflow. Works for mineral, organic, and mixed systems.",
+        features: [
+          "Mineral/inorganic: loads via ap.load_minff_into_openmm() (CLAYFF/MINFF)",
+          "Organic / mixed: loads natively generated top/gro via OpenMM's GromacsTopFile",
+          "Energy minimisation followed by NVT or NPT MD",
+          "Langevin integrator, configurable temperature and step count",
+          "PDB trajectory + state-data log written to the output bundle",
+          "Falls back to input coordinates gracefully if OpenMM is unavailable",
+        ],
+      },
+    ],
+  },
+  {
     id: "output",
     label: "Output & Visualization",
     color: "teal",
@@ -216,7 +249,7 @@ const nodeCategories = [
         desc: "Write the final structure and optional topology files to the output bundle.",
         features: [
           "Structure: .pdb, .gro, .xyz, .cif, .poscar, .sdf, .pqr",
-          "Topology: .itp (GROMACS), .data (LAMMPS), .psf (NAMD)",
+          "Topology: .itp (GROMACS), .data (LAMMPS), .psf (NAMD), .prmtop (AMBER)",
           "Configurable output filename",
           "Multiple export nodes allowed per workflow",
         ],
@@ -255,6 +288,7 @@ const quickSteps = [
 const COLOR_MAP: Record<string, { ring: string; dot: string }> = {
   blue:    { ring: "ring-blue-500/40",    dot: "bg-blue-400" },
   purple:  { ring: "ring-purple-500/40",  dot: "bg-purple-400" },
+  violet:  { ring: "ring-violet-500/40",  dot: "bg-violet-400" },
   emerald: { ring: "ring-emerald-500/40", dot: "bg-emerald-400" },
   amber:   { ring: "ring-amber-500/40",   dot: "bg-amber-400" },
   cyan:    { ring: "ring-cyan-500/40",    dot: "bg-cyan-400" },
@@ -410,7 +444,7 @@ const About = () => {
               <div className="space-y-3">
                 <h3 className="font-semibold">Topology Output</h3>
                 <div className="flex flex-wrap gap-2">
-                  {[".itp (GROMACS)", ".data (LAMMPS)", ".psf (NAMD/OpenMM)"].map((fmt) => (
+                  {[".itp (GROMACS)", ".data (LAMMPS)", ".psf (NAMD/OpenMM)", ".prmtop (AMBER)"].map((fmt) => (
                     <span key={fmt} className="text-xs px-2 py-1 rounded-md border bg-background text-muted-foreground">{fmt}</span>
                   ))}
                 </div>

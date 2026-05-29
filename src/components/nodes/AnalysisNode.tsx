@@ -4,7 +4,8 @@ import { BarChart3, ChevronDown, ChevronUp, X } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
-type AnalysisMode = "rdf" | "cn" | "closest" | "occupancy" | "bvs" | "stats";
+type AnalysisMode = "rdf" | "cn" | "closest" | "mindist" | "occupancy" | "bvs" | "stats";
+
 type OutputMode = "none" | "json" | "csv" | "both";
 type ClosestReferenceMode = "index" | "coords";
 
@@ -15,6 +16,12 @@ type AnalysisNodeData = {
   cutoff?: number;
   rmax?: number;
   dr?: number;
+  // Min distances
+  mindistGroupBy?: "molid" | "resname";
+  mindistNPairs?: number;
+  mindistCutoff?: number;
+  mindistOutputMode?: OutputMode;
+  mindistOutputBase?: string;
   // Closest
   closestReferenceMode?: ClosestReferenceMode;
   closestRefIndex?: number;
@@ -69,6 +76,7 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
             <option value="rdf">Radial Distribution (RDF)</option>
             <option value="cn">Coordination Number</option>
             <option value="closest">Find Closest Atom</option>
+            <option value="mindist">Min Distances (Inter-mol)</option>
             <option value="occupancy">Site Occupancy</option>
             <option value="bvs">Bond Valence Sum (BVS)</option>
             <option value="stats">Structure Stats</option>
@@ -301,6 +309,71 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
                   className={inputCls}
                   value={data.closestOutputBase ?? "closest_results"}
                   onChange={(e) => set("closestOutputBase", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {mode === "mindist" && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Group by</label>
+                <select
+                  className={selectCls}
+                  value={data.mindistGroupBy ?? "molid"}
+                  onChange={(e) => set("mindistGroupBy", e.target.value as "molid" | "resname")}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <option value="molid">Molecule ID</option>
+                  <option value="resname">Residue name</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Top N pairs</label>
+                <input
+                  type="number" min="1" max="100"
+                  className={inputCls}
+                  value={data.mindistNPairs ?? 10}
+                  onChange={(e) => set("mindistNPairs", parseInt(e.target.value, 10) || 10)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Cutoff (Å, 0 = all)</label>
+              <input
+                type="number" step="0.1" min="0"
+                className={inputCls}
+                value={data.mindistCutoff ?? 0}
+                onChange={(e) => set("mindistCutoff", parseFloat(e.target.value) || 0)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Output</label>
+                <select
+                  className={selectCls}
+                  value={data.mindistOutputMode ?? "json"}
+                  onChange={(e) => set("mindistOutputMode", e.target.value as OutputMode)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <option value="none">None</option>
+                  <option value="json">JSON</option>
+                  <option value="csv">CSV</option>
+                  <option value="both">JSON + CSV</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Output base</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={data.mindistOutputBase ?? "mindist_results"}
+                  onChange={(e) => set("mindistOutputBase", e.target.value)}
                   onPointerDown={(e) => e.stopPropagation()}
                 />
               </div>

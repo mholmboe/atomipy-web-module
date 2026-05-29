@@ -55,10 +55,8 @@ export function SolvateNode({ id, data }: NodeComponentProps<SolvateNodeData>) {
             onChange={(e) => handleChange("waterModel", e.target.value)}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <option value="spce">SPC/E</option>
-            <option value="spc">SPC</option>
-            <option value="tip3p">TIP3P</option>
-            <option value="tip4p">TIP4P</option>
+            <option value="spce">3-site (SPC/E, TIP3P, OPC3)</option>
+            <option value="tip4p">4-site (TIP4P, OPC)</option>
           </select>
         </div>
 

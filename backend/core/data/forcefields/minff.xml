@@ -1,0 +1,102 @@
+<!-- data/forcefields/minff.xml -->
+<ForceField name="MINFF" version="1.0.0">
+  <AtomTypes>
+    <!-- Silicon: always tetrahedral -->
+    <Type name="Si"  element="Si" mass="28.086"
+          def="[Si;X4]"
+          desc="Tetrahedral Si in clay"/>
+
+    <!-- Aluminium: octahedral (octahedral coordination in clay sheet) -->
+    <Type name="AlO" element="Al" mass="26.982"
+          def="[Al;X6]"
+          desc="Octahedral Al"/>
+
+    <!-- Aluminium: tetrahedral substitution for Si -->
+    <Type name="AlT" element="Al" mass="26.982"
+          def="[Al;X4]"
+          desc="Tetrahedral Al substituting Si"/>
+
+    <!-- Magnesium: octahedral -->
+    <Type name="Mg"  element="Mg" mass="24.305"
+          def="[Mg;X6]"
+          desc="Octahedral Mg"/>
+
+    <!-- Iron(III): octahedral -->
+    <Type name="Fe3" element="Fe" mass="55.845"
+          def="[Fe+3;X6]"
+          desc="Octahedral Fe(III)"/>
+
+    <!-- Iron(II): octahedral -->
+    <Type name="Fe2" element="Fe" mass="55.845"
+          def="[Fe+2;X6]"
+          desc="Octahedral Fe(II)"/>
+
+    <!-- Bridging oxygen (Si-O-Si or Si-O-Al) -->
+    <Type name="OB"  element="O"  mass="15.999"
+          def="[O;X2]([Si,Al])[Si,Al]"
+          desc="Bridging oxygen"/>
+
+    <!-- Hydroxyl oxygen bonded to metal -->
+    <Type name="OH"  element="O"  mass="15.999"
+          def="[O;X2]([H])[Al,Mg,Fe]"
+          desc="Hydroxyl oxygen on metal"/>
+
+    <!-- Apical oxygen: O bonded to one tetrahedral Si and one octahedral metal -->
+    <Type name="OA"  element="O"  mass="15.999"
+          def="[O;X2]([Si;X4])[Al;X6,Mg;X6,Fe;X6]"
+          desc="Apical oxygen"/>
+
+    <!-- Hydroxyl hydrogen -->
+    <Type name="HO"  element="H"  mass="1.008"
+          def="[H][O;X2][Al,Mg,Fe]"
+          desc="Hydroxyl hydrogen"/>
+
+    <!-- Water oxygen (for interlayer water if present) -->
+    <Type name="OW"  element="O"  mass="15.999"
+          def="[O;X2]([H])[H]"
+          desc="Water oxygen"/>
+
+    <!-- Water hydrogen -->
+    <Type name="HW"  element="H"  mass="1.008"
+          def="[H][O;X2][H]"
+          desc="Water hydrogen"/>
+  </AtomTypes>
+
+  <NonbondedForce coulomb14scale="1.0" lj14scale="1.0">
+    <!-- LJ parameters: sigma in nm, epsilon in kJ/mol -->
+    <!-- MINFF general parameters — system-specific variants override these -->
+    <Atom type="Si"  charge=" 2.10" sigma="3.302e-01" epsilon="7.700e-06"/>
+    <Atom type="AlO" charge=" 1.575" sigma="4.271e-01" epsilon="5.564e-06"/>
+    <Atom type="AlT" charge=" 1.575" sigma="4.271e-01" epsilon="5.564e-06"/>
+    <Atom type="Mg"  charge=" 1.36"  sigma="5.260e-01" epsilon="3.778e-06"/>
+    <Atom type="Fe3" charge=" 1.575" sigma="4.271e-01" epsilon="5.564e-06"/>
+    <Atom type="Fe2" charge=" 1.36"  sigma="4.271e-01" epsilon="5.564e-06"/>
+    <Atom type="OB"  charge="-1.05"  sigma="3.166e-01" epsilon="6.503e-01"/>
+    <Atom type="OH"  charge="-0.95"  sigma="3.166e-01" epsilon="6.503e-01"/>
+    <Atom type="OA"  charge="-1.08"  sigma="3.166e-01" epsilon="6.503e-01"/>
+    <Atom type="HO"  charge=" 0.425" sigma="0.000e+00" epsilon="0.000e+00"/>
+    <Atom type="OW"  charge="-0.82"  sigma="3.166e-01" epsilon="6.503e-01"/>
+    <Atom type="HW"  charge=" 0.41"  sigma="0.000e+00" epsilon="0.000e+00"/>
+  </NonbondedForce>
+
+  <HarmonicBondForce>
+    <!-- Bond force constants: k in kJ/mol/nm², length in nm -->
+    <Bond type1="OH" type2="HO" length="1.000e-01" k="4.637e+05"/>
+    <Bond type1="OW" type2="HW" length="1.000e-01" k="4.637e+05"/>
+    <!-- Metal-oxygen bonds not included: rigid framework assumption -->
+  </HarmonicBondForce>
+
+  <HarmonicAngleForce>
+    <!-- IMPORTANT: these are *type-averaged* defaults only.               -->
+    <!-- Per-triplet equilibrium angles are injected at runtime            -->
+    <!-- from the angles.json sidecar by patch_minff_angles() below.      -->
+    <!-- k in kJ/mol/rad², angle in degrees                               -->
+    <Angle type1="HO" type2="OH" type3="AlO" angle="109.47" k="500.0"/>
+    <Angle type1="HO" type2="OH" type3="Mg"  angle="109.47" k="500.0"/>
+    <Angle type1="HW" type2="OW" type3="HW"  angle="109.47" k="500.0"/>
+    <!-- Si-O-Si, Al-O-Si, etc. angles filled in with structural values -->
+    <Angle type1="Si"  type2="OB" type3="Si"  angle="144.0" k="836.8"/>
+    <Angle type1="AlO" type2="OB" type3="Si"  angle="125.0" k="836.8"/>
+    <Angle type1="AlT" type2="OB" type3="Si"  angle="130.0" k="836.8"/>
+  </HarmonicAngleForce>
+</ForceField>

@@ -25,26 +25,34 @@ type SimulateNodeData = {
   dcdFreq?: number;
   writePdb?: boolean;
   pdbFreq?: number;
+  posres?: boolean;
+  posresFC?: number;
+  wrapTrajectory?: boolean;
+  excludeWater?: boolean;
 };
 
-export function SimulateNode({ id, data }: NodeComponentProps<SimulateNodeData>) {
+export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeData>) {
   const { updateNodeData } = useReactFlow();
   const [showMore, setShowMore] = useState(false);
 
-  const forcefieldMode = data.forcefieldMode ?? "minff";
-  const prmFile = data.prmFile ?? "minff";
-  const simType = data.simType ?? "minimize";
-  const miniSteps = data.miniSteps ?? 500;
-  const mdSteps = data.mdSteps ?? 5000;
-  const temperature = data.temperature ?? 298.15;
-  const timestep = data.timestep ?? 1.0;
-  const cutoff = data.cutoff ?? 12.0;
-  const constraints = data.constraints ?? "HBonds";
-  const pressure = data.pressure ?? 1.0;
-  const frictionCoeff = data.frictionCoeff ?? 1.0;
-  const switchDistance = data.switchDistance ?? 10.0;
-  const writePdb = data.writePdb ?? data.writeDcd ?? false;
-  const pdbFreq = data.pdbFreq ?? data.dcdFreq ?? 1000;
+  const forcefieldMode = data?.forcefieldMode ?? "minff";
+  const prmFile = data?.prmFile ?? "minff";
+  const simType = data?.simType ?? "minimize";
+  const miniSteps = data?.miniSteps ?? 500;
+  const mdSteps = data?.mdSteps ?? 5000;
+  const temperature = data?.temperature ?? 298.15;
+  const timestep = data?.timestep ?? 1.0;
+  const cutoff = data?.cutoff ?? 12.0;
+  const constraints = data?.constraints ?? "HBonds";
+  const pressure = data?.pressure ?? 1.0;
+  const frictionCoeff = data?.frictionCoeff ?? 1.0;
+  const switchDistance = data?.switchDistance ?? 10.0;
+  const writePdb = data?.writePdb ?? data?.writeDcd ?? false;
+  const pdbFreq = data?.pdbFreq ?? data?.dcdFreq ?? 1000;
+  const posres = data?.posres ?? false;
+  const posresFC = data?.posresFC ?? 1000;
+  const wrapTrajectory = data?.wrapTrajectory ?? true;
+  const excludeWater = data?.excludeWater ?? true;
 
   const isSimulationDisabled = (window as any).disableSimulation === true;
   const showMdFields = simType === "nvt" || simType === "npt";
@@ -69,44 +77,6 @@ export function SimulateNode({ id, data }: NodeComponentProps<SimulateNodeData>)
           </div>
         )}
 
-        {/* Forcefield selection */}
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground block mb-1">Forcefield</label>
-          <select
-            className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
-            value={forcefieldMode}
-            onChange={(e) => {
-              const newMode = e.target.value as ForcefieldMode;
-              const updates: Partial<SimulateNodeData> = { forcefieldMode: newMode };
-              // Auto-select matching PRM when choosing a forcefield
-              if (newMode === "minff") updates.prmFile = "minff";
-              else if (newMode === "clayff") updates.prmFile = "clayff";
-              updateNodeData(id, { ...data, ...updates });
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <option value="minff">MINFF (assign types)</option>
-            <option value="clayff">CLAYFF (assign types)</option>
-            <option value="preassigned">Pre-assigned (FF node)</option>
-          </select>
-        </div>
-
-        {/* Variant selector */}
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground block mb-1">Parameter Set</label>
-          <select
-            className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
-            value={prmFile}
-            onChange={(e) => updateNodeData(id, { ...data, prmFile: e.target.value as PrmFile })}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <option value="minff_gminff_k0">MINFF (GMINFF_k0, OPC3_IOD_LM, OPC3)</option>
-            <option value="minff_gminff_k250">MINFF (GMINFF_k250, OPC3_IOD_LM, OPC3)</option>
-            <option value="minff">MINFF (GMINFF_k500, OPC3_IOD_LM, OPC3)</option>
-            <option value="minff_gminff_k1500">MINFF (GMINFF_k1500, OPC3_IOD_LM, OPC3)</option>
-            <option value="clayff">CLAYFF (CLAYFF_EXT, SPCE_HFE_LM, SPCE)</option>
-          </select>
-        </div>
 
         {/* Simulation type */}
         <div>
@@ -132,11 +102,10 @@ export function SimulateNode({ id, data }: NodeComponentProps<SimulateNodeData>)
             <input
               type="number"
               min={0}
-              max={20000}
               step={100}
               className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
               value={miniSteps}
-              onChange={(e) => updateNodeData(id, { ...data, miniSteps: Math.max(0, Math.min(20000, parseInt(e.target.value) || 0)) })}
+              onChange={(e) => updateNodeData(id, { ...data, miniSteps: Math.max(0, parseInt(e.target.value) || 0) })}
               onPointerDown={(e) => e.stopPropagation()}
             />
           </div>
@@ -151,11 +120,10 @@ export function SimulateNode({ id, data }: NodeComponentProps<SimulateNodeData>)
                 <input
                   type="number"
                   min={0}
-                  max={20000}
                   step={500}
                   className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
                   value={mdSteps}
-                  onChange={(e) => updateNodeData(id, { ...data, mdSteps: Math.max(0, Math.min(20000, parseInt(e.target.value) || 0)) })}
+                  onChange={(e) => updateNodeData(id, { ...data, mdSteps: Math.max(0, parseInt(e.target.value) || 0) })}
                   onPointerDown={(e) => e.stopPropagation()}
                 />
               </div>
@@ -202,6 +170,37 @@ export function SimulateNode({ id, data }: NodeComponentProps<SimulateNodeData>)
                 </div>
               )}
             </div>
+
+            {/* Positional restraints (POSRES) */}
+            <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
+              <span title="Harmonically restrain non-water/non-ion atoms to their initial positions (equivalent to GROMACS POSRES). Useful during equilibration to let water relax around a fixed solute.">
+                Positional restraints (POSRES)
+              </span>
+              <input
+                type="checkbox"
+                className="nodrag"
+                checked={posres}
+                onChange={(e) => updateNodeData(id, { ...data, posres: e.target.checked })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </label>
+            {posres && (
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1"
+                  title="Force constant in kJ/mol/nm². GROMACS default is 1000. Lower values give softer restraints.">
+                  POSRES fc (kJ/mol/nm²)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  step={100}
+                  className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+                  value={posresFC}
+                  onChange={(e) => updateNodeData(id, { ...data, posresFC: Math.max(1, parseFloat(e.target.value) || 1000) })}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            )}
           </>
         )}
 
@@ -286,16 +285,48 @@ export function SimulateNode({ id, data }: NodeComponentProps<SimulateNodeData>)
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </label>
-            {writePdb && showMdFields && (
+            <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
+              Wrap trajectory (periodic box)
+              <input
+                type="checkbox"
+                className="nodrag"
+                checked={wrapTrajectory}
+                onChange={(e) => updateNodeData(id, { ...data, wrapTrajectory: e.target.checked })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </label>
+            <label className="nodrag flex items-center justify-between text-xs text-muted-foreground" title="Generates traj_no_water.pdb for high-performance visual display while retaining full traj.pdb">
+              Exclude water in viewer
+              <input
+                type="checkbox"
+                className="nodrag"
+                checked={excludeWater}
+                onChange={(e) => updateNodeData(id, { ...data, excludeWater: e.target.checked })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </label>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Log frequency (steps)</label>
+              <input
+                type="number"
+                min={1}
+                step={100}
+                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
+                value={data?.logFreq ?? 1000}
+                onChange={(e) => updateNodeData(id, { ...data, logFreq: Math.max(1, parseInt(e.target.value) || 1000) })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </div>
+            {writePdb && (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1">PDB frequency (steps)</label>
                 <input
                   type="number"
-                  min={10}
+                  min={1}
                   step={100}
                   className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
                   value={pdbFreq}
-                  onChange={(e) => updateNodeData(id, { ...data, pdbFreq: Math.max(10, parseInt(e.target.value) || 1000) })}
+                  onChange={(e) => updateNodeData(id, { ...data, pdbFreq: Math.max(1, parseInt(e.target.value) || 1000) })}
                   onPointerDown={(e) => e.stopPropagation()}
                 />
               </div>

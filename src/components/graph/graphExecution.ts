@@ -194,6 +194,9 @@ export function validateWorkflow(nodes: Node[], edges: Edge[]): string[] {
 }
 
 export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode = "full") {
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const activeEdges = edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
+
   const adj = new Map<string, string[]>();
   const inDegree = new Map<string, number>();
   nodes.forEach((n) => {
@@ -201,11 +204,9 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
     inDegree.set(n.id, 0);
   });
 
-  edges.forEach((e) => {
-    if (adj.has(e.source)) {
-      adj.get(e.source)!.push(e.target);
-      inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1);
-    }
+  activeEdges.forEach((e) => {
+    adj.get(e.source)!.push(e.target);
+    inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1);
   });
 
   const queue: string[] = [];
@@ -263,7 +264,8 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
   const stateVars = new Map<string, { atoms: string; box: string; traj?: string }>();
 
   sorted.forEach((id, index) => {
-    const n = nodeMap.get(id)!;
+    const n = nodeMap.get(id);
+    if (!n) return;
     const data = (n.data ?? {}) as NodeDataMap;
     const blockOutAtoms = `${n.type}_atoms_${index}`;
     const blockOutBox = `${n.type}_box_${index}`;
@@ -308,14 +310,51 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         if (source === "upload") {
           const upFilename = pyEscape(getString(data, "filename", "uploaded.pdb"));
           pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'uploads/${upFilename}')\n`;
-        } else {
+        } else if (source === "preset") {
           const file = pyEscape(getString(data, "value", "unknown.pdb"));
           pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'UC_conf/${file}')\n`;
+        } else {
+          // source === "organic" (SMILES or organic file)
+          const smiles = pyEscape(getString(data, "smiles", ""));
+          const inputMode = getString(data, "inputMode", "smiles");
+          const uploadPath = pyEscape(getString(data, "uploadedFilePath", ""));
+
+          // Defer parametrization only if the organic node is directly connected to a forcefield node.
+          // If there are intermediate nodes (like System Box, Spatial Ops, etc.), we must parameterize immediately
+          // so those nodes receive valid coordinates instead of raw SMILES strings.
+          const hasDirectForcefield = edges.some(
+            (e) => e.source === id && nodeMap.get(e.target)?.type === "forcefield"
+          );
+          const hasDownstreamFF = hasDirectForcefield;
+
+          if (hasDownstreamFF) {
+            pythonCode += `# Organic structure definition (parameterized downstream in Forcefield node)\n`;
+            if (inputMode === "file" && uploadPath) {
+              pythonCode += `${blockOutAtoms} = "${uploadPath}"\n`;
+            } else {
+              pythonCode += `${blockOutAtoms} = "${smiles}"\n`;
+            }
+            pythonCode += `${blockOutBox} = None\n`;
+          } else {
+            pythonCode += `\n# Parametrize Organic Molecule (Fallback / Standalone)\n`;
+            pythonCode += `try:\n`;
+            if (inputMode === "file" && uploadPath) {
+              pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${uploadPath}', version='gaff-2.11')\n`;
+            } else {
+              pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff('${smiles}', version='gaff-2.11')\n`;
+            }
+            pythonCode += `except Exception as e:\n`;
+            pythonCode += `    print(f"Failed to parametrize organic molecule: {e}")\n`;
+            pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = [], None\n`;
+          }
         }
-        pythonCode += `if ${blockOutBox} is None or (not isinstance(${blockOutBox}, str) and hasattr(${blockOutBox}, '__len__') and len(${blockOutBox}) == 0):\n`;
-        pythonCode += `    ${blockOutBox} = [50.0, 50.0, 50.0, 90.0, 90.0, 90.0]\n`;
-        pythonCode += `if hasattr(${blockOutBox}, '__len__') and len(${blockOutBox}) in [3, 6]:\n`;
-        pythonCode += `    ${blockOutBox} = ap.Cell2Box_dim(${blockOutBox})\n`;
+        
+        if (source !== "organic") {
+          pythonCode += `if ${blockOutBox} is None or (not isinstance(${blockOutBox}, str) and hasattr(${blockOutBox}, '__len__') and len(${blockOutBox}) == 0):\n`;
+          pythonCode += `    ${blockOutBox} = [50.0, 50.0, 50.0, 90.0, 90.0, 90.0]\n`;
+          pythonCode += `if hasattr(${blockOutBox}, '__len__') and len(${blockOutBox}) in [3, 6]:\n`;
+          pythonCode += `    ${blockOutBox} = ap.Cell2Box_dim(${blockOutBox})\n`;
+        }
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
@@ -368,13 +407,16 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
                 ? `'${pyEscape(atomLabels[0])}'`
                 : "";
 
+          pythonCode += `if hasattr(${stateA.atoms}, 'itp') or hasattr(${stateB.atoms}, 'itp'):\n`;
+          pythonCode += `    raise ValueError("The 'Merge (Spatial)' node is for geometric overlap filtering of minerals. To merge topologies (organics or organics+minerals), please use the 'Add' node instead.")\n`;
+          pythonCode += `else:\n`;
           if (atomLabelExpr) {
-            pythonCode += `${filteredVar} = ap.merge(${stateA.atoms}, ${stateB.atoms}, ${stateA.box}, type_mode='${typeMode}', atom_label=${atomLabelExpr}, min_distance=${minDistanceExpr})\n`;
+            pythonCode += `    ${filteredVar} = ap.merge(${stateA.atoms}, ${stateB.atoms}, ${stateA.box}, type_mode='${typeMode}', atom_label=${atomLabelExpr}, min_distance=${minDistanceExpr})\n`;
           } else {
-            pythonCode += `${filteredVar} = ap.merge(${stateA.atoms}, ${stateB.atoms}, ${stateA.box}, type_mode='${typeMode}', min_distance=${minDistanceExpr})\n`;
+            pythonCode += `    ${filteredVar} = ap.merge(${stateA.atoms}, ${stateB.atoms}, ${stateA.box}, type_mode='${typeMode}', min_distance=${minDistanceExpr})\n`;
           }
-          pythonCode += `${blockOutAtoms} = ap.update(${stateA.atoms}, ${filteredVar})\n`;
-          pythonCode += `${blockOutBox} = ${stateA.box}\n`;
+          pythonCode += `    ${blockOutAtoms} = ap.update(${stateA.atoms}, ${filteredVar})\n`;
+          pythonCode += `    ${blockOutBox} = ${stateA.box}\n`;
           stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         } else {
           pythonCode += `# Error: Merge node missing input A or B\n`;
@@ -403,30 +445,67 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
 
         if (gatheredStates.length > 0) {
           const atomArgs = gatheredStates.map((s) => s.atoms).join(", ");
-          pythonCode += `${blockOutAtoms} = ap.update(${atomArgs}, force=True)\n`;
-          pythonCode += `${blockOutBox} = ${gatheredStates[0].box}\n`;
-
           const reorder = getBoolean(data, "reorderMolids", true);
           const customMolid = getNumber(data, "molid", undefined);
           const customResname = getString(data, "resname", "");
 
+          pythonCode += `\n# Smart Branch Joining (Organic/Mixed SystemList vs Mineral/Solvent/Ions)\n`;
+          pythonCode += `_organic_branches = []\n`;
+          pythonCode += `_list_branches = []\n`;
+          pythonCode += `for _b in [${atomArgs}]:\n`;
+          pythonCode += `    if _b is None: continue\n`;
+          pythonCode += `    if hasattr(_b, 'itp') and _b.itp is not None:\n`;
+          pythonCode += `        _organic_branches.append(_b)\n`;
+          pythonCode += `    else:\n`;
+          pythonCode += `        _list_branches.append(_b)\n`;
+          pythonCode += `\n`;
+          pythonCode += `if len(_organic_branches) > 0:\n`;
+          pythonCode += `    if len(_list_branches) > 0:\n`;
           if (reorder) {
-            pythonCode += `# Reorder molids sequentially across joined branches\n`;
-            pythonCode += `curr_molid = 1\n`;
-            pythonCode += `for branch_atoms in [${atomArgs}]:\n`;
-            pythonCode += `    if not branch_atoms: continue\n`;
-            pythonCode += `    m_ids = sorted(list(set(a.get('molid', 1) for a in branch_atoms)))\n`;
-            pythonCode += `    m_map = {old: curr_molid + i for i, old in enumerate(m_ids)}\n`;
-            pythonCode += `    for a in branch_atoms: a['molid'] = m_map.get(a.get('molid', 1), curr_molid)\n`;
-            pythonCode += `    curr_molid += len(m_ids)\n`;
-            pythonCode += `${blockOutAtoms} = ap.update(${atomArgs}, force=True) # Refresh combined list\n`;
+            pythonCode += `        # Reorder molids sequentially across list branches\n`;
+            pythonCode += `        curr_molid = 1\n`;
+            pythonCode += `        for branch_atoms in _list_branches:\n`;
+            pythonCode += `            if not branch_atoms: continue\n`;
+            pythonCode += `            m_ids = sorted(list(set(a.get('molid', 1) for a in branch_atoms)))\n`;
+            pythonCode += `            m_map = {old: curr_molid + i for i, old in enumerate(m_ids)}\n`;
+            pythonCode += `            for a in branch_atoms: a['molid'] = m_map.get(a.get('molid', 1), curr_molid)\n`;
+            pythonCode += `            curr_molid += len(m_ids)\n`;
           }
-
+          pythonCode += `        _inorganic_combined = ap.update(*_list_branches, force=True)\n`;
           if (customMolid !== undefined || customResname) {
             const molidArg = customMolid !== undefined ? `, molid=${customMolid}` : "";
             const resArg = customResname ? `, resname='${customResname}'` : "";
-            pythonCode += `${blockOutAtoms} = ap.molecule(${blockOutAtoms}${molidArg}${resArg})\n`;
+            pythonCode += `        _inorganic_combined = ap.molecule(_inorganic_combined${molidArg}${resArg})\n`;
           }
+          pythonCode += `    else:\n`;
+          pythonCode += `        _inorganic_combined = []\n`;
+          pythonCode += `    \n`;
+          pythonCode += `    _temp_mixed = _inorganic_combined\n`;
+          pythonCode += `    for _ob in _organic_branches:\n`;
+          pythonCode += `        _temp_mixed = ap.mix_systems(_temp_mixed, _ob, box=${gatheredStates[0].box})\n`;
+          pythonCode += `    ${blockOutAtoms} = _temp_mixed\n`;
+          pythonCode += `    ${blockOutBox} = ${gatheredStates[0].box}\n`;
+          pythonCode += `else:\n`;
+          if (reorder) {
+            pythonCode += `    # Reorder molids sequentially across joined branches\n`;
+            pythonCode += `    curr_molid = 1\n`;
+            pythonCode += `    for branch_atoms in [${atomArgs}]:\n`;
+            pythonCode += `        if not branch_atoms: continue\n`;
+            pythonCode += `        m_ids = sorted(list(set(a.get('molid', 1) for a in branch_atoms)))\n`;
+            pythonCode += `        m_map = {old: curr_molid + i for i, old in enumerate(m_ids)}\n`;
+            pythonCode += `        for a in branch_atoms: a['molid'] = m_map.get(a.get('molid', 1), curr_molid)\n`;
+            pythonCode += `        curr_molid += len(m_ids)\n`;
+            pythonCode += `    ${blockOutAtoms} = ap.update(${atomArgs}, force=True) # Refresh combined list\n`;
+          } else {
+            pythonCode += `    ${blockOutAtoms} = ap.update(${atomArgs}, force=True)\n`;
+          }
+          if (customMolid !== undefined || customResname) {
+            const molidArg = customMolid !== undefined ? `, molid=${customMolid}` : "";
+            const resArg = customResname ? `, resname='${customResname}'` : "";
+            pythonCode += `    ${blockOutAtoms} = ap.molecule(${blockOutAtoms}${molidArg}${resArg})\n`;
+          }
+          pythonCode += `    ${blockOutBox} = ${gatheredStates[0].box}\n`;
+          pythonCode += `\n`;
 
           stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         } else {
@@ -498,6 +577,78 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const renumberIndex = getBoolean(data, "renumberIndex", true) ? "True" : "False";
         pythonCode += `${blockOutAtoms}, ${blockOutBox}, _ = ap.replicate_system(${inAtoms}, ${inBox}, replicate=[${nx}, ${ny}, ${nz}], keep_molid=${keepMolid}, keep_resname=${keepResname}, renumber_index=${renumberIndex})\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
+      case "transform": {
+        const tMode = getString(data, "mode", "translate");
+        if (tMode === "translate") {
+          const transMode = getString(data, "translateMode", "absolute");
+          const tx = getNumber(data, "tx", 0);
+          const ty = getNumber(data, "ty", 0);
+          const tz = getNumber(data, "tz", 0);
+          const resname = getString(data, "translateResname", "").trim();
+          if (transMode === "absolute") {
+            pythonCode += `${blockOutAtoms} = ap.place(${inAtoms}, [${tx}, ${ty}, ${tz}])\n`;
+          } else {
+            if (resname) {
+              pythonCode += `${blockOutAtoms} = ap.translate(${inAtoms}, [${tx}, ${ty}, ${tz}], resname='${pyEscape(resname)}')\n`;
+            } else {
+              pythonCode += `${blockOutAtoms} = ap.translate(${inAtoms}, [${tx}, ${ty}, ${tz}])\n`;
+            }
+          }
+          stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        } else if (tMode === "rotate") {
+          const rotMode = getString(data, "rotateMode", "random");
+          if (rotMode === "manual") {
+            const rx = getNumber(data, "rx", 0);
+            const ry = getNumber(data, "ry", 0);
+            const rz = getNumber(data, "rz", 0);
+            pythonCode += `${blockOutAtoms} = ap.rotate(${inAtoms}, Box=${inBox}, angles=[${rx}, ${ry}, ${rz}])\n`;
+          } else {
+            pythonCode += `${blockOutAtoms} = ap.rotate(${inAtoms}, Box=${inBox}, angles='random')\n`;
+          }
+          stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        } else if (tMode === "scale") {
+          const sx = getNumber(data, "sx", 1.0);
+          const sy = getNumber(data, "sy", 1.0);
+          const sz = getNumber(data, "sz", 1.0);
+          const resname = getString(data, "scaleResname", "").trim();
+          if (resname) {
+            pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.scale(${inAtoms}, ${inBox}, [${sx}, ${sy}, ${sz}], resname='${pyEscape(resname)}')\n`;
+          } else {
+            pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.scale(${inAtoms}, ${inBox}, [${sx}, ${sy}, ${sz}])\n`;
+          }
+          stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        } else if (tMode === "bend") {
+          const radius = getNumber(data, "radius", 50);
+          pythonCode += `${blockOutAtoms} = ap.bend(${inAtoms}, ${radius})\n`;
+          stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        } else if (tMode === "center") {
+          const useBox = getBoolean(data, "useBox", true);
+          const centerDim = getString(data, "centerDim", "xyz");
+          const centerResname = getString(data, "centerResname", "").trim();
+          
+          let boxArg = "None";
+          if (useBox) {
+            boxArg = inBox;
+          }
+          
+          let resnameArg = "all";
+          if (centerResname) {
+            resnameArg = `'${pyEscape(centerResname)}'`;
+          } else {
+            resnameArg = "'all'";
+          }
+          
+          pythonCode += `${blockOutAtoms} = ap.center(${inAtoms}, Box=${boxArg}, resname=${resnameArg}, dim='${pyEscape(centerDim)}')\n`;
+          stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        }
+        break;
+      }
+      case "bend": {
+        const radius = getNumber(data, "radius", 50);
+        pythonCode += `${blockOutAtoms} = ap.bend(${inAtoms}, ${radius})\n`;
+        stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
       case "position": {
@@ -573,9 +724,9 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const zhi = getOptionalNumber(data, "zhi");
         const removePartial = getBoolean(data, "removePartial", true);
 
-        const xhiExpr = xhi !== null ? `${xhi}` : `${inBox}[0]`;
-        const yhiExpr = yhi !== null ? `${yhi}` : `${inBox}[1]`;
-        const zhiExpr = zhi !== null ? `${zhi}` : `${inBox}[2]`;
+        const xhiExpr = xhi !== null ? `${xhi}` : (inBox !== "None" ? `${inBox}[0]` : "50.0");
+        const yhiExpr = yhi !== null ? `${yhi}` : (inBox !== "None" ? `${inBox}[1]` : "50.0");
+        const zhiExpr = zhi !== null ? `${zhi}` : (inBox !== "None" ? `${inBox}[2]` : "50.0");
         const removePy = removePartial ? "True" : "False";
 
         pythonCode += `${blockOutAtoms} = ap.slice(${inAtoms}, [${xlo}, ${ylo}, ${zlo}, ${xhiExpr}, ${yhiExpr}, ${zhiExpr}], remove_partial_molecules=${removePy})\n`;
@@ -779,7 +930,6 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           const density = getNumber(data, "density", 0.1);
           pythonCode += `${ionsVar}, _ = ap.create_grid('${ion}', ${density}, ${limitsExpr})\n`;
           pythonCode += `${blockOutAtoms} = ap.update(${inAtoms}, ${ionsVar})\n`;
-          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else {
           const count = getNumber(data, "count", 0);
           const dist = getNumber(data, "minDistance", 3.0);
@@ -794,9 +944,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
 
           const wrappedInAtoms = `wrapped_${index}`;
           pythonCode += `${wrappedInAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
-          pythonCode += `${ionsVar} = ap.ionize('${ion}', resname='ION', limits=${limitsExpr}, num_ions=${count}, Box=${inBox}, min_distance=${dist}, solute_atoms=${wrappedInAtoms}, placement='${placement}'${directionArg})\n`;
+          pythonCode += `${ionsVar} = ap.ionize('${ion}', resname='${ion}', limits=${limitsExpr}, num_ions=${count}, Box=${inBox}, min_distance=${dist}, solute_atoms=${wrappedInAtoms}, placement='${placement}'${directionArg})\n`;
           pythonCode += `${blockOutAtoms} = ap.update(${inAtoms}, ${ionsVar})\n`;
         }
+        // Propagate .itp so downstream Simulate nodes use the merged-topology path
+        pythonCode += `if hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None:\n`;
+        pythonCode += `    class _SL_ions(list): pass\n`;
+        pythonCode += `    _sl = _SL_ions(${blockOutAtoms}); _sl.itp = ${inAtoms}.itp; ${blockOutAtoms} = _sl\n`;
+        pythonCode += `${blockOutBox} = ${inBox}\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
@@ -804,7 +959,12 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const model = pyEscape(getString(data, "waterModel", "spce"));
         const dens = getNumber(data, "density", 1.0) * 1000.0;
         const spacing = getNumber(data, "minDistance", 2.0);
-        pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.solvate_system(${inAtoms}, ${inBox}, watermodel='${model}', density=${dens}, rmin=${spacing})\n`;
+        pythonCode += `${blockOutAtoms} = ap.solvate(limits=${inBox}, Box=${inBox}, density=${dens}, min_distance=${spacing}, solute_atoms=${inAtoms}, solvent_type='${model}', include_solute=True)\n`;
+        // Propagate .itp so downstream Simulate nodes use the merged-topology path
+        pythonCode += `if hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None:\n`;
+        pythonCode += `    class _SL_solv(list): pass\n`;
+        pythonCode += `    _sl = _SL_solv(${blockOutAtoms}); _sl.itp = ${inAtoms}.itp; ${blockOutAtoms} = _sl\n`;
+        pythonCode += `${blockOutBox} = ${inBox}\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
@@ -812,34 +972,147 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const model = pyEscape(getString(data, "waterModel", "spce"));
         const dens = getNumber(data, "density", 1.0) * 1000.0;
         const spacing = getNumber(data, "minDistance", 2.0);
-        pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.solvate_system(${inAtoms}, ${inBox}, watermodel='${model}', density=${dens}, rmin=${spacing})\n`;
+        pythonCode += `${blockOutAtoms} = ap.solvate(limits=${inBox}, Box=${inBox}, density=${dens}, min_distance=${spacing}, solute_atoms=${inAtoms}, solvent_type='${model}', include_solute=True)\n`;
+        // Propagate .itp so downstream Simulate nodes use the merged-topology path
+        pythonCode += `if hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None:\n`;
+        pythonCode += `    class _SL_solv2(list): pass\n`;
+        pythonCode += `    _sl = _SL_solv2(${blockOutAtoms}); _sl.itp = ${inAtoms}.itp; ${blockOutAtoms} = _sl\n`;
+        pythonCode += `${blockOutBox} = ${inBox}\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
       case "waterModel": {
         const model = pyEscape(getString(data, "value", "spce"));
         const numH2O = getNumber(data, "numH2O", 1);
-        pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.solvate_system([], [30.0, 30.0, 30.0], watermodel='${model}', rmin=2.0)\n`;
+        pythonCode += `${blockOutAtoms} = ap.solvate(limits=[30.0, 30.0, 30.0], Box=[30.0, 30.0, 30.0], solvent_type='${model}', min_distance=2.0, include_solute=False)\n`;
         pythonCode += `if len(${blockOutAtoms}) > ${numH2O} * 3:\n`;
         pythonCode += `    ${blockOutAtoms} = ${blockOutAtoms}[:${numH2O} * 3]\n`;
+        pythonCode += `${blockOutBox} = ap.Cell2Box_dim([30.0, 30.0, 30.0, 90.0, 90.0, 90.0])\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
       case "edit": {
-        const selectedResname = getString(data, "resname", "").trim();
-        const option = getString(data, "option", "resname");
-        const value = getString(data, "value", "").trim();
+        const editMode = getString(data, "mode", "remove");
 
-        if (option === "resname") {
-          const resnameArg = selectedResname ? `, resname='${pyEscape(selectedResname)}'` : "";
-          pythonCode += `${blockOutAtoms} = ap.assign_resname(${inAtoms}, default_resname='${pyEscape(value)}'${resnameArg})\n`;
-        } else if (option === "molid") {
-          const customMolid = parseInt(value, 10);
-          const molidVal = isNaN(customMolid) ? 1 : customMolid;
-          const resnameArg = selectedResname ? `, resname='${pyEscape(selectedResname)}'` : "";
-          pythonCode += `${blockOutAtoms} = ap.molecule(${inAtoms}, molid=${molidVal}${resnameArg})\n`;
-        } else if (option === "renumber") {
-          pythonCode += `${blockOutAtoms} = ap.reindex(${inAtoms})\n`;
+        if (editMode === "slice") {
+          const xlo = getNumber(data, "xlo", 0);
+          const ylo = getNumber(data, "ylo", 0);
+          const zlo = getNumber(data, "zlo", 0);
+          const xhi = getOptionalNumber(data, "xhi");
+          const yhi = getOptionalNumber(data, "yhi");
+          const zhi = getOptionalNumber(data, "zhi");
+          const removePartial = getBoolean(data, "removePartial", true);
+
+          const xhiExpr = xhi !== null ? `${xhi}` : (inBox !== "None" ? `${inBox}[0]` : "50.0");
+          const yhiExpr = yhi !== null ? `${yhi}` : (inBox !== "None" ? `${inBox}[1]` : "50.0");
+          const zhiExpr = zhi !== null ? `${zhi}` : (inBox !== "None" ? `${inBox}[2]` : "50.0");
+          const removePy = removePartial ? "True" : "False";
+
+          pythonCode += `${blockOutAtoms} = ap.slice(${inAtoms}, [${xlo}, ${ylo}, ${zlo}, ${xhiExpr}, ${yhiExpr}, ${zhiExpr}], remove_partial_molecules=${removePy})\n`;
+        } else if (editMode === "remove") {
+          const atomTypeRaw = getString(data, "atomType", "").trim();
+          const indicesRaw = getString(data, "indices", "").trim();
+          const molidsRaw = getString(data, "molids", "").trim();
+          const logic = getString(data, "logic", "and").toLowerCase() === "or" ? "or" : "and";
+          const modeVal = getString(data, "mode", "remove");
+
+          const removeArgs: string[] = [];
+
+          if (atomTypeRaw) {
+            const atomTypeTokens = atomTypeRaw
+              .split(/[;,]+/)
+              .map((token) => token.trim())
+              .filter((token) => token.length > 0);
+            if (atomTypeTokens.length === 1) {
+              removeArgs.push(`atom_type='${pyEscape(atomTypeTokens[0])}'`);
+            } else if (atomTypeTokens.length > 1) {
+              removeArgs.push(`atom_type=[${atomTypeTokens.map((t) => `'${pyEscape(t)}'`).join(", ")}]`);
+            }
+          }
+
+          if (indicesRaw) {
+            const indexTokens = indicesRaw
+              .split(/[;,]+/)
+              .map((token) => token.trim())
+              .filter((token) => /^-?\d+$/.test(token))
+              .map((token) => parseInt(token, 10));
+            if (indexTokens.length === 1) {
+              removeArgs.push(`index=${indexTokens[0]}`);
+            } else if (indexTokens.length > 1) {
+              removeArgs.push(`index=[${indexTokens.join(", ")}]`);
+            }
+          }
+
+          if (molidsRaw) {
+            const molidTokens = molidsRaw
+              .split(/[;,]+/)
+              .map((token) => token.trim())
+              .filter((token) => /^-?\d+$/.test(token))
+              .map((token) => parseInt(token, 10));
+            if (molidTokens.length === 1) {
+              removeArgs.push(`molid=${molidTokens[0]}`);
+            } else if (molidTokens.length > 1) {
+              removeArgs.push(`molid=[${molidTokens.join(", ")}]`);
+            }
+          }
+
+          (["x", "y", "z"] as const).forEach((axis) => {
+            const enabled = getBoolean(data, `${axis}Enabled`, false);
+            if (!enabled) return;
+            const opRaw = getString(data, `${axis}Op`, "<");
+            const op = ["<", "<=", ">", ">=", "==", "!="].includes(opRaw) ? opRaw : "<";
+            const value = getNumber(data, `${axis}Value`, 0);
+            removeArgs.push(`${axis}=('${op}', ${value})`);
+          });
+
+          const removedVar = `removed_${index}`;
+          if (removeArgs.length === 0) {
+            pythonCode += `# Remove node has no valid criteria, passing unchanged\n`;
+            pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+          } else {
+            removeArgs.push(`logic='${logic}'`);
+            removeArgs.push(`reindex=True`);
+            if (modeVal === "keep") {
+              removeArgs.push(`keep=True`);
+            }
+            pythonCode += `${removedVar} = ap.remove(${inAtoms}, ${removeArgs.join(", ")})\n`;
+            pythonCode += `${blockOutAtoms} = ap.update(${removedVar}, force=True)\n`;
+          }
+        } else if (editMode === "molecule") {
+          const customMolid = getNumber(data, "molid", 1);
+          const customResname = getString(data, "moleculeResname", "").trim();
+          if (customResname) {
+            pythonCode += `${blockOutAtoms} = ap.molecule(${inAtoms}, molid=${customMolid}, resname='${pyEscape(customResname)}')\n`;
+          } else {
+            pythonCode += `${blockOutAtoms} = ap.molecule(${inAtoms}, molid=${customMolid})\n`;
+          }
+        } else if (editMode === "resname") {
+          const defaultResname = getString(data, "defaultResname", "MIN").trim();
+          pythonCode += `${blockOutAtoms} = ap.assign_resname(${inAtoms}, default_resname='${pyEscape(defaultResname)}')\n`;
+        } else if (editMode === "reorder") {
+          const byMode = getString(data, "byMode", "index");
+          const neworder = getString(data, "neworder", "").trim();
+          let listExpr = "[]";
+          if (neworder) {
+            const tokens = neworder.split(/[;,]+/).map((t) => t.trim()).filter((t) => t.length > 0);
+            if (byMode === "index") {
+              const intTokens = tokens.map((t) => parseInt(t, 10)).filter((t) => isFinite(t));
+              listExpr = `[${intTokens.join(", ")}]`;
+            } else {
+              listExpr = `[${tokens.map((t) => `'${pyEscape(t)}'`).join(", ")}]`;
+            }
+          }
+          pythonCode += `${blockOutAtoms} = ap.reorder(${inAtoms}, ${listExpr}, by='${byMode}')\n`;
+        } else if (editMode === "center") {
+          const centerOrigin = getBoolean(data, "centerOrigin", false);
+          if (centerOrigin) {
+            pythonCode += `${blockOutAtoms} = ap.center(${inAtoms})\n`;
+          } else {
+            pythonCode += `if ${inBox} is not None:\n`;
+            pythonCode += `    ${blockOutAtoms} = ap.center(${inAtoms}, ${inBox})\n`;
+            pythonCode += `else:\n`;
+            pythonCode += `    ${blockOutAtoms} = ap.center(${inAtoms})\n`;
+          }
         } else {
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
         }
@@ -863,49 +1136,450 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         break;
       }
       case "forcefield": {
-        const ff = pyEscape(getString(data, "ff", "CLAYFF"));
-        const waterFF = pyEscape(getString(data, "waterFF", "SPC"));
-        pythonCode += `${blockOutAtoms} = ap.assign_forcefield(${inAtoms}, ${inBox}, ff='${ff}', watermodel='${waterFF}')\n`;
-        stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        const ff = getString(data, "forcefield", "minff");
+        const isOrganic = ["openff_sage", "openff_parsley", "gaff"].includes(ff);
+        
+        if (isOrganic) {
+          const chargeMethod = getString(data, "chargeMethod", "am1bcc");
+          const chargeArg = chargeMethod === "none" ? "none" : chargeMethod === "gasteiger" ? "gasteiger" : "am1bcc";
+          const versionArg = ff === "gaff" ? "gaff-2.11" : ff;
+
+          pythonCode += `\n# Parametrize Organic Molecule via Forcefield node\n`;
+          pythonCode += `if isinstance(${inAtoms}, str):\n`;
+          pythonCode += `    try:\n`;
+          pythonCode += `        if '/' in ${inAtoms} or ${inAtoms}.endswith(('.pdb', '.mol2', '.sdf', '.mol')):\n`;
+          pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file(${inAtoms}, version='${versionArg}', charge_method='${chargeArg}')\n`;
+          pythonCode += `        else:\n`;
+          pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff(${inAtoms}, version='${versionArg}', charge_method='${chargeArg}')\n`;
+          pythonCode += `    except Exception as e:\n`;
+          pythonCode += `        print(f"Failed to parametrize organic molecule: {e}")\n`;
+          pythonCode += `        ${blockOutAtoms}, ${blockOutBox} = [], None\n`;
+          pythonCode += `else:\n`;
+          pythonCode += `    # Legacy compat: pass-through pre-parameterized structure\n`;
+          pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
+          pythonCode += `    ${blockOutBox} = ${inBox}\n`;
+        } else {
+          pythonCode += `if ${inBox} is None:\n`;
+          pythonCode += `    raise ValueError("Forcefield node (${ff.toUpperCase()}) requires a mineral structure with a simulation box. Connect a mineral source node, not an organic molecule node.")\n`;
+          if (ff === "minff") {
+            pythonCode += `${blockOutAtoms} = ap.minff(${inAtoms}, ${inBox})\n`;
+          } else {
+            pythonCode += `${blockOutAtoms} = ap.clayff(${inAtoms}, ${inBox})\n`;
+          }
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
+        }
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
       case "simulate": {
-        const ensemble = pyEscape(getString(data, "ensemble", "NVT"));
+        const simType = getString(data, "simType", "nvt");
         const temp = getNumber(data, "temperature", 298.15);
-        const steps = getNumber(data, "steps", 5000);
+        const timestepFs = getNumber(data, "timestep", 1.0);
+        const miniSteps = getNumber(data, "miniSteps", 500);
+        const mdSteps = getNumber(data, "mdSteps", 5000);
+        const cutoffNm = getNumber(data, "cutoff", 12.0) / 10.0;
+        const constraintsStr = getString(data, "constraints", "HBonds");
+        const wrapTrajectory = getBoolean(data, "wrapTrajectory", true);
+        const findUpstreamForcefield = (startId: string): string => {
+          const visited = new Set<string>();
+          const queue = [startId];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (visited.has(current)) continue;
+            visited.add(current);
+            const parentEdges = edges.filter(e => e.target === current);
+            for (const edge of parentEdges) {
+              const parentNode = nodeMap.get(edge.source);
+              if (parentNode) {
+                if (parentNode.type === "forcefield") {
+                  return getString(parentNode.data, "forcefield", "minff");
+                }
+                queue.push(parentNode.id);
+              }
+            }
+          }
+          return "minff"; // fallback default
+        };
+        const findUpstreamMinffVariant = (startId: string): string => {
+          const visited = new Set<string>();
+          const queue = [startId];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (visited.has(current)) continue;
+            visited.add(current);
+            const parentEdges = edges.filter(e => e.target === current);
+            for (const edge of parentEdges) {
+              const parentNode = nodeMap.get(edge.source);
+              if (parentNode) {
+                if (parentNode.type === "forcefield") {
+                  return getString(parentNode.data, "minffVariant", "500");
+                }
+                queue.push(parentNode.id);
+              }
+            }
+          }
+          return "500"; // fallback default
+        };
+        const findUpstreamWaterModel = (startId: string, ffType: string): string => {
+          const visited = new Set<string>();
+          const queue = [startId];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (visited.has(current)) continue;
+            visited.add(current);
+            const parentEdges = edges.filter(e => e.target === current);
+            for (const edge of parentEdges) {
+              const parentNode = nodeMap.get(edge.source);
+              if (parentNode) {
+                if (parentNode.type === "forcefield") {
+                  return getString(parentNode.data, "waterModel", ffType === "clayff" ? "SPCE" : "OPC3");
+                }
+                queue.push(parentNode.id);
+              }
+            }
+          }
+          return ffType === "clayff" ? "SPCE" : "OPC3";
+        };
+        const findUpstreamIonSet = (startId: string, ffType: string): string => {
+          const visited = new Set<string>();
+          const queue = [startId];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (visited.has(current)) continue;
+            visited.add(current);
+            const parentEdges = edges.filter(e => e.target === current);
+            for (const edge of parentEdges) {
+              const parentNode = nodeMap.get(edge.source);
+              if (parentNode) {
+                if (parentNode.type === "forcefield") {
+                  return getString(parentNode.data, "ionSet", ffType === "clayff" ? "HFE_LM" : "IOD_LM");
+                }
+                queue.push(parentNode.id);
+              }
+            }
+          }
+          return ffType === "clayff" ? "HFE_LM" : "IOD_LM";
+        };
+        const upstreamFF = findUpstreamForcefield(id);
+        const minffVariant = findUpstreamMinffVariant(id);
+        const waterModel = findUpstreamWaterModel(id, upstreamFF);
+        const ionSet = findUpstreamIonSet(id, upstreamFF);
         const logFile = pyEscape(getString(data, "logFile", "output.log"));
         const trajFile = `traj_${index}.pdb`;
+        const excludeWater = getBoolean(data, "excludeWater", true);
+        const pdbFreq = getNumber(data, "pdbFreq", getNumber(data, "dcdFreq", 1000));
+        const logFreq = getNumber(data, "logFreq", 1000);
+
+        const defines = upstreamFF === "clayff"
+          ? ["CLAYFF_EXT", `${waterModel}_${ionSet}`, waterModel]
+          : [`GMINFF_k${minffVariant}`, `${waterModel}_${ionSet}`, waterModel];
+        const definesExpr = `[${defines.map(d => `'${d}'`).join(", ")}]`;
+
+        const constraintsExpr = constraintsStr === "None" ? "None"
+          : constraintsStr === "AllBonds" ? "app.AllBonds" : "app.HBonds";
+        const isMinimize = simType === "minimize";
+        const isNPT = simType === "npt";
+        const pressure = getNumber(data, "pressure", 1.0);
 
         pythonCode += `\n# Set up and execute OpenMM Molecular Dynamics Simulation\n`;
         pythonCode += `try:\n`;
         pythonCode += `    import openmm as mm\n`;
         pythonCode += `    import openmm.app as app\n`;
         pythonCode += `    from openmm import unit\n`;
-        pythonCode += `    import sys\n`;
+        pythonCode += `    import tempfile, os as _os\n`;
         pythonCode += `    \n`;
-        pythonCode += `    print("Running energy minimization...")\n`;
-        pythonCode += `    topology, system, positions = ap.load_minff_into_openmm(${inAtoms}, ${inBox})\n`;
-        pythonCode += `    integrator = mm.LangevinMiddleIntegrator(${temp}*unit.kelvin, 1/unit.picosecond, 0.002*unit.picoseconds)\n`;
+        pythonCode += `    print("Setting up simulation system...")\n`;
+        pythonCode += `    # _SimList: list subclass that carries topology metadata across chained nodes\n`;
+        pythonCode += `    class _SimList(list): pass\n`;
+        pythonCode += `    # Priority 1: topology already built by an upstream simulation — reuse it\n`;
+        pythonCode += `    _chain_top = getattr(${inAtoms}, '_top_path', None)\n`;
+        pythonCode += `    if _chain_top and _os.path.exists(_chain_top):\n`;
+        pythonCode += `        _top_path = _chain_top\n`;
+        pythonCode += `        _defines  = getattr(${inAtoms}, '_defines', ${definesExpr})\n`;
+        pythonCode += `        _gro_path = "chained_sim.gro"\n`;
+        pythonCode += `        ap.write_gro(list(${inAtoms}), ${inBox}, _gro_path)\n`;
+        pythonCode += `        _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
+        pythonCode += `        topology, system, positions = ap.load_minff_into_openmm(_top_path, _gro_path, _defines, include_dir=_minff_dir, rigid_water=True)\n`;
+        pythonCode += `        _sim_atoms = list(${inAtoms})\n`;
+        pythonCode += `        _is_parmed = False\n`;
+        pythonCode += `    else:\n`;
+        pythonCode += `        # Ensure mixed systems (mineral + solvent/ions) always use merged topology even if itp is missing\n`;
+        pythonCode += `        _solvent_ion_res = {'SOL', 'WAT', 'HOH', 'TIP3', 'OPC', 'OPC3', 'SPC', 'SPCE', 'TIP4', 'TIP5',\n`;
+        pythonCode += `                            'ION', 'NA', 'CL', 'K', 'LI', 'CS', 'RB', 'F', 'BR', 'I', 'CA', 'MG', 'ZN',\n`;
+        pythonCode += `                            'NA+', 'CL-', 'K+', 'CA2+', 'MG2+', 'ZN2+'}\n`;
+        pythonCode += `        _has_solvent_or_ions = any(str(a.get('resname', '')).upper() in _solvent_ion_res for a in ${inAtoms})\n`;
+        pythonCode += `        _has_itp = hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None\n`;
+        pythonCode += `        if _has_itp or _has_solvent_or_ions:\n`;
+        pythonCode += `            # Priority 2: merged topology (organic/mineral/water SystemList)\n`;
+        pythonCode += `            _top_path = "sim_input.top"\n`;
+        pythonCode += `            _gro_path = "sim_input.gro"\n`;
+        pythonCode += `            _defines = ${definesExpr}\n`;
+        pythonCode += `            _ff_variant = "GMINFF_k500"\n`;
+        pythonCode += `            _water_model = "spce"\n`;
+        pythonCode += `            _ion_model = "SPCE_HFE_LM"\n`;
+        pythonCode += `            for _d in _defines:\n`;
+        pythonCode += `                if "CLAYFF" in _d: _ff_variant = "CLAYFF_EXT"\n`;
+        pythonCode += `                elif "MINFF" in _d: _ff_variant = _d\n`;
+        pythonCode += `                _d_parts = [p.upper() for p in _d.split('_')]\n`;
+        pythonCode += `                for _w in ['spce', 'opc3', 'tip3p', 'opc', 'tip4pew', 'spc', 'tip5p']:\n`;
+        pythonCode += `                    if _w.upper() in _d_parts or _w.upper() == _d.upper(): _water_model = _w\n`;
+        pythonCode += `                for _ion in ['HFE_LM', 'IOD_LM', 'CM_LM', 'JC']:\n`;
+        pythonCode += `                    if _ion in _d: _ion_model = _d\n`;
+        pythonCode += `            \n`;
+        pythonCode += `            # Reconstruct itp if missing\n`;
+        pythonCode += `            if not _has_itp:\n`;
+        pythonCode += `                _mineral_atoms = [a for a in ${inAtoms} if str(a.get('resname', '')).upper() not in _solvent_ion_res]\n`;
+        pythonCode += `                if _mineral_atoms:\n`;
+        pythonCode += `                    _, _reconstructed_itp, _ = ap.merge_top({'atoms': _mineral_atoms, 'itp': None, 'box': ${inBox}})\n`;
+        pythonCode += `                else:\n`;
+        pythonCode += `                    # solvent/ions only, empty mineral itp\n`;
+        pythonCode += `                    _reconstructed_itp = {'_original_itps': [], 'atomtypes': {}, '_component_labels': ['Solvent/Ions']}\n`;
+        pythonCode += `                _itp = _reconstructed_itp\n`;
+        pythonCode += `            else:\n`;
+        pythonCode += `                _itp = ${inAtoms}.itp\n`;
+        pythonCode += `            \n`;
+        pythonCode += `            _org_itps = []\n`;
+        pythonCode += `            if _itp.get('_source_itp'):\n`;
+        pythonCode += `                _org_itps.append(_os.path.basename(_itp['_source_itp']))\n`;
+        pythonCode += `            for _k, _v in _itp.items():\n`;
+        pythonCode += `                if _k.startswith('_source_itp') and _v and _v not in _org_itps:\n`;
+        pythonCode += `                    _org_itps.append(_os.path.basename(_v))\n`;
+        pythonCode += `            \n`;
+        pythonCode += `            ap.write_merged_top(list(${inAtoms}), _itp, ${inBox}, _top_path, _gro_path,\n`;
+        pythonCode += `                                 minff_variant=_ff_variant, water_model=_water_model,\n`;
+        pythonCode += `                                 ion_model=_ion_model, organic_itps=_org_itps or None)\n`;
+        pythonCode += `            \n`;
+        pythonCode += `            _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
+        pythonCode += `            topology, system, positions = ap.load_minff_into_openmm(_top_path, _gro_path, _defines, include_dir=_minff_dir, rigid_water=True)\n`;
+        pythonCode += `            _sim_atoms = list(${inAtoms})\n`;
+        pythonCode += `            _is_parmed = False\n`;
+        pythonCode += `        else:\n`;
+        pythonCode += `            # Priority 3: mineral-only — build topology from scratch\n`;
+        pythonCode += `            _top_path = "min_system.top"\n`;
+        pythonCode += `            _gro_path = "min_system.gro"\n`;
+        pythonCode += `            _sim_atoms = list(${inAtoms})\n`;
+        pythonCode += `            ap.write_top(_sim_atoms, Box=${inBox}, file_path=_top_path)\n`;
+        pythonCode += `            ap.write_gro(_sim_atoms, ${inBox}, _gro_path)\n`;
+        pythonCode += `            _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
+        pythonCode += `            _defines = ${definesExpr}\n`;
+        pythonCode += `            topology, system, positions = ap.load_minff_into_openmm(_top_path, _gro_path, _defines, include_dir=_minff_dir, rigid_water=True)\n`;
+        pythonCode += `            _is_parmed = False\n`;
+        pythonCode += `    \n`;
+
+        pythonCode += `    # Enable periodic boundaries for bonds, angles, and nonbonded exceptions (critical for periodic mineral systems!)\n`;
+        pythonCode += `    for _force in system.getForces():\n`;
+        pythonCode += `        if _force.__class__.__name__ in ('HarmonicBondForce', 'HarmonicAngleForce'):\n`;
+        pythonCode += `            _force.setUsesPeriodicBoundaryConditions(True)\n`;
+        pythonCode += `        elif _force.__class__.__name__ == 'NonbondedForce':\n`;
+        pythonCode += `            _force.setExceptionsUsePeriodicBoundaryConditions(True)\n`;
+        pythonCode += `    \n`;
+        pythonCode += `    if ${isNPT ? "True" : "False"}:\n`;
+        pythonCode += `        system.addForce(mm.MonteCarloBarostat(${pressure}*unit.bar, ${temp}*unit.kelvin))\n`;
+        pythonCode += `    \n`;
+
+        // Positional restraints (POSRES) — applied to non-water/non-ion atoms
+        const posres = !isMinimize && (data.posres === true);
+        const posresFC = getNumber(data, "posresFC", 1000.0);
+        if (posres) {
+          pythonCode += `    # Positional restraints (POSRES) on non-water/non-ion atoms\n`;
+          pythonCode += `    _posres_force = mm.CustomExternalForce("0.5*k*((x-x0)^2+(y-y0)^2+(z-z0)^2)")\n`;
+          pythonCode += `    _posres_force.addGlobalParameter("k", ${posresFC})  # kJ/mol/nm²\n`;
+          pythonCode += `    _posres_force.addPerParticleParameter("x0")\n`;
+          pythonCode += `    _posres_force.addPerParticleParameter("y0")\n`;
+          pythonCode += `    _posres_force.addPerParticleParameter("z0")\n`;
+          pythonCode += `    _water_rn = {'HOH','WAT','SOL','TIP3','SPC','OPC','OPC3','TIP4P','TIP4PEW','TIP5P'}\n`;
+          pythonCode += `    _ion_rn = {'NA','CL','K','CA','MG','LI','RB','CS','ZN','BR','F','I'}\n`;
+          pythonCode += `    _pos_nm = positions.value_in_unit(unit.nanometer)\n`;
+          pythonCode += `    _posres_n = 0\n`;
+          pythonCode += `    for _atom in topology.atoms():\n`;
+          pythonCode += `        _rn = _atom.residue.name.upper()\n`;
+          pythonCode += `        if _rn not in _water_rn and _rn not in _ion_rn:\n`;
+          pythonCode += `            _p = _pos_nm[_atom.index]\n`;
+          pythonCode += `            _posres_force.addParticle(_atom.index, [float(_p.x), float(_p.y), float(_p.z)])\n`;
+          pythonCode += `            _posres_n += 1\n`;
+          pythonCode += `    system.addForce(_posres_force)\n`;
+          pythonCode += `    print(f"  Positional restraints: {_posres_n} atoms restrained at fc=${posresFC} kJ/mol/nm²")\n`;
+          pythonCode += `    \n`;
+        }
+
+        pythonCode += `    integrator = mm.LangevinMiddleIntegrator(${temp}*unit.kelvin, 1/unit.picosecond, ${(timestepFs / 1000).toFixed(4)}*unit.picoseconds)\n`;
+
         pythonCode += `    simulation = app.Simulation(topology, system, integrator)\n`;
         pythonCode += `    simulation.context.setPositions(positions)\n`;
-        pythonCode += `    simulation.minimizeEnergy()\n`;
         pythonCode += `    \n`;
-        pythonCode += `    print(f"Executing MD Simulation ({ensemble}, {steps} steps)...")\n`;
-        pythonCode += `    simulation.reporters.append(app.PDBReporter('${trajFile}', int(${steps} // 10 or 500)))\n`;
-        pythonCode += `    simulation.reporters.append(app.StateDataReporter('${logFile}', int(${steps} // 10 or 500), step=True, potentialEnergy=True, temperature=True))\n`;
-        pythonCode += `    simulation.step(${steps})\n`;
+        pythonCode += `    class DynamicBoxPDBReporter:\n`;
+        pythonCode += `        def __init__(self, file, reportInterval, write_no_water=False):\n`;
+        pythonCode += `            self._out = open(file, 'w', encoding='utf-8')\n`;
+        pythonCode += `            self._write_no_water = write_no_water\n`;
+        pythonCode += `            if write_no_water:\n`;
+        pythonCode += `                _nw_file = file.replace('.pdb', '_no_water.pdb')\n`;
+        pythonCode += `                self._out_no_water = open(_nw_file, 'w', encoding='utf-8')\n`;
+        pythonCode += `            self._reportInterval = reportInterval\n`;
+        pythonCode += `            self._model = 1\n`;
+        pythonCode += `            self._topology = None\n`;
+        pythonCode += `            self._header_written = False\n`;
+        pythonCode += `        def describeNextReport(self, simulation):\n`;
+        pythonCode += `            steps = self._reportInterval - simulation.currentStep % self._reportInterval\n`;
+        pythonCode += `            return {'steps': steps, 'periodic': True, 'include': ['positions']}\n`;
+        pythonCode += `        def report(self, simulation, state):\n`;
+        pythonCode += `            try:\n`;
+        pythonCode += `                import io as _io, re as _re\n`;
+        pythonCode += `                _state = simulation.context.getState(getPositions=True, enforcePeriodicBox=${wrapTrajectory ? "True" : "False"})\n`;
+        pythonCode += `                _bv = _state.getPeriodicBoxVectors()\n`;
+        pythonCode += `                if self._topology is None:\n`;
+        pythonCode += `                    self._topology = simulation.topology\n`;
+        pythonCode += `                self._topology.setPeriodicBoxVectors(_bv)\n`;
+        pythonCode += `                # Write header (REMARK lines) once — strip CRYST1, we inject it per-frame\n`;
+        pythonCode += `                if not self._header_written:\n`;
+        pythonCode += `                    _hdr_buf = _io.StringIO()\n`;
+        pythonCode += `                    app.PDBFile.writeHeader(self._topology, _hdr_buf)\n`;
+        pythonCode += `                    _hdr = '\\n'.join(l for l in _hdr_buf.getvalue().split('\\n') if not l.startswith('CRYST1'))\n`;
+        pythonCode += `                    self._out.write(_hdr)\n`;
+        pythonCode += `                    if self._write_no_water:\n`;
+        pythonCode += `                        self._out_no_water.write(_hdr)\n`;
+        pythonCode += `                    self._header_written = True\n`;
+        pythonCode += `                # Get CRYST1 for this frame's box\n`;
+        pythonCode += `                _c_buf = _io.StringIO()\n`;
+        pythonCode += `                app.PDBFile.writeHeader(self._topology, _c_buf)\n`;
+        pythonCode += `                _cryst1 = next((l for l in _c_buf.getvalue().split('\\n') if l.startswith('CRYST1')), '')\n`;
+        pythonCode += `                # Write MODEL block, injecting CRYST1 right after the MODEL line\n`;
+        pythonCode += `                _m_buf = _io.StringIO()\n`;
+        pythonCode += `                app.PDBFile.writeModel(self._topology, _state.getPositions(), _m_buf, self._model)\n`;
+        pythonCode += `                _m_str = _m_buf.getvalue()\n`;
+        pythonCode += `                if _cryst1:\n`;
+        pythonCode += `                    _nl = _m_str.find('\\n')\n`;
+        pythonCode += `                    if _nl >= 0:\n`;
+        pythonCode += `                        _m_str = _m_str[:_nl+1] + _cryst1 + '\\n' + _m_str[_nl+1:]\n`;
+        pythonCode += `                self._out.write(_m_str)\n`;
+        pythonCode += `                if self._write_no_water:\n`;
+        pythonCode += `                    _water_res = {'SOL', 'WAT', 'HOH', 'TIP3', 'OPC', 'OPC3', 'SPC', 'SPCE', 'TIP4', 'TIP5', 'MW', 'IW', 'HW', 'OW'}\n`;
+        pythonCode += `                    _m_lines_no_water = []\n`;
+        pythonCode += `                    for _l in _m_str.split('\\n'):\n`;
+        pythonCode += `                        if _l.startswith(('ATOM', 'HETATM')):\n`;
+        pythonCode += `                            _res = _l[17:21].strip()\n`;
+        pythonCode += `                            if _res in _water_res:\n`;
+        pythonCode += `                                continue\n`;
+        pythonCode += `                        _m_lines_no_water.append(_l)\n`;
+        pythonCode += `                    self._out_no_water.write('\\n'.join(_m_lines_no_water) + '\\n')\n`;
+        pythonCode += `                self._model += 1\n`;
+        pythonCode += `            except Exception as _rep_err:\n`;
+        pythonCode += `                print(f"Warning: PDB frame {self._model} skipped ({_rep_err})")\n`;
+        pythonCode += `        def __del__(self):\n`;
+        pythonCode += `            self._out.close()\n`;
+        pythonCode += `            if self._write_no_water:\n`;
+        pythonCode += `                self._out_no_water.close()\n`;
+        pythonCode += `\n`;
+        pythonCode += `    if ${isMinimize ? "True" : "False"}:\n`;
+        pythonCode += `        print("Running energy minimization (${miniSteps} max iterations)...")\n`;
+        pythonCode += `        _em_state0 = simulation.context.getState(getEnergy=True)\n`;
+        pythonCode += `        _em_pe0 = _em_state0.getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)\n`;
+        pythonCode += `        print(f"  Initial potential energy: {_em_pe0:,.1f} kJ/mol ({_em_pe0/4.184:,.1f} kcal/mol)")\n`;
+        pythonCode += `        \n`;
+        pythonCode += `        # EM Trajectory and CSV Log generation\n`;
+        pythonCode += `        _em_reporter = DynamicBoxPDBReporter('${trajFile}', 1, write_no_water=${excludeWater ? "True" : "False"})\n`;
+        pythonCode += `        _em_log_file = open('${logFile}', 'w', encoding='utf-8')\n`;
+        pythonCode += `        _em_log_file.write("Step,Potential Energy (kJ/mole),Temperature (K)\\n")\n`;
+        pythonCode += `        _em_chunk = min(max(1, ${logFreq}), max(1, ${pdbFreq}))\n`;
+        pythonCode += `        _em_total_iter = ${miniSteps}\n`;
+        pythonCode += `        _em_current_iter = 0\n`;
+        pythonCode += `        # Print table header\n`;
+        pythonCode += `        print(f"\\n{'Iter':<15} {'Potential Energy':<24} {'Max Force':<24}")\n`;
+        pythonCode += `        # Initial state frame\n`;
+        pythonCode += `        _em_reporter.report(simulation, simulation.context.getState(getPositions=True))\n`;
+        pythonCode += `        _em_log_file.write(f"0,{_em_pe0},0.0\\n")\n`;
+        pythonCode += `        \n`;
+        pythonCode += `        while _em_current_iter < _em_total_iter:\n`;
+        pythonCode += `            _em_steps = min(_em_chunk, _em_total_iter - _em_current_iter)\n`;
+        pythonCode += `            simulation.minimizeEnergy(maxIterations=_em_steps)\n`;
+        pythonCode += `            _em_current_iter += _em_steps\n`;
+        pythonCode += `            \n`;
+        pythonCode += `            # Write frame if reached PDB frequency\n`;
+        pythonCode += `            if _em_current_iter % max(1, ${pdbFreq}) == 0 or _em_current_iter == _em_total_iter:\n`;
+        pythonCode += `                _em_reporter.report(simulation, simulation.context.getState(getPositions=True))\n`;
+        pythonCode += `            \n`;
+        pythonCode += `            # Log energy and print values if reached Log frequency\n`;
+        pythonCode += `            if _em_current_iter % max(1, ${logFreq}) == 0 or _em_current_iter == _em_total_iter:\n`;
+        pythonCode += `                _em_state = simulation.context.getState(getEnergy=True, getForces=True)\n`;
+        pythonCode += `                _em_cur_pe = _em_state.getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)\n`;
+        pythonCode += `                _em_forces = _em_state.getForces()\n`;
+        pythonCode += `                _max_force = max((_f[0]**2 + _f[1]**2 + _f[2]**2)**0.5 for _f in _em_forces).value_in_unit_system(unit.md_unit_system)\n`;
+        pythonCode += `                print(f"{_em_current_iter}/{_em_total_iter:<14} {_em_cur_pe:>14,.1f} kJ/mol  {_max_force:>14,.1f} kJ/mol/nm")\n`;
+        pythonCode += `                _em_log_file.write(f"{_em_current_iter},{_em_cur_pe},0.0\\n")\n`;
+        pythonCode += `            \n`;
+        pythonCode += `        del _em_reporter\n`;
+        pythonCode += `        _em_log_file.close()\n`;
+        pythonCode += `        _em_state1 = simulation.context.getState(getEnergy=True)\n`;
+        pythonCode += `        _em_pe1 = _em_state1.getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)\n`;
+        pythonCode += `        print(f"  Final potential energy:   {_em_pe1:,.1f} kJ/mol ({_em_pe1/4.184:,.1f} kcal/mol)")\n`;
+        pythonCode += `        print(f"  Energy change: {_em_pe1 - _em_pe0:,.1f} kJ/mol  |  EM complete.")\n`;
+        pythonCode += `    else:\n`;
+        pythonCode += `        import math as _math\n`;
+        pythonCode += `        _md_init_state = simulation.context.getState(getEnergy=True)\n`;
+        pythonCode += `        _md_init_pe = _md_init_state.getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)\n`;
+        pythonCode += `        if _math.isnan(_md_init_pe) or _math.isinf(_md_init_pe) or abs(_md_init_pe) > 1e7:\n`;
+        pythonCode += `            print(f"⚠️  Initial potential energy is unsafe: {_md_init_pe:,.0f} kJ/mol")\n`;
+        pythonCode += `            print("   The system likely has atomic clashes from solvation.")\n`;
+        pythonCode += `            print("   Solution: chain an Energy Minimization (EM) Simulate node BEFORE this ${simType.toUpperCase()} node.")\n`;
+        pythonCode += `            raise RuntimeError(f"Unsafe initial energy ({_md_init_pe:,.0f} kJ/mol) — run EM first, then chain into ${simType.toUpperCase()}.")\n`;
+        pythonCode += `        print(f"  Initial potential energy: {_md_init_pe:,.1f} kJ/mol — system looks stable, starting MD...")\n`;
+        pythonCode += `        print(f"Executing ${simType.toUpperCase()} MD (${mdSteps} steps)...")\n`;
+        pythonCode += `        simulation.reporters.append(DynamicBoxPDBReporter('${trajFile}', max(1, ${pdbFreq}), write_no_water=${excludeWater ? "True" : "False"}))\n`;
+        pythonCode += `        import sys as _sys\n`;
+        pythonCode += `        class CleanHeaderStream:\n`;
+        pythonCode += `            def __init__(self, stream):\n`;
+        pythonCode += `                self._stream = stream\n`;
+        pythonCode += `            def write(self, message):\n`;
+        pythonCode += `                _msg = message\n`;
+        pythonCode += `                if _msg.startswith('#"Step"'):\n`;
+        pythonCode += `                    _msg = _msg.replace('#', '').replace('"', '')\n`;
+        pythonCode += `                self._stream.write(_msg)\n`;
+        pythonCode += `            def flush(self):\n`;
+        pythonCode += `                self._stream.flush()\n`;
+        pythonCode += `            def close(self):\n`;
+        pythonCode += `                if hasattr(self._stream, 'close'):\n`;
+        pythonCode += `                    self._stream.close()\n`;
+        pythonCode += `        simulation.reporters.append(app.StateDataReporter(CleanHeaderStream(open('${logFile}', 'w', encoding='utf-8')), max(1, ${logFreq}), step=True, potentialEnergy=True, temperature=True))\n`;
+        pythonCode += `        simulation.reporters.append(app.StateDataReporter(CleanHeaderStream(_sys.stdout), max(1, ${logFreq}), step=True, potentialEnergy=True, temperature=True))\n`;
+        pythonCode += `        simulation.step(${mdSteps})\n`;
         pythonCode += `    \n`;
-        pythonCode += `    # Extract final frame coordinates\n`;
-        pythonCode += `    state = simulation.context.getState(getPositions=True)\n`;
-        pythonCode += `    final_positions = state.getPositions(asNumpy=True).value_in_unit(unit.angstrom)\n`;
-        pythonCode += `    ${blockOutAtoms} = ap.update_positions(${inAtoms}, final_positions)\n`;
-        pythonCode += `    ${blockOutBox} = ${inBox}\n`;
+        pythonCode += `    _state = simulation.context.getState(getPositions=True, enforcePeriodicBox=${wrapTrajectory ? "True" : "False"})\n`;
+        pythonCode += `    _final_positions = _state.getPositions(asNumpy=True).value_in_unit(unit.angstrom)\n`;
+        pythonCode += `    _bv = _state.getPeriodicBoxVectors(asNumpy=True).value_in_unit(unit.angstrom)\n`;
+        pythonCode += `    # Convert OpenMM box vectors → GROMACS Box_dim [lx,ly,lz,0,0,xy,0,xz,yz]\n`;
+        pythonCode += `    _lx = float(_bv[0][0]); _ly = float(_bv[1][1]); _lz = float(_bv[2][2])\n`;
+        pythonCode += `    _xy = float(_bv[1][0]); _xz = float(_bv[2][0]); _yz = float(_bv[2][1])\n`;
+        pythonCode += `    _new_box = [_lx, _ly, _lz, 0, 0, _xy, 0, _xz, _yz]\n`;
+        pythonCode += `    if _is_parmed:\n`;
+        pythonCode += `        for _i, _a in enumerate(_sim_atoms.atoms):\n`;
+        pythonCode += `            _a.xx = float(_final_positions[_i][0])\n`;
+        pythonCode += `            _a.xy = float(_final_positions[_i][1])\n`;
+        pythonCode += `            _a.xz = float(_final_positions[_i][2])\n`;
+        pythonCode += `        ${blockOutAtoms} = _sim_atoms\n`;
+        pythonCode += `        ${blockOutBox} = _new_box\n`;
+        pythonCode += `        _sim_atoms.save("result_${index}.pdb", overwrite=True)\n`;
+        pythonCode += `    else:\n`;
+        pythonCode += `        for _i, _pos in enumerate(_final_positions):\n`;
+        pythonCode += `            _sim_atoms[_i]['x'] = float(_pos[0])\n`;
+        pythonCode += `            _sim_atoms[_i]['y'] = float(_pos[1])\n`;
+        pythonCode += `            _sim_atoms[_i]['z'] = float(_pos[2])\n`;
+        pythonCode += `        # Wrap in _SimList to carry topology metadata to downstream nodes\n`;
+        pythonCode += `        ${blockOutAtoms} = _SimList(_sim_atoms)\n`;
+        pythonCode += `        ${blockOutAtoms}._top_path = _top_path\n`;
+        pythonCode += `        ${blockOutAtoms}._defines  = _defines\n`;
+        pythonCode += `        if hasattr(${inAtoms}, 'itp'): ${blockOutAtoms}.itp = ${inAtoms}.itp\n`;
+        pythonCode += `        ${blockOutBox} = _new_box\n`;
+        pythonCode += `        ap.write_pdb(list(_sim_atoms), _new_box, "result_${index}.pdb")\n`;
+
         pythonCode += `except Exception as md_err:\n`;
-        pythonCode += `    print(f"MD Simulation crashed or OpenMM not installed, using starting coordinates: {md_err}")\n`;
+        pythonCode += `    import traceback as _tb\n`;
+        pythonCode += `    print(f"Simulation failed: {md_err}")\n`;
+        pythonCode += `    print(_tb.format_exc())\n`;
         pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
         pythonCode += `    ${blockOutBox} = ${inBox}\n`;
-        pythonCode += `    with open('${logFile}', 'w') as _logf: _logf.write("OpenMM not configured or MD failed. Starting positions used.")\n`;
-        pythonCode += `    with open('${trajFile}', 'w') as _trajf: _trajf.write("No trajectory generated.")\n`;
+        if (!isMinimize) {
+          pythonCode += `    with open('${logFile}', 'w') as _logf: _logf.write(f"Simulation failed: {md_err}\\n" + _tb.format_exc())\n`;
+          pythonCode += `    with open('${trajFile}', 'w') as _trajf: _trajf.write("No trajectory generated.\\n")\n`;
+        }
         
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox, traj: `'${trajFile}'` });
         break;
@@ -937,32 +1611,35 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         break;
       }
       case "analysis": {
-        const option = getString(data, "option", "rdf");
+        // AnalysisNode stores the selection under "mode"; "option" was a historical alias
+        const option = getString(data, "mode", getString(data, "option", "rdf"));
 
         if (option === "rdf") {
           const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
           const typeB = pyEscape(getString(data, "atomTypeB", "Cl"));
-          const rMax = getNumber(data, "rMax", 10.0);
+          const rMax = getNumber(data, "rmax", 10.0);
           const dr = getNumber(data, "dr", 0.05);
           const outputBase = pyEscape(getString(data, "rdfOutputBase", "rdf_results"));
 
           pythonCode += `\n# Run RDF Analysis\n`;
-          pythonCode += `rdf_data = ap.rdf(${inAtoms}, ${inBox}, typeA='${typeA}', typeB='${typeB}', rmax=${rMax}, dr=${dr}, output_base='${outputBase}')\n`;
-          pythonCode += `with open('rdf_results.json', 'w') as _rf:\n`;
-          pythonCode += `    json.dump({'x': [float(x) for x in rdf_data[:, 0]], 'y': [float(y) for y in rdf_data[:, 1]]}, _rf)\n`;
-          
-          if (mode === "full") {
-            pythonCode += `print("__PLOT_DATA__:${id}:" + json.dumps({'x': [float(x) for x in rdf_data[:, 0]], 'y': [float(y) for y in rdf_data[:, 1]]}))\n`;
-          }
+          pythonCode += `rdf_data = ap.calculate_rdf(${inAtoms}, ${inBox}, typeA='${typeA}', typeB='${typeB}', rmax=${rMax}, dr=${dr})\n`;
+          pythonCode += `with open('${outputBase}.json', 'w') as _rf:\n`;
+          pythonCode += `    json.dump({'x': [float(x) for x in rdf_data[0]], 'y': [float(y) for y in rdf_data[1]]}, _rf)\n`;
+          pythonCode += `print(f"RDF: {len(rdf_data[0])} bins, rmax=${rMax} A")\n`;
+
         } else if (option === "cn" || option === "coordinationNumber") {
           const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
           const typeB = getString(data, "atomTypeB", "").trim();
-          const rCut = getNumber(data, "rCut", 3.5);
+          const rCut = getNumber(data, "cutoff", 3.5);
           const outputBase = pyEscape(getString(data, "cnOutputBase", "cn_results"));
-          const typeBArg = typeB ? `, typeB='${pyEscape(typeB)}'` : "";
+          const typeBArg = typeB ? `, neighbor_types=['${pyEscape(typeB)}']` : "";
 
           pythonCode += `\n# Coordination Number Analysis\n`;
-          pythonCode += `cn_data = ap.coordination_number(${inAtoms}, ${inBox}, typeA='${typeA}'${typeBArg}, rcut=${rCut}, output_base='${outputBase}')\n`;
+          pythonCode += `cn_data = ap.coordination_number(${inAtoms}, ${inBox}, cutoff=${rCut}, atom_types=['${typeA}']${typeBArg})\n`;
+          pythonCode += `with open('${outputBase}.json', 'w') as _cf:\n`;
+          pythonCode += `    json.dump({'coordination_numbers': cn_data}, _cf)\n`;
+          pythonCode += `print(f"CN: mean={sum(cn_data)/len(cn_data):.2f}, min={min(cn_data)}, max={max(cn_data)}")\n`;
+
         } else if (option === "closest") {
           const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
           const typeB = pyEscape(getString(data, "atomTypeB", "Cl"));
@@ -970,7 +1647,36 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           const outputBase = pyEscape(getString(data, "closestOutputBase", "closest_results"));
 
           pythonCode += `\n# Closest atoms extraction\n`;
-          pythonCode += `closest_data = ap.closest_atoms(${inAtoms}, ${inBox}, typeA='${typeA}', typeB='${typeB}', limit=${limit}, output_base='${outputBase}')\n`;
+          pythonCode += `closest_data = ap.closest_atom(${inAtoms}, [${typeA}], ${inBox})\n`;
+          pythonCode += `with open('${outputBase}.json', 'w') as _cf:\n`;
+          pythonCode += `    json.dump(closest_data, _cf)\n`;
+
+        } else if (option === "mindist") {
+          const groupBy = getString(data, "mindistGroupBy", "molid");
+          const nPairs = getNumber(data, "mindistNPairs", 10);
+          const cutoff = getNumber(data, "mindistCutoff", 0);
+          const outputBase = pyEscape(getString(data, "mindistOutputBase", "mindist_results"));
+          const outMode = getString(data, "mindistOutputMode", "json");
+          const cutoffArg = cutoff > 0 ? `, cutoff=${cutoff}` : "";
+
+          pythonCode += `\n# Minimum inter-molecular distances\n`;
+          pythonCode += `_md_results = ap.min_distances(list(${inAtoms}), ${inBox}, group_by='${groupBy}', n_pairs=${nPairs}${cutoffArg})\n`;
+          pythonCode += `print(f"Min distances (group_by='${groupBy}', top ${nPairs}):")\n`;
+          pythonCode += `print(f"  {'Group A':>10}  {'Group B':>10}  {'Type A':>6}  {'Type B':>6}  {'Dist (A)':>8}")\n`;
+          pythonCode += `print("  " + "-"*52)\n`;
+          pythonCode += `for _r in _md_results:\n`;
+          pythonCode += `    print(f"  {str(_r['group_a']):>10}  {str(_r['group_b']):>10}  {_r['type_a']:>6}  {_r['type_b']:>6}  {_r['distance']:>8.2f}")\n`;
+          if (outMode === "json" || outMode === "both") {
+            pythonCode += `with open('${outputBase}.json', 'w') as _mf:\n`;
+            pythonCode += `    json.dump(_md_results, _mf, indent=2)\n`;
+          }
+          if (outMode === "csv" || outMode === "both") {
+            pythonCode += `with open('${outputBase}.csv', 'w') as _mc:\n`;
+            pythonCode += `    _mc.write("group_a,group_b,atom_a,atom_b,type_a,type_b,distance\\n")\n`;
+            pythonCode += `    for _r in _md_results:\n`;
+            pythonCode += `        _mc.write(f"{_r['group_a']},{_r['group_b']},{_r['atom_a']},{_r['atom_b']},{_r['type_a']},{_r['type_b']},{_r['distance']}\\n")\n`;
+          }
+
         } else if (option === "occupancy") {
           const ionType = pyEscape(getString(data, "ionType", "Na"));
           const rCut = getNumber(data, "rCut", 3.0);
@@ -985,6 +1691,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
+
       case "stats": {
         const statsLog = pyEscape(getString(data, "statsLogFile", "output.log"));
         pythonCode += `\n# Compute Composition Statistics\n`;
@@ -1079,8 +1786,10 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `${blockOutAtoms} = ap.fuse_atoms(${inAtoms}, ${inBox}, rmax=${rmax}, criteria='${criteria}')\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else if (chemMode === "addH") {
-          const waterFF = pyEscape(getString(data, "waterFF", "SPC"));
-          pythonCode += `${blockOutAtoms} = ap.assign_forcefield(${inAtoms}, ${inBox}, ff='CLAYFF', watermodel='${waterFF}')\n`;
+          const delta = getNumber(data, "deltaThreshold", -0.5);
+          const maxAdd = getNumber(data, "maxAdditions", 10);
+          const bondLen = getNumber(data, "bondLength", 0.96);
+          pythonCode += `${blockOutAtoms} = ap.add_hydrogens_bvs(${inAtoms}, ${inBox}, delta_threshold=${delta}, max_additions=${maxAdd}, bond_length=${bondLen})\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else {
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
@@ -1096,13 +1805,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         if (option === "com") {
           const comLogFile = pyEscape(getString(data, "comLogFile", "com_report.json"));
           pythonCode += `\n# Center of mass calculation\n`;
-          pythonCode += `com_data = ap.center_of_mass(${inAtoms}, ${inBox})\n`;
+          pythonCode += `com_data = ap.com(${inAtoms})\n`;
           pythonCode += `with open('${comLogFile}', 'w') as _cf:\n`;
           pythonCode += `    json.dump({'x': float(com_data[0]), 'y': float(com_data[1]), 'z': float(com_data[2])}, _cf)\n`;
         } else if (option === "vectors") {
           const vectorsFile = pyEscape(getString(data, "vectorsFile", "cell_vectors.json"));
           pythonCode += `\n# Cell vectors calculation\n`;
-          pythonCode += `vectors_data = ap.cell_vectors(${inBox})\n`;
+          pythonCode += `_cell = ap.Box_dim2Cell(${inBox})\n`;
+          pythonCode += `vectors_data = ap.get_cell_vectors(_cell)\n`;
           pythonCode += `with open('${vectorsFile}', 'w') as _vf:\n`;
           pythonCode += `    json.dump({'a': [float(v) for v in vectors_data[0]], 'b': [float(v) for v in vectors_data[1]], 'c': [float(v) for v in vectors_data[2]]}, _vf)\n`;
         }
@@ -1137,32 +1847,215 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
+      case "organic": {
+        const smiles = pyEscape(getString(data, "smiles", ""));
+        const ff = pyEscape(getString(data, "forcefield", "gaff-2.11"));
+        const inputMode = getString(data, "inputMode", "smiles");
+        const uploadPath = pyEscape(getString(data, "uploadedFilePath", ""));
+
+        pythonCode += `\n# Parametrize Organic Molecule\n`;
+        pythonCode += `try:\n`;
+        if (inputMode === "file" && uploadPath) {
+          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${uploadPath}', version='${ff}')\n`;
+        } else {
+          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff('${smiles}', version='${ff}')\n`;
+        }
+        pythonCode += `except Exception as e:\n`;
+        pythonCode += `    print(f"Failed to parametrize organic molecule: {e}")\n`;
+        pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = [], None\n`;
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
       case "plot": {
         pythonCode += `# Plot Node (${id}) is active downstream\n`;
         break;
       }
       case "viewer": {
-        pythonCode += `# Viewer Node (${id}) is active downstream\n`;
+        // Generate PDB snapshot for the frontend viewer
+        const writeConect = "True";
+        pythonCode += `import io, json, os\n`;
+        pythonCode += `if ${inAtoms} is not None:\n`;
+        pythonCode += `    _temp_atoms = list(${inAtoms}) if ${inAtoms} else []\n`;
+        pythonCode += `    if not _temp_atoms:\n`;
+        pythonCode += `        _temp_atoms = [{'index': 1, 'x': 0.0, 'y': 0.0, 'z': 0.0, 'element': 'C', 'type': 'C', 'fftype': 'C', 'resname': 'DUM', 'molid': 1, 'charge': 0.0}]\n`;
+        if (inTraj) {
+          pythonCode += `    _traj_file = ${inTraj}\n`;
+          pythonCode += `    _no_water_file = _traj_file.replace('.pdb', '_no_water.pdb')\n`;
+          pythonCode += `    if os.path.exists(_no_water_file):\n`;
+          pythonCode += `        _traj_file = _no_water_file\n`;
+          pythonCode += `    if os.path.exists(_traj_file):\n`;
+          pythonCode += `        with open(_traj_file, 'r', encoding='utf-8') as _f:\n`;
+          pythonCode += `            _vis_pdb_content = _f.read()\n`;
+          pythonCode += `        # Downsample PDB models if there are too many (max 10 models to prevent SSE crash)\n`;
+          pythonCode += `        _models = []\n`;
+          pythonCode += `        _curr_model = []\n`;
+          pythonCode += `        _in_model = False\n`;
+          pythonCode += `        _lines = _vis_pdb_content.splitlines()\n`;
+          pythonCode += `        _has_models = any(l.startswith('MODEL') for l in _lines)\n`;
+          pythonCode += `        if _has_models:\n`;
+          pythonCode += `            for _l in _lines:\n`;
+          pythonCode += `                if _l.startswith('MODEL'):\n`;
+          pythonCode += `                    _in_model = True\n`;
+          pythonCode += `                    _curr_model = [_l]\n`;
+          pythonCode += `                elif _l.startswith('ENDMDL'):\n`;
+          pythonCode += `                    _curr_model.append(_l)\n`;
+          pythonCode += `                    _models.append(_curr_model)\n`;
+          pythonCode += `                    _in_model = False\n`;
+          pythonCode += `                elif _in_model:\n`;
+          pythonCode += `                    _curr_model.append(_l)\n`;
+          pythonCode += `            \n`;
+          pythonCode += `            _max_out_models = 1000\n`;
+          pythonCode += `            if len(_models) > _max_out_models:\n`;
+          pythonCode += `                _keep_indices = [int(i * (len(_models) - 1) / (_max_out_models - 1)) for i in range(_max_out_models)]\n`;
+          pythonCode += `                _keep_indices = sorted(list(set(_keep_indices)))\n`;
+          pythonCode += `                _models = [_models[_idx] for _idx in _keep_indices]\n`;
+          pythonCode += `            \n`;
+          pythonCode += `            _vis_pdb_str = '\\\\\\\\n'.join('\\\\\\\\n'.join(_m) for _m in _models)\n`;
+          pythonCode += `        else:\n`;
+          pythonCode += `            _vis_pdb_str = _vis_pdb_content.replace('\\n', '\\\\n')\n`;
+          pythonCode += `    else:\n`;
+          pythonCode += `        _vis_buf = io.StringIO()\n`;
+          pythonCode += `        ap.write_pdb(_temp_atoms, ${inBox}, _vis_buf, write_conect=${writeConect})\n`;
+          pythonCode += `        _vis_pdb_str = _vis_buf.getvalue().replace('\\n', '\\\\n')\n`;
+        } else {
+          pythonCode += `    _vis_buf = io.StringIO()\n`;
+          pythonCode += `    ap.write_pdb(_temp_atoms, ${inBox}, _vis_buf, write_conect=${writeConect})\n`;
+          pythonCode += `    _vis_pdb_str = _vis_buf.getvalue().replace('\\n', '\\\\n')\n`;
+        }
+        pythonCode += `    print(f"__VISUALIZE_${id}__:{_vis_pdb_str}")\n`;
+        pythonCode += `    # Stream raw high-precision charges for labeling\n`;
+        pythonCode += `    _vis_charges = [a.get('charge', 0) for a in _temp_atoms]\n`;
+        pythonCode += `    print(f"__CHARGES_${id}__:{json.dumps(_vis_charges)}")\n`;
+        stateVars.set(id, { atoms: inAtoms, box: inBox, traj: inTraj });
         break;
       }
       case "export": {
         const outName = pyEscape(getString(data, "outputName", "system"));
         const structFmt = pyEscape(getString(data, "structureFormat", "pdb"));
         const topFmt = pyEscape(getString(data, "topologyFormat", "none"));
+        const findUpstreamForcefield = (startId: string): string => {
+          const visited = new Set<string>();
+          const queue = [startId];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (visited.has(current)) continue;
+            visited.add(current);
+            const parentEdges = edges.filter(e => e.target === current);
+            for (const edge of parentEdges) {
+              const parentNode = nodeMap.get(edge.source);
+              if (parentNode) {
+                if (parentNode.type === "forcefield") {
+                  return getString(parentNode.data, "forcefield", "minff");
+                }
+                queue.push(parentNode.id);
+              }
+            }
+          }
+          return "minff"; // fallback default
+        };
+        const findUpstreamMinffVariant = (startId: string): string => {
+          const visited = new Set<string>();
+          const queue = [startId];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (visited.has(current)) continue;
+            visited.add(current);
+            const parentEdges = edges.filter(e => e.target === current);
+            for (const edge of parentEdges) {
+              const parentNode = nodeMap.get(edge.source);
+              if (parentNode) {
+                if (parentNode.type === "forcefield") {
+                  return getString(parentNode.data, "minffVariant", "500");
+                }
+                queue.push(parentNode.id);
+              }
+            }
+          }
+          return "500"; // fallback default
+        };
+        const findUpstreamWaterModel = (startId: string, ffType: string): string => {
+          const visited = new Set<string>();
+          const queue = [startId];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (visited.has(current)) continue;
+            visited.add(current);
+            const parentEdges = edges.filter(e => e.target === current);
+            for (const edge of parentEdges) {
+              const parentNode = nodeMap.get(edge.source);
+              if (parentNode) {
+                if (parentNode.type === "forcefield") {
+                  return getString(parentNode.data, "waterModel", ffType === "clayff" ? "SPCE" : "OPC3");
+                }
+                queue.push(parentNode.id);
+              }
+            }
+          }
+          return ffType === "clayff" ? "SPCE" : "OPC3";
+        };
+        const findUpstreamIonSet = (startId: string, ffType: string): string => {
+          const visited = new Set<string>();
+          const queue = [startId];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (visited.has(current)) continue;
+            visited.add(current);
+            const parentEdges = edges.filter(e => e.target === current);
+            for (const edge of parentEdges) {
+              const parentNode = nodeMap.get(edge.source);
+              if (parentNode) {
+                if (parentNode.type === "forcefield") {
+                  return getString(parentNode.data, "ionSet", ffType === "clayff" ? "HFE_LM" : "IOD_LM");
+                }
+                queue.push(parentNode.id);
+              }
+            }
+          }
+          return ffType === "clayff" ? "HFE_LM" : "IOD_LM";
+        };
+        const upstreamFF = findUpstreamForcefield(id);
+        const minffVariant = findUpstreamMinffVariant(id);
+        const waterModel = findUpstreamWaterModel(id, upstreamFF);
+        const ionSet = findUpstreamIonSet(id, upstreamFF);
+        const ffVariant = upstreamFF === "clayff" ? "CLAYFF_EXT" : `GMINFF_k${minffVariant}`;
+        const waterLower = waterModel.toLowerCase();
+        const ionCombine = `${waterModel}_${ionSet}`;
 
         pythonCode += `\n# Export Final System Coordinate and Topology Outputs\n`;
+        pythonCode += `if hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None:\n`;
+        pythonCode += `    # Export Mixed/Organic System\n`;
+        pythonCode += `    _exp_atoms = list(${inAtoms})\n`;
+        pythonCode += `    _exp_box = ${inBox}\n`;
         if (structFmt === "pdb") {
-          pythonCode += `ap.write_conf(${inAtoms}, ${inBox}, '${outName}.pdb')\n`;
+          pythonCode += `    ap.write_pdb(_exp_atoms, _exp_box, '${outName}.pdb')\n`;
         } else if (structFmt === "gro") {
-          pythonCode += `ap.write_conf(${inAtoms}, ${inBox}, '${outName}.gro')\n`;
+          pythonCode += `    ap.write_gro(_exp_atoms, _exp_box, '${outName}.gro')\n`;
         } else if (structFmt === "cif") {
-          pythonCode += `ap.write_conf(${inAtoms}, ${inBox}, '${outName}.cif')\n`;
+          pythonCode += `    ap.write_cif(_exp_atoms, _exp_box, '${outName}.cif')\n`;
+        }
+        if (topFmt === "gromacs") {
+          pythonCode += `    _org_itps = []\n`;
+          pythonCode += `    if ${inAtoms}.itp.get('_source_itp'):\n`;
+          pythonCode += `        _org_itps.append(os.path.basename(${inAtoms}.itp['_source_itp']))\n`;
+          pythonCode += `    for _k, _v in ${inAtoms}.itp.items():\n`;
+          pythonCode += `        if _k.startswith('_source_itp') and _v and _v not in _org_itps:\n`;
+          pythonCode += `            _org_itps.append(os.path.basename(_v))\n`;
+          pythonCode += `    ap.write_merged_top(_exp_atoms, ${inAtoms}.itp, _exp_box, '${outName}.top', '${outName}.gro', minff_variant='${ffVariant}', water_model='${waterLower}', ion_model='${ionCombine}', organic_itps=_org_itps or None)\n`;
+        }
+        pythonCode += `else:\n`;
+        
+        if (structFmt === "pdb") {
+          pythonCode += `    ap.write_pdb(${inAtoms}, ${inBox}, '${outName}.pdb')\n`;
+        } else if (structFmt === "gro") {
+          pythonCode += `    ap.write_gro(${inAtoms}, ${inBox}, '${outName}.gro')\n`;
+        } else if (structFmt === "cif") {
+          pythonCode += `    ap.write_cif(${inAtoms}, ${inBox}, '${outName}.cif')\n`;
         }
 
         if (topFmt === "gromacs") {
-          pythonCode += `ap.write_itp(${inAtoms}, ${inBox}, '${outName}.itp')\n`;
+          pythonCode += `    ap.write_itp(${inAtoms}, ${inBox}, '${outName}.itp')\n`;
         } else if (topFmt === "namd") {
-          pythonCode += `ap.write_psf(${inAtoms}, ${inBox}, '${outName}.psf')\n`;
+          pythonCode += `    ap.write_psf(${inAtoms}, ${inBox}, '${outName}.psf')\n`;
         }
         break;
       }

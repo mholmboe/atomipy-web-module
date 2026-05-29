@@ -6,7 +6,19 @@ A powerful, node-based visual programming environment for designing, manipulatin
 
 ## 🚀 Key Features
 
+- **Interactive MD & Energy Minimization (EM) Simulations**:
+    - **Simulation Node**: Execute Molecular Dynamics (NVT/NPT) and Energy Minimization (EM) simulations directly in the node workspace.
+    - **Dynamic EM Trajectories**: Unlike standard minimizers, EM now runs step-by-step to compile a smooth, real-time relaxation trajectory of your system.
+    - **Max Force Norm Logging**: EM table outputs report both Potential Energy and Maximum Euclidean Force Norm vectors in standard `kJ/mol/nm` units.
+    - **Decoupled reporting frequencies**: Configure **Log frequency (steps)** and **PDB frequency (steps)** independently in the advanced settings.
+    - **Clean Log CSV Headers Interceptor**: Built-in Python output stream wrapper (`CleanHeaderStream`) automatically filters and cleans comment symbols (`#`) and double quotes (`"`) from CSV header columns.
+    - **GPU Acceleration**: Utilizes hardware GPU acceleration (via OpenMM's OpenCL/Metal/CUDA platforms) automatically when available, falling back to CPU or Reference platforms seamlessly.
+    - **Live Trajectory Plotting**: Real-time graphing of potential energy and temperature progress directly in the web UI.
+    - **Auto-Unzipping & Download**: Download the completed trajectory, topology, and state files in an automatically unzipped structural bundle.
 - **Visual Workflow**: Build systems by connecting nodes: Import → Replicate → Solvate → Add Ions → Run Simulation → Export.
+- **Topology & Structure Uploads**: Drag-and-drop structural coordinate files (`.xyz`, `.gro`, `.pdb`, `.cif`) as well as GROMACS topology files (`.itp`) cleanly into both the Import and Insert nodes.
+- **Fluctuating Bounding Box Rendering**: Enabled dynamic unit cell/box animation in the 3Dmol viewer. Supports NPT simulation box expansion and contraction playbacks up to **1000 frames**.
+- **Top-Left Warnings Position**: Floating Workflow Warning banners are positioned in the top-left corner of the editor canvas to prevent bottom dock overlapping.
 - **Undo & Redo Capabilities**: Unlimited layout timeline history (up to 50 snapshots) with full `Cmd+Z` / `Cmd+Y` (or `Ctrl+Z` / `Ctrl+Y`) keyboard shortcut integration.
 - **Session Auto-save & Restore**: Debounced local storage caching preserves the complete workflow layout across page refreshes or unexpected crashes.
 - **Topological Warnings Alert**: Active rule-based prerequisite check validation (e.g. alerts when a Forcefield node is missing before a Simulation).
@@ -19,11 +31,6 @@ A powerful, node-based visual programming environment for designing, manipulatin
 - **Structure Library**: Built-in 100+ mineral preset structures (Pyrophyllite, Kaolinite, Montmorillonite, etc.).
 - **3D Visualization**: Real-time 3D structure previewing with integrated NGL/3Dmol viewers.
 - **Forcefield Generation**: Streamlined assignment of **MINFF** and **CLAYFF** parameters.
-- **Interactive MD Simulations**:
-    - **Simulation Node**: Execute Molecular Dynamics (NVT) simulations directly in the node workspace.
-    - **GPU Acceleration**: Utilizes hardware GPU acceleration (via OpenMM's OpenCL/Metal/CUDA platforms) automatically when available, falling back to CPU or Reference platforms seamlessly.
-    - **Live Trajectory Plotting**: Real-time graphing of potential energy and temperature progress directly in the web UI.
-    - **Auto-Unzipping & Download**: Download the completed trajectory, topology, and state files in an automatically unzipped structural bundle.
 - **Advanced Analysis**:
     - **XRD Patterns**: Simulate high-performance X-ray diffraction patterns.
     - **BVS/GII Analysis**: Calculate Bond Valence Sums and Global Instability Index.
@@ -51,7 +58,7 @@ If you plan to run large molecular dynamics simulations, you can launch the Visu
 
 ### Local Installation
 
-You will need **Node.js (v20+)** and **Python (3.11+)** installed on your system.
+You will need **Node.js (v20+)** and **Miniconda / Anaconda** (or mamba) installed on your system.
 
 #### 1. Clone the Repository
 ```bash
@@ -59,33 +66,21 @@ git clone https://github.com/mholmboe/atomipy-web-module.git
 cd atomipy-web-module
 ```
 
-#### 2. Backend Setup (Flask)
+#### 2. Install Frontend Dependencies
 ```bash
-# It is recommended to use a virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-pip install -r requirements.txt
+npm install
 ```
 
-#### 3. Frontend Setup (React/Vite)
+#### 3. Run Development Servers
+We provide a unified script that handles setting up conda environments (`atomipy-core` and `atomipy-openff`), launching Redis, starting the Celery worker, and spinning up both the Core Backend and OpenFF Microservice, plus the React frontend.
+
 ```bash
-npm install --legacy-peer-deps
+./restart_dev.sh
 ```
 
-#### 4. Run Development Servers
-You will need two terminal windows open:
+*(Note: You must have `redis-server` installed on your system, e.g. `brew install redis` or `sudo apt install redis-server`)*
 
-**Terminal 1 (Backend):**
-```bash
-python app.py
-```
-
-**Terminal 2 (Frontend):**
-```bash
-npm run dev
-```
-Open your browser at `http://localhost:8080`.
+The script will stream logs to `.dev-logs/` and open your frontend at `http://localhost:8080`.
 
 ---
 
@@ -103,8 +98,10 @@ docker run -p 5002:5002 atomipy-web
 ## 🏗️ Architecture
 
 - **Frontend**: React, React Flow (for the node graph), Tailwind CSS, Shadcn UI.
-- **Backend**: Flask (Python), Gunicorn (Production server).
-- **Core Engine**: `atomipy` (Molecular geometry & topology logic).
+- **Core Backend**: FastAPI (Python), managing execution and native `atomipy` merging logic without heavy GMSO dependencies.
+- **Task Queue**: Celery + Redis for asynchronous molecular dynamics and OpenFF tasks.
+- **OpenFF Worker**: Isolated FastAPI microservice handling `openff-interchange` and `openff-toolkit` dependencies.
+- **Core Engine**: `atomipy` (Molecular geometry & purely native dictionary-based topology merging).
 
 ## 📄 License
 This project is part of the atomipy web module toolbox. See the main [atomipy](https://github.com/mholmboe/atomipy) repository for licensing details.

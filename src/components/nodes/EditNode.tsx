@@ -4,7 +4,7 @@ import { SlidersHorizontal, X } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
-type EditMode = "slice" | "remove" | "molecule" | "resname" | "reorder";
+type EditMode = "slice" | "remove" | "molecule" | "resname" | "reorder" | "center";
 const OPS = ["<", "<=", ">", ">=", "==", "!="] as const;
 
 type EditNodeData = {
@@ -29,6 +29,8 @@ type EditNodeData = {
   // Reorder
   byMode?: "index" | "resname" | "type";
   neworder?: string;
+  // Center
+  centerOrigin?: boolean;
 };
 
 export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
@@ -57,6 +59,7 @@ export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
             <option value="molecule">Set Molecule ID</option>
             <option value="resname">Assign Resname</option>
             <option value="reorder">Reorder Atoms</option>
+            <option value="center">Center Coordinates</option>
           </select>
         </div>
 
@@ -203,6 +206,24 @@ export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
                 onPointerDown={(e) => e.stopPropagation()} />
             </div>
           </>
+        )}
+
+        {/* CENTER */}
+        {mode === "center" && (
+          <div className="space-y-2">
+            <label className="nodrag flex items-center gap-2 text-xs text-muted-foreground">
+              <input 
+                type="checkbox" 
+                checked={data.centerOrigin ?? false}
+                onChange={(e) => set("centerOrigin", e.target.checked)}
+                onPointerDown={(e) => e.stopPropagation()} 
+              />
+              Move to origin [0,0,0] (otherwise centers in box)
+            </label>
+            <p className="text-[10px] text-muted-foreground/60 leading-normal">
+              Centering shifts atom positions relative to their center of geometry or center of mass.
+            </p>
+          </div>
         )}
       </div>
 

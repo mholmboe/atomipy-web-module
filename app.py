@@ -387,6 +387,7 @@ def list_presets():
     })
 
 
+
 @app.route("/build_system", methods=["POST"])
 def build_system():
     try:
@@ -693,227 +694,55 @@ def debug_cache():
     except Exception as e:
         return jsonify({"error": str(e)})
 
+import requests
+
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://backend:8000")
+
+@app.route("/api/upload", methods=["POST"])
+def proxy_upload_file():
+    if "file" not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files["file"]
+    
+    files = {"file": (file.filename, file.read(), file.content_type)}
+    resp = requests.post(f"{BACKEND_URL}/api/upload", files=files)
+    return Response(resp.content, status=resp.status_code, content_type=resp.headers.get("content-type"))
+
+@app.route("/api/presets", methods=["GET"])
+def proxy_list_presets():
+    resp = requests.get(f"{BACKEND_URL}/api/presets")
+    return Response(resp.content, status=resp.status_code, content_type=resp.headers.get("content-type"))
+
+@app.route("/api/download-result/<token>")
+def proxy_download_result(token):
+    resp = requests.get(f"{BACKEND_URL}/api/download-result/{token}", stream=True)
+    return Response(resp.iter_content(chunk_size=1024), status=resp.status_code, content_type=resp.headers.get("content-type"))
+
 @app.route("/api/build-stream", methods=["POST"])
 def build_stream():
     try:
         payload = _parse_payload()
         script_code = payload.get("script", "")
-        workflow_data = payload.get("workflow")
-        script_artifacts = _extract_script_artifacts(payload)
-
         if not script_code:
             return jsonify({"error": "No script provided."}), 400
 
-        if os.environ.get("DISABLE_SIMULATION", "false").lower() == "true" and "load_minff_into_openmm" in script_code:
-            return jsonify({"error": "Simulation execution is disabled on this server instance. Run locally or in Google Colab to execute simulations."}), 403
-
-        session_id = _get_or_create_session_id()
-
-        # Helper to format SSE data
-        class SSE:
-            @staticmethod
-            def status(msg): return SSE._fmt("status", {"message": msg})
-            @staticmethod
-            def progress(node_id, index): return SSE._fmt("progress", {"nodeId": node_id, "index": int(index)})
-            @staticmethod
-            def log(line): return SSE._fmt("log", {"message": line})
-            @staticmethod
-            def visualize(node_id, data): return SSE._fmt("visualize", {"nodeId": node_id, "data": data})
-            @staticmethod
-            def box(node_id, data): return SSE._fmt("box", {"nodeId": node_id, "data": data})
-            @staticmethod
-            def complete(token, success): return SSE._fmt("complete", {"token": token, "success": success})
-            @staticmethod
-            def _fmt(t, d): return f"data: {json.dumps({'type': t, **d})}\n\n"
-
-        BUILD_TIMEOUT = int(os.environ.get("BUILD_TIMEOUT_SECONDS", "600"))
-
+        # Proxy the request to the FastAPI backend
+        response = requests.post(f"{BACKEND_URL}/api/build-stream", json=payload, stream=True)
+        
         def generate():
-            with tempfile.TemporaryDirectory(prefix="atomipy_stream_") as work_dir:
-                # 1. Setup Environment
-                _prepare_execution_workspace(work_dir, session_id)
-                _write_execution_inputs(work_dir, script_code, script_artifacts, workflow_data)
-
-                yield SSE.status('Build initializing (Locked Mode)...')
-
-                # 2. Execute In-Process via Thread (Saves ~150MB RAM over Subprocess)
-                log_queue = queue.Queue()
-
-                def run_build_in_process():
-                    with BUILD_LOCK:
-                        old_cwd = os.getcwd()
-                        class QueueWriter:
-                            def __init__(self, q): self.q = q
-                            def write(self, s: str) -> int:
-                                if s: self.q.put(s)
-                                return len(s)
-                            def flush(self): pass
-
-                        writer = QueueWriter(log_queue)
-                        try:
-                            os.chdir(work_dir)
-                            gc.collect()
-                            with contextlib.redirect_stdout(writer), contextlib.redirect_stderr(writer):
-                                def ap_plot(node_id, x, y, title="", xlabel="", ylabel=""):
-                                    data = {
-                                        "x": x.tolist() if hasattr(x, 'tolist') else list(x),
-                                        "y": y.tolist() if hasattr(y, 'tolist') else list(y),
-                                        "title": title,
-                                        "xlabel": xlabel,
-                                        "ylabel": ylabel
-                                    }
-                                    print(f"__PLOT_{node_id}__:{json.dumps(data)}")
-
-                                exec_globals = {
-                                    "__name__": "__main__",
-                                    "ap": get_ap(),
-                                    "os": os,
-                                    "sys": sys,
-                                    "json": json,
-                                    "ap_plot": ap_plot,
-                                }
-                                exec(script_code, exec_globals)
-
-                            log_queue.put("__FINISH__:0")
-                        except Exception as e:
-                            writer.write(f"\nFATAL BUILD ERROR: {str(e)}\n{traceback.format_exc()}\n")
-                            log_queue.put("__FINISH__:1")
-                        finally:
-                            os.chdir(old_cwd)
-                            gc.collect()
-
-                thread = threading.Thread(target=run_build_in_process, daemon=True)
-                thread.start()
-
-                log_path = os.path.join(work_dir, "execution_stdout.txt")
-                curr_line = ""
-                success = False
-                has_plot_data = False
-
-                # Collect plot/charges/xrd data to yield AFTER zip is created
-                deferred_events = []
-
-                deadline = time.time() + BUILD_TIMEOUT
-                with open(log_path, "w", encoding="utf-8") as log_f:
-                    while True:
-                        remaining = deadline - time.time()
-                        if remaining <= 0:
-                            yield SSE.log(f"Build timed out after {BUILD_TIMEOUT}s.")
-                            success = False
-                            break
-                        try:
-                            content = log_queue.get(timeout=min(15, remaining))
-                            if content.startswith("__FINISH__"):
-                                success = content.endswith(":0")
-                                break
-
-                            for char in content:
-                                curr_line += char
-                                if char in ('\n', '\r'):
-                                    stripped = curr_line.strip()
-                                    if stripped:
-                                        if "__NODE_START__:" in stripped:
-                                            try:
-                                                parts = stripped.split(":")
-                                                yield SSE.progress(parts[1], parts[2])
-                                                log_f.write(curr_line)
-                                            except: pass
-                                        elif "__VISUALIZE_" in stripped:
-                                            try:
-                                                parts = stripped.split("__:", 1)
-                                                node_id = parts[0].replace("__VISUALIZE_", "")
-                                                pdb_data = parts[1].replace("\\n", "\n")
-                                                yield SSE.visualize(node_id, pdb_data)
-                                            except: pass
-                                        elif "__BOX_" in stripped:
-                                            try:
-                                                parts = stripped.split("__:", 1)
-                                                node_id = parts[0].replace("__BOX_", "")
-                                                box_data = json.loads(parts[1])
-                                                yield SSE.box(node_id, box_data)
-                                            except: pass
-                                        elif "__XRD_DATA_" in stripped:
-                                            try:
-                                                parts = stripped.split("__:", 1)
-                                                node_id = parts[0].replace("__XRD_DATA_", "")
-                                                xrd_data = json.loads(parts[1])
-                                                yield f"data: {json.dumps({'type': 'xrd', 'nodeId': node_id, **xrd_data})}\n\n"
-                                            except: pass
-                                        elif "__PLOT_" in stripped:
-                                            try:
-                                                parts = stripped.split("__:", 1)
-                                                node_id = parts[0].replace("__PLOT_", "")
-                                                deferred_events.append(
-                                                    f"data: {json.dumps({'type': 'plot', 'nodeId': node_id, 'data': json.loads(parts[1])})}\n\n"
-                                                )
-                                                has_plot_data = True
-                                            except: pass
-                                        elif "__CHARGES_" in stripped:
-                                            try:
-                                                parts = stripped.split("__:", 1)
-                                                node_id = parts[0].replace("__CHARGES_", "")
-                                                deferred_events.append(
-                                                    f"data: {json.dumps({'type': 'charges', 'nodeId': node_id, 'data': json.loads(parts[1])})}\n\n"
-                                                )
-                                            except: pass
-                                        else:
-                                            log_f.write(curr_line)
-                                            yield SSE.log(stripped)
-                                    else:
-                                        log_f.write(curr_line)
-                                    curr_line = ""
-
-                        except queue.Empty:
-                            # 15s pulse to keep Render connection alive
-                            yield SSE.log(" ")
-                            continue
-
-                if has_plot_data:
-                    yield SSE.log("Plot data ready.")
-
-                # 3. Package Results to Disk Cache FIRST (before sending large data)
-                token = str(uuid4())
-                zip_path = os.path.abspath(os.path.join(CACHE_DIR, f"result_{token}.zip"))
-
-                # Copy executing script to run_openmm.py for absolute clarity in download bundle
-                _script_src = os.path.join(work_dir, "build_script.py")
-                if os.path.exists(_script_src):
-                    import shutil as _app_shutil
-                    _app_shutil.copy(_script_src, os.path.join(work_dir, "run_openmm.py"))
-
-
-                summary = {
-                    "success": success,
-                    "message": "Build succeeded." if success else "Build failed.",
-                }
-
-                with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-                    for fname, path in _iter_regular_work_dir_files(work_dir, {"UC_conf", "uploads"}):
-                        zf.write(path, arcname=fname)
-                    zf.writestr("build_summary.json", json.dumps(summary, indent=2))
-
-                _remember_cached_result(token, zip_path, "atomipy_system_bundle.zip", session_id=session_id)
-
-                # 4. Now send deferred plot/charges data (large payloads)
-                for evt in deferred_events:
-                    yield evt
-
-                # 5. Send completion with the token (zip already exists on disk)
-                yield SSE.complete(token, success)
-                gc.collect()
-
-        resp = Response(
-            generate(),
-            mimetype="text/event-stream",
+            for chunk in response.iter_content(chunk_size=1024):
+                if chunk:
+                    yield chunk
+                    
+        return Response(
+            stream_with_context(generate()), 
+            content_type=response.headers.get("content-type", "text/event-stream"),
             headers={
                 "Cache-Control": "no-cache",
                 "X-Accel-Buffering": "no",
                 "Connection": "keep-alive",
-            },
+            }
         )
-        resp.set_cookie("atomipy_session", session_id, httponly=True, samesite="Strict")
-        return resp
-
     except Exception as exc:
         return jsonify({"error": str(exc), "traceback": traceback.format_exc()}), 500
 

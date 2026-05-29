@@ -13,7 +13,7 @@ type ReplicateNodeData = {
   renumberIndex?: boolean;
 };
 
-export function ReplicateNode({ id, data }: NodeComponentProps<ReplicateNodeData>) {
+export function ReplicateNode({ id, data = {} }: NodeComponentProps<ReplicateNodeData>) {
   const { updateNodeData } = useReactFlow();
   const [showMore, setShowMore] = useState(false);
 
