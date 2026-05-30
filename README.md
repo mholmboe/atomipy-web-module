@@ -45,6 +45,15 @@ A powerful, node-based visual programming environment for designing, manipulatin
 Use the hosted version directly at:  
 👉 **[www.atomipy.io](https://www.atomipy.io)** (also mirrored at [atomipy.io](https://atomipy.io) and [top.atomipy.io](https://top.atomipy.io))
 
+The hosted site runs simulations on the **CPU** (no GPU) — fine for **energy
+minimization** and **short MD**. For production-scale or long MD, use the
+**GPU-accelerated Google Colab** launch below.
+
+> **Simulation workflow tip:** always chain an **Energy Minimization (EM)** node
+> *before* an **NVT / NPT** node. Running NVT/NPT directly on a freshly built or
+> solvated structure can diverge (`Particle coordinate is NaN`) on the CPU
+> platform — EM relaxes the starting structure first.
+
 ---
 
 ### ⚡ GPU-Accelerated Google Colab Access (Recommended for Simulations)
@@ -52,66 +61,122 @@ Use the hosted version directly at:
 
 If you plan to run large molecular dynamics simulations, you can launch the Visual Builder with **free hardware GPU acceleration** via Google Colab!
 1. Click the **"Open in Colab"** badge above to load the notebook directly in Google Colab.
-2. Follow the simple steps inside the notebook to launch your private, GPU-accelerated cloud instance!
+2. Set **Runtime → Change runtime type → GPU**, then run the two cells.
+
+The notebook clones the repo, installs the Python deps + builds the frontend,
+and launches the **FastAPI server** (which serves both the UI and the API) with
+**simulations enabled on the GPU**, exposed through a Localtunnel URL.
+
+> **Note:** the **Organic Molecule (GAFF/OpenFF)** node needs the separate
+> OpenFF worker, which Colab does not run — that node is available on the hosted
+> site and in a full local install. Everything else (build, forcefields,
+> analysis, EM, GPU MD) works on Colab.
 
 ---
 
 ### Local Installation
 
-You will need **Node.js (v20+)** and **Miniconda / Anaconda** (or mamba) installed on your system.
+There are two ways to run locally. Both clone the repo first:
 
-#### 1. Clone the Repository
 ```bash
 git clone https://github.com/mholmboe/atomipy-web-module.git
 cd atomipy-web-module
 ```
 
-#### 2. Install Frontend Dependencies
+Local simulations use whatever OpenMM platform is available on your machine
+(CUDA / Metal / OpenCL GPU if present, otherwise CPU).
+
+#### Option A — Development (hot reload)
+Best for development. Requires **Node.js (v20+)**, **Miniconda / Anaconda** (or
+mamba), and **redis-server** (`brew install redis` / `sudo apt install redis-server`).
+
 ```bash
 npm install
-```
-
-#### 3. Run Development Servers
-We provide a unified script that handles setting up conda environments (`atomipy-core` and `atomipy-openff`), launching Redis, starting the Celery worker, and spinning up both the Core Backend and OpenFF Microservice, plus the React frontend.
-
-```bash
 ./restart_dev.sh
 ```
 
-*(Note: You must have `redis-server` installed on your system, e.g. `brew install redis` or `sudo apt install redis-server`)*
+`restart_dev.sh` creates the two conda environments (`atomipy-core`,
+`atomipy-openff`), starts Redis + the Celery worker, the **Core Backend** (FastAPI,
+:8000), the **OpenFF worker** (:8001), and the **Vite** dev server (:8080).
+Logs stream to `.dev-logs/`; open <http://localhost:8080>.
 
-The script will stream logs to `.dev-logs/` and open your frontend at `http://localhost:8080`.
+#### Option B — Production-like (Docker)
+Runs the same single image deployed online (FastAPI serving the built frontend +
+API) plus the optional OpenFF worker. Requires only **Docker**.
+
+```bash
+docker compose up --build
+# open http://localhost:8080
+```
+
+Set `DISABLE_SIMULATION=true` in `docker-compose.yml` to disable simulations.
 
 ---
 
-## 🐳 Docker Deployment
+## 🐳 Docker & Cloud Run Deployment
 
-The app deploys as a **single image**: the FastAPI core backend serves both the
-API and the built React frontend. The OpenFF small-molecule worker is an
-optional second service.
+The app deploys as **two services**:
+
+1. **Main app** (root [`Dockerfile`](Dockerfile)) — one image where the FastAPI
+   core backend serves both the API and the built React frontend. Listens on
+   `$PORT`.
+2. **OpenFF worker** (optional, [`docker/Dockerfile.openff`](docker/Dockerfile.openff))
+   — small-molecule GAFF/OpenFF parametrization (the Organic Molecule node).
+   The main app reaches it via the `OPENFF_WORKER_URL` env var.
+
+Build/run the main image directly:
 
 ```bash
-# Unified app + optional OpenFF worker
-docker compose up --build
-# open http://localhost:8080
-
-# Or just the main image:
 docker build -t atomipy-web .
 docker run -p 8080:8080 -e PORT=8080 atomipy-web
 ```
 
-### Cloud Run (atomipy.io)
-A Cloud Run **source-deploy trigger** on this GitHub repo auto-builds the root
-`Dockerfile` and deploys to the `atomipy-web-module` service on every push to
-`main` (project `atomipywebmodule`, region `europe-north1`; domains atomipy.io /
-www / top map to it). The service runs with `DISABLE_SIMULATION=false`
-(CPU energy-minimization / short MD allowed; the image ships no OpenCL driver so
-OpenMM uses the native CPU platform), `OPENFF_WORKER_URL` pointing at the
-`atomipywebmodule-openff-worker` service, and 4Gi memory.
+Key environment variables (main app):
 
-[`cloudbuild.yaml`](cloudbuild.yaml) / [`cloudbuild.openff.yaml`](cloudbuild.openff.yaml)
-are optional Infrastructure-as-Code / manual-deploy references (the live path is
-the source trigger; see headers in those files).
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `8080` | Port to listen on (Cloud Run injects this) |
+| `DISABLE_SIMULATION` | `false` | `true` = build-only (refuses MD/EM) |
+| `OPENFF_WORKER_URL` | `http://127.0.0.1:8001` | URL of the OpenFF worker |
+| `WEB_CONCURRENCY` | `1` | uvicorn worker processes |
+
+### Reference deployment (atomipy.io)
+A Cloud Run **source-deploy trigger** on this GitHub repo auto-builds the root
+`Dockerfile` and deploys to the `atomipy-web-module` service on **every push to
+`main`** (project `atomipywebmodule`, region `europe-north1`; domains atomipy.io /
+www / top map to it), with `DISABLE_SIMULATION=false`, `OPENFF_WORKER_URL` set,
+and **4Gi** memory. The image ships **no OpenCL driver**, so OpenMM uses the
+native CPU platform online.
+
+> The OpenFF worker has **no auto-trigger** — redeploy it manually after changing
+> `workers/`, `envs/atomipy-openff.yml`, or `docker/Dockerfile.openff`:
+> `gcloud builds submit --config cloudbuild.openff.yaml`.
+
+### Deploy your own on Cloud Run
+```bash
+# 0. One-time: enable APIs + an Artifact Registry repo
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+gcloud artifacts repositories create atomipy --repository-format=docker --location=REGION
+
+# 1. OpenFF worker (≥2Gi RAM — importing openff toolkit alone OOMs 512Mi).
+#    Must stay public: the main app calls it without an auth token.
+gcloud builds submit --config cloudbuild.openff.yaml   # builds + deploys the worker
+
+# 2. Main app (serves frontend + API + CPU sims)
+gcloud run deploy atomipy-web-module --source . --region REGION \
+  --allow-unauthenticated --memory 4Gi --cpu 2 --timeout 900 \
+  --set-env-vars DISABLE_SIMULATION=false,OPENFF_WORKER_URL=<worker-url>
+
+# 3. (optional) Wire continuous deploys: Cloud Run console → "Set up continuous
+#    deployment" on the GitHub repo, or use cloudbuild.yaml as a build trigger.
+```
+
+Notes:
+- The main app needs **≥2Gi** (4Gi recommended) — `/tmp` is RAM-backed on Cloud
+  Run and build outputs are written there.
+- [`cloudbuild.yaml`](cloudbuild.yaml) / [`cloudbuild.openff.yaml`](cloudbuild.openff.yaml)
+  are declarative build/deploy configs (used by `gcloud builds submit`, or wire
+  them to a trigger). See the headers in those files.
 
 ---
 
