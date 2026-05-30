@@ -70,7 +70,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Loader2, Terminal, AlertTriangle, Square, OctagonX } from "lucide-react";
+import { Loader2, Terminal, AlertTriangle, Square, OctagonX, Copy, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { isValidConnection } from "./graph/connectionValidation";
 import { useGraphHistory } from "./graph/useGraphHistory";
@@ -1022,6 +1022,16 @@ export default function VisualBuilder() {
   const currentRunningNodeRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Right-click context menu & inspectors
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [nodeLogsMap, setNodeLogsMap] = useState<Record<string, string[]>>({});
+  const [activeInspector, setActiveInspector] = useState<{
+    type: "code" | "logs";
+    nodeId: string;
+    title: string;
+    content: string;
+  } | null>(null);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -1099,6 +1109,124 @@ export default function VisualBuilder() {
       ),
     [setEdges, edgeType],
   );
+
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      event.preventDefault();
+      if (!reactFlowWrapper.current) return;
+      const rect = reactFlowWrapper.current.getBoundingClientRect();
+      setMenu({
+        id: node.id,
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      });
+    },
+    [setMenu]
+  );
+
+  const onPaneClick = useCallback(() => setMenu(null), [setMenu]);
+
+  const handleDuplicateNode = useCallback((nodeId: string) => {
+    const sourceNode = nodes.find((n) => n.id === nodeId);
+    if (sourceNode) {
+      const newId = `node_${Date.now()}`;
+      const newNode = {
+        ...deepClone(sourceNode),
+        id: newId,
+        position: {
+          x: sourceNode.position.x + 50,
+          y: sourceNode.position.y + 50,
+        },
+        selected: false,
+      };
+      setNodes((nds) => [...nds, newNode]);
+      toast.success("Node duplicated successfully!");
+    }
+    setMenu(null);
+  }, [nodes, setNodes]);
+
+  const handleToggleBypassNode = useCallback((nodeId: string) => {
+    let wasDisabled = false;
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.id === nodeId) {
+          const currentDisabled = n.data?.disabled === true;
+          wasDisabled = !currentDisabled;
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              disabled: !currentDisabled,
+            },
+          };
+        }
+        return n;
+      })
+    );
+    toast.success(wasDisabled ? "Node bypassed/disabled!" : "Node enabled!");
+    setMenu(null);
+  }, [setNodes]);
+
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+    setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    toast.success("Node deleted successfully!");
+    setMenu(null);
+  }, [setNodes, setEdges]);
+
+  const handleInspectPythonCode = useCallback((nodeId: string) => {
+    // Generate script specifically up to this node
+    const visited = new Set<string>();
+    const queue = [nodeId];
+    while (queue.length > 0) {
+      const curId = queue.shift()!;
+      if (visited.has(curId)) continue;
+      visited.add(curId);
+      const parents = edges
+        .filter((e) => e.target === curId)
+        .map((e) => e.source);
+      queue.push(...parents);
+    }
+    const activeNodes = nodes.filter((n) => visited.has(n.id));
+    const activeEdges = edges.filter((e) => visited.has(e.source) && visited.has(e.target));
+    const script = generatePythonCode(activeNodes, activeEdges, "minimal");
+    
+    const node = nodes.find(n => n.id === nodeId);
+    const nodeLabel = node ? `${node.type} (${node.id})` : nodeId;
+    setActiveInspector({
+      type: "code",
+      nodeId,
+      title: `Generated Python Script: ${nodeLabel}`,
+      content: script,
+    });
+    setMenu(null);
+  }, [nodes, edges]);
+
+  const handleInspectNodeLogs = useCallback((nodeId: string) => {
+    const logs = nodeLogsMap[nodeId] || [];
+    const node = nodes.find(n => n.id === nodeId);
+    const nodeLabel = node ? `${node.type} (${node.id})` : nodeId;
+    
+    let content = "";
+    const runStatus = nodeRunStatus[nodeId];
+    
+    if (logs.length > 0) {
+      content = logs.join("\n");
+    } else if (node && runStatus === "done") {
+      const singleNodeScript = generatePythonCode([node], [], "minimal");
+      content = `[Status]: Node executed successfully (in-memory operation).\n[Console Output]: None (This node does not print standard output).\n\n[Executed Python Code Snippet]:\n${singleNodeScript}`;
+    } else {
+      content = "No logs available for this node. Ensure you have run the workflow first.";
+    }
+
+    setActiveInspector({
+      type: "logs",
+      nodeId,
+      title: `Execution Logs: ${nodeLabel}`,
+      content,
+    });
+    setMenu(null);
+  }, [nodes, nodeLogsMap, nodeRunStatus]);
 
   const addNode = (type: string) => {
     const baseData: Record<string, unknown> = {
@@ -1832,7 +1960,7 @@ export default function VisualBuilder() {
     [applyWorkflowGraph],
   );
 
-  const handleCompileAndRun = async () => {
+  const handleCompileAndRun = async (targetNodeId?: string) => {
     if (nodes.length === 0) {
       toast.error("Workflow Empty", {
         description: "Please add some nodes to your system before building.",
@@ -1843,9 +1971,10 @@ export default function VisualBuilder() {
     let activeNodes = nodes;
     let activeEdges = edges;
     const selectedNodes = nodes.filter((n) => n.selected);
-    if (selectedNodes.length > 0) {
+
+    if (targetNodeId) {
       const visited = new Set<string>();
-      const queue = selectedNodes.map((n) => n.id);
+      const queue = [targetNodeId];
       while (queue.length > 0) {
         const curId = queue.shift()!;
         if (visited.has(curId)) continue;
@@ -1857,7 +1986,25 @@ export default function VisualBuilder() {
       }
       activeNodes = nodes.filter((n) => visited.has(n.id));
       activeEdges = edges.filter((e) => visited.has(e.source) && visited.has(e.target));
-      toast.info(`Running ${activeNodes.length} selected node(s) & upstream dependencies...`);
+      const targetType = nodes.find((n) => n.id === targetNodeId)?.type || "node";
+      toast.info(`Running workflow up to ${targetType}...`);
+    } else {
+      if (selectedNodes.length > 0) {
+        const visited = new Set<string>();
+        const queue = selectedNodes.map((n) => n.id);
+        while (queue.length > 0) {
+          const curId = queue.shift()!;
+          if (visited.has(curId)) continue;
+          visited.add(curId);
+          const parents = edges
+            .filter((e) => e.target === curId)
+            .map((e) => e.source);
+          queue.push(...parents);
+        }
+        activeNodes = nodes.filter((n) => visited.has(n.id));
+        activeEdges = edges.filter((e) => visited.has(e.source) && visited.has(e.target));
+        toast.info(`Running ${activeNodes.length} selected node(s) & upstream dependencies...`);
+      }
     }
 
     const validationErrors = validateWorkflow(activeNodes, activeEdges);
@@ -1869,7 +2016,7 @@ export default function VisualBuilder() {
       return;
     }
 
-    const runToastId = toast.loading(selectedNodes.length > 0 ? "Running selected subgraph..." : "Running your system... this may take a minute.");
+    const runToastId = toast.loading(targetNodeId ? "Running targeted subgraph..." : (selectedNodes.length > 0 ? "Running selected subgraph..." : "Running your system... this may take a minute."));
     const isOutputProducing = activeNodes.some((n) =>
       ["export", "xrd", "bvs", "bondAngle", "stats"].includes(n.type || "")
     );
@@ -1883,6 +2030,7 @@ export default function VisualBuilder() {
     setBuildProgress(0);
     setBuildStatus("Build queued...");
     setBuildLogs([]);
+    setNodeLogsMap({});
     setDownloadToken(null);
     setIsBuilding(true);
     setShowStatusWindow(true);
@@ -1975,6 +2123,13 @@ export default function VisualBuilder() {
                 !logLine.includes("__NODE_START_") &&
                 !logLine.includes("__CHARGES_")) {
                 setBuildLogs((prev) => [...prev.slice(-48), logLine]);
+                const runningId = currentRunningNodeRef.current;
+                if (runningId) {
+                  setNodeLogsMap((prev) => ({
+                    ...prev,
+                    [runningId]: [...(prev[runningId] || []), logLine],
+                  }));
+                }
               }
             } else if (data.type === "progress") {
               const nodeId = typeof data.nodeId === "string" ? data.nodeId : "";
@@ -2002,6 +2157,9 @@ export default function VisualBuilder() {
                     );
                     setBuildProgress(progressPct);
                   }
+                } else {
+                  // Fallback for untracked node types to capture logs scoped to that node
+                  currentRunningNodeRef.current = nodeId;
                 }
               }
             } else if (data.type === "visualize") {
@@ -2191,6 +2349,32 @@ export default function VisualBuilder() {
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
               <FileOutput className="w-4 h-4 text-slate-500" /> Export
             </Button>
+
+            <div className="h-4 w-[1px] bg-slate-200 mx-1" />
+
+            <Button
+              className="gap-1 text-slate-500 hover:text-slate-800 disabled:opacity-30"
+              variant="ghost"
+              size="sm"
+              onClick={() => undo(setNodes, setEdges)}
+              disabled={!canUndo}
+              title="Undo last change (Cmd+Z / Ctrl+Z)"
+            >
+              <History className="w-4 h-4 rotate-180" /> Undo
+            </Button>
+            <Button
+              className="gap-1 text-slate-500 hover:text-slate-800 disabled:opacity-30"
+              variant="ghost"
+              size="sm"
+              onClick={() => redo(setNodes, setEdges)}
+              disabled={!canRedo}
+              title="Redo last undone change (Cmd+Y / Ctrl+Y)"
+            >
+              <History className="w-4 h-4" /> Redo
+            </Button>
+
+            <div className="h-4 w-[1px] bg-slate-200 mx-1" />
+
             <Button
               variant="ghost"
               size="sm"
@@ -2214,7 +2398,7 @@ export default function VisualBuilder() {
                 Stop
               </Button>
             ) : (
-              <Button className="shadow-lg shadow-primary/20 w-full h-11" onClick={handleCompileAndRun}>
+              <Button className="shadow-lg shadow-primary/20 w-full h-11" onClick={() => handleCompileAndRun()}>
                 <Play className="w-4 h-4 mr-2" />
                 Run
               </Button>
@@ -2345,28 +2529,7 @@ export default function VisualBuilder() {
                   <Upload className="w-4 h-4" /> Upload
                 </Button>
 
-                <div className="h-6 w-[1px] bg-border mx-1" /> {/* Separator */}
-
-                <Button
-                  className="gap-1 h-8 text-slate-500 hover:text-foreground disabled:opacity-30"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => undo(setNodes, setEdges)}
-                  disabled={!canUndo}
-                  title="Undo last change (Cmd+Z / Ctrl+Z)"
-                >
-                  <History className="w-4 h-4 rotate-180" /> Undo
-                </Button>
-                <Button
-                  className="gap-1 h-8 text-slate-500 hover:text-foreground disabled:opacity-30"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => redo(setNodes, setEdges)}
-                  disabled={!canRedo}
-                  title="Redo last undone change (Cmd+Y / Ctrl+Y)"
-                >
-                  <History className="w-4 h-4" /> Redo
-                </Button>                {(selectedSavedWorkflow || selectedCustomTemplate) && (
+                {(selectedSavedWorkflow || selectedCustomTemplate) && (
                   <Button className="gap-1" variant="ghost" size="sm" onClick={handleDeleteSelectedEntry} title="Delete selected workflow/template">
                     <Trash2 className="w-4 h-4" /> Delete
                   </Button>
@@ -2563,12 +2726,16 @@ export default function VisualBuilder() {
           <ReactFlow
             nodes={nodes.map((n) => {
               const statusStyle = getNodeStatusStyle(nodeRunStatus[n.id]);
-              if (Object.keys(statusStyle).length === 0) return n;
+              const baseStyle = n.style || {};
+              const opacity = n.data?.disabled === true ? 0.4 : 1.0;
+              const filter = n.data?.disabled === true ? "grayscale(45%)" : "none";
               return {
                 ...n,
                 style: {
-                  ...(n.style || {}),
+                  ...baseStyle,
                   ...statusStyle,
+                  opacity,
+                  filter,
                 },
               };
             })}
@@ -2576,6 +2743,9 @@ export default function VisualBuilder() {
             onNodesChange={(changes) => setNodes((nds) => applyNodeChanges(changes, nds))}
             onEdgesChange={(changes) => setEdges((eds) => applyEdgeChanges(changes, eds))}
             onConnect={onConnect}
+            onNodeContextMenu={onNodeContextMenu}
+            onPaneClick={onPaneClick}
+            onMoveStart={onPaneClick}
             isValidConnection={isValidConnection}
             onInit={(instance) => {
               setRfInstance(instance);
@@ -2599,6 +2769,126 @@ export default function VisualBuilder() {
             <Background gap={20} size={1} color="rgba(0,0,0,0.1)" />
           </ReactFlow>
         </ReactFlowProvider>
+
+        {/* Floating Context Menu */}
+        {menu && (
+          <div
+            className="absolute z-50 min-w-[210px] backdrop-blur-md bg-white/95 border border-slate-200/80 text-slate-700 shadow-xl shadow-slate-200/40 rounded-xl p-1.5 flex flex-col space-y-0.5 pointer-events-auto"
+            style={{ top: menu.y, left: menu.x }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 mb-1">
+              Node Actions
+            </div>
+            
+            <button
+              onClick={() => {
+                handleCompileAndRun(menu.id);
+                setMenu(null);
+              }}
+              className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all duration-150 text-left w-full font-medium"
+            >
+              <Play className="w-3.5 h-3.5" />
+              <span>Run up to this node</span>
+            </button>
+
+            <button
+              onClick={() => handleDuplicateNode(menu.id)}
+              className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-slate-100 text-slate-600 rounded-lg transition-all duration-150 text-left w-full"
+            >
+              <Copy className="w-3.5 h-3.5 text-slate-400" />
+              <span>Duplicate Node</span>
+            </button>
+
+            <button
+              onClick={() => handleToggleBypassNode(menu.id)}
+              className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-slate-100 text-slate-600 rounded-lg transition-all duration-150 text-left w-full"
+            >
+              <Ban className={`w-3.5 h-3.5 ${nodes.find(n => n.id === menu.id)?.data?.disabled === true ? "text-amber-500" : "text-slate-400"}`} />
+              <span>
+                {nodes.find((n) => n.id === menu.id)?.data?.disabled === true
+                  ? "Enable Node"
+                  : "Bypass / Disable"}
+              </span>
+            </button>
+
+            <div className="border-t border-slate-100 my-1" />
+
+            <button
+              onClick={() => handleInspectPythonCode(menu.id)}
+              className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-slate-100 text-slate-600 rounded-lg transition-all duration-150 text-left w-full"
+            >
+              <Terminal className="w-3.5 h-3.5 text-blue-500" />
+              <span>View Python Script</span>
+            </button>
+
+            <button
+              onClick={() => handleInspectNodeLogs(menu.id)}
+              className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-slate-100 text-slate-600 rounded-lg transition-all duration-150 text-left w-full"
+            >
+              <Eye className="w-3.5 h-3.5 text-indigo-500" />
+              <span>View Node Logs</span>
+            </button>
+
+            <div className="border-t border-slate-100 my-1" />
+
+            <button
+              onClick={() => handleDeleteNode(menu.id)}
+              className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-rose-500 hover:bg-rose-50 rounded-lg transition-all duration-150 text-left w-full font-medium"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete Node</span>
+            </button>
+          </div>
+        )}
+
+        {/* Dynamic Code & Logs Inspector Modal */}
+        {activeInspector && (
+          <div className="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                  {activeInspector.type === "code" ? (
+                    <Terminal className="w-4 h-4 text-blue-500" />
+                  ) : (
+                    <Eye className="w-4 h-4 text-indigo-500" />
+                  )}
+                  {activeInspector.title}
+                </h3>
+                <button
+                  onClick={() => setActiveInspector(null)}
+                  className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-auto p-5 font-mono text-xs leading-relaxed text-slate-700 bg-slate-50/20 max-h-[500px]">
+                {activeInspector.type === "code" ? (
+                  <pre className="whitespace-pre overflow-x-auto text-emerald-700 pb-4">{activeInspector.content}</pre>
+                ) : (
+                  <div className="space-y-1">
+                    {activeInspector.content.split("\n").map((line, idx) => (
+                      <p key={idx} className="break-words text-slate-600">
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="px-5 py-3 border-t border-slate-100 flex justify-end bg-slate-50/50">
+                <Button
+                  onClick={() => setActiveInspector(null)}
+                  size="sm"
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

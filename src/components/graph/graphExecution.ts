@@ -1,7 +1,7 @@
 import type { Node, Edge } from "@xyflow/react";
 
 export type PythonScriptMode = "full" | "minimal" | "strict";
-export type RunNodeStatus = "queued" | "running" | "success" | "failure";
+export type RunNodeStatus = "queued" | "running" | "done" | "error" | "skipped" | "success" | "failure";
 
 export type NodeDataMap = Record<string, any>;
 
@@ -299,8 +299,19 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
     const opType = n.type || "unknown";
     const opTypeEscaped = pyEscape(opType);
     const opIdEscaped = pyEscape(id);
+
+    if (data.disabled === true) {
+      pythonCode += `\n# --- Operation: ${opType} (${id}) [BYPASSED] ---\n`;
+      if (mode === "full" || mode === "minimal") {
+        pythonCode += `print("__NODE_START__:${opIdEscaped}:${index}")\n`;
+        pythonCode += `print("__NODE_STATUS__:${opIdEscaped}:success")\n`;
+      }
+      stateVars.set(id, { atoms: inAtoms, box: inBox, traj: inTraj });
+      return;
+    }
+
     pythonCode += `\n# --- Operation: ${opType} (${id}) ---\n`;
-    if (mode === "full") {
+    if (mode === "full" || mode === "minimal") {
       pythonCode += `print("__NODE_START__:${opIdEscaped}:${index}")\n`;
     }
 

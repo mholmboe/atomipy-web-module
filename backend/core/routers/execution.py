@@ -390,9 +390,9 @@ async def build_stream(request: BuildRequest):
                                
                             return SystemList(atoms_merged, itp=merged_itp, box=box_merged)
 
-                        ap.parametrize_organic_gaff = parametrize_organic_gaff
-                        ap.parametrize_organic_file = parametrize_organic_file
-                        ap.mix_systems = mix_systems
+                        setattr(ap, 'parametrize_organic_gaff', parametrize_organic_gaff)
+                        setattr(ap, 'parametrize_organic_file', parametrize_organic_file)
+                        setattr(ap, 'mix_systems', mix_systems)
 
 
 
