@@ -41,6 +41,9 @@ A powerful, node-based visual programming environment for designing, manipulatin
 
 ## 🛠️ Getting Started
 
+> 📖 For the full installation & deployment reference (local / online / Colab
+> differences, build triggers, env vars), see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+
 ### Online Access
 Use the hosted version directly at:  
 👉 **[www.atomipy.io](https://www.atomipy.io)** (also mirrored at [atomipy.io](https://atomipy.io) and [top.atomipy.io](https://top.atomipy.io))
@@ -115,6 +118,9 @@ Set `DISABLE_SIMULATION=true` in `docker-compose.yml` to disable simulations.
 ---
 
 ## 🐳 Docker & Cloud Run Deployment
+
+> 📖 Full details — build/deploy triggers, the local vs online vs Colab
+> differences, env vars, and a repo map — are in **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
 The app deploys as **two services**:
 
