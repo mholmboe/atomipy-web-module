@@ -12,3 +12,4 @@ dependencies:
   - uvicorn
   - celery
   - redis-py
+  - requests
