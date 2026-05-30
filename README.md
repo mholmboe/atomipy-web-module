@@ -68,9 +68,10 @@ and launches the **FastAPI server** (which serves both the UI and the API) with
 **simulations enabled on the GPU**, exposed through a Localtunnel URL.
 
 > **Note:** the **Organic Molecule (GAFF/OpenFF)** node needs the separate
-> OpenFF worker, which Colab does not run — that node is available on the hosted
-> site and in a full local install. Everything else (build, forcefields,
-> analysis, EM, GPU MD) works on Colab.
+> OpenFF worker. It's **off by default** on Colab; run the optional **Step 1b**
+> cell in the notebook to install the OpenFF/ACPYPE stack (via micromamba, no
+> kernel restart) and start the worker. Everything else (build, forcefields,
+> analysis, EM, GPU MD) works without it.
 
 ---
 
