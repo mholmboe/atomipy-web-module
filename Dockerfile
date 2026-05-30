@@ -23,7 +23,13 @@ RUN npm run build
 FROM python:3.11-slim
 
 # Install git needed for atomipy, and OpenCL/GL system libraries required by OpenMM (including CPU POCL platform)
-RUN apt-get update && apt-get install -y git ocl-icd-opencl-dev pocl-opencl-icd libgl1 && rm -rf /var/lib/apt/lists/*
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    git \
+    ocl-icd-opencl-dev \
+    pocl-opencl-icd \
+    libgl1 && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -42,7 +48,6 @@ COPY app.py .
 COPY atomipy ./atomipy
 
 # Set environment variables
-ENV PORT=5002
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
@@ -51,7 +56,7 @@ ENV MALLOC_ARENA_MAX=2
 ENV OMP_NUM_THREADS=1
 
 # Expose is documentation only for Cloud Run, but helpful for Render
-EXPOSE 5002
+EXPOSE 8080
 
 # Run the app using gunicorn
 # Note: Cloud Run uses $PORT, Render can use $PORT or a fixed one.

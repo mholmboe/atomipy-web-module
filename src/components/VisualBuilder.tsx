@@ -1022,6 +1022,14 @@ export default function VisualBuilder() {
   const currentRunningNodeRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const [isStatusWindowMinimized, setIsStatusWindowMinimized] = useState(() => {
+    return localStorage.getItem("atomipy_status_window_minimized") === "true";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("atomipy_status_window_minimized", String(isStatusWindowMinimized));
+  }, [isStatusWindowMinimized]);
+
   // Right-click context menu & inspectors
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [nodeLogsMap, setNodeLogsMap] = useState<Record<string, string[]>>({});
@@ -2663,8 +2671,15 @@ export default function VisualBuilder() {
               <div className="flex items-center gap-3">
                 <p className="text-xs text-muted-foreground">{Math.round(buildProgress)}%</p>
                 <button
+                  onClick={() => setIsStatusWindowMinimized(!isStatusWindowMinimized)}
+                  className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded hover:bg-muted"
+                  title={isStatusWindowMinimized ? "Expand Status Window" : "Minimize Status Window"}
+                >
+                  {isStatusWindowMinimized ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                </button>
+                <button
                   onClick={() => setShowStatusWindow(false)}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded hover:bg-muted"
                   title="Close Status Window"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -2687,39 +2702,40 @@ export default function VisualBuilder() {
               </div>
             )}
 
-            <div className="max-h-[480px] overflow-y-auto space-y-1 pr-1 scrollbar-thin" ref={scrollRef}>
-              {trackedNodeOrder.length === 0 && (
-                <p className="text-xs text-muted-foreground">No tracked compute nodes in current workflow.</p>
-              )}
-              {trackedNodeOrder.map((nodeId) => {
-                const node = nodes.find((item) => item.id === nodeId);
-                const status = nodeRunStatus[nodeId];
-                return (
-                  <div key={nodeId} className="flex items-center justify-between rounded-md border border-border/70 bg-background/70 px-2 py-1.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`inline-block h-2.5 w-2.5 rounded-full ${STATUS_DOT_CLASS[status || "queued"]}`} />
-                      <span className="truncate text-xs font-medium">
-                        {nodeTypeLabel(node?.type)} <span className="text-muted-foreground">({nodeId})</span>
-                      </span>
+            {!isStatusWindowMinimized && (
+              <div className="max-h-[480px] overflow-y-auto space-y-1 pr-1 scrollbar-thin" ref={scrollRef}>
+                {trackedNodeOrder.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No tracked compute nodes in current workflow.</p>
+                )}
+                {trackedNodeOrder.map((nodeId) => {
+                  const node = nodes.find((item) => item.id === nodeId);
+                  const status = nodeRunStatus[nodeId];
+                  return (
+                    <div key={nodeId} className="flex items-center justify-between rounded-md border border-border/70 bg-background/70 px-2 py-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`inline-block h-2.5 w-2.5 rounded-full ${STATUS_DOT_CLASS[status || "queued"]}`} />
+                        <span className="truncate text-xs font-medium">
+                          {nodeTypeLabel(node?.type)} <span className="text-muted-foreground">({nodeId})</span>
+                        </span>
+                      </div>
+                      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{statusToLabel(status)}</span>
                     </div>
-                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{statusToLabel(status)}</span>
+                  );
+                })}
+                {buildLogs.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-border">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Execution Logs</p>
+                    <div className="bg-muted/30 rounded-lg p-2 font-mono text-[10px] space-y-1">
+                      {buildLogs.map((line, idx) => (
+                        <p key={`${line}-${idx}`} className="text-muted-foreground break-words leading-relaxed">
+                          {line}
+                        </p>
+                      ))}
+                    </div>
                   </div>
-                );
-              })}
-              {buildLogs.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-border">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Execution Logs</p>
-                  <div className="bg-muted/30 rounded-lg p-2 font-mono text-[10px] space-y-1">
-                    {buildLogs.map((line, idx) => (
-                      <p key={`${line}-${idx}`} className="text-muted-foreground break-words leading-relaxed">
-                        {line}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            </div>
+                )}
+              </div>
+            )}
           </div>
         )}
         <ReactFlowProvider>
