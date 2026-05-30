@@ -16,9 +16,10 @@ substitutions:
 options:
   machineType: E2_HIGHCPU_8
   logging: CLOUD_LOGGING_ONLY
+  dynamic_substitutions: true   # expand ${_IMAGE} which nests ${_REPO} etc.
 
 images:
-  - ${_IMAGE}:${SHORT_SHA}
+  - ${_IMAGE}:${BUILD_ID}
   - ${_IMAGE}:latest
 
 steps:
@@ -29,14 +30,17 @@ steps:
       - -f
       - docker/Dockerfile.openff
       - -t
-      - ${_IMAGE}:${SHORT_SHA}
+      - ${_IMAGE}:${BUILD_ID}
       - -t
       - ${_IMAGE}:latest
       - .
 
   - name: gcr.io/cloud-builders/docker
     id: push
-    args: [push, --all-tags, ${_IMAGE}]
+    args:
+      - push
+      - --all-tags
+      - ${_IMAGE}
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy
@@ -45,7 +49,7 @@ steps:
       - run
       - deploy
       - ${_SERVICE}
-      - --image=${_IMAGE}:${SHORT_SHA}
+      - --image=${_IMAGE}:${BUILD_ID}
       - --region=${_REGION}
       - --platform=managed
       # The main app currently calls the worker over plain HTTP (no auth token),

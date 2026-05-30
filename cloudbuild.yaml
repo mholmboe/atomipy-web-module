@@ -17,9 +17,10 @@ substitutions:
 options:
   machineType: E2_HIGHCPU_8        # frontend build + conda env solve are heavy
   logging: CLOUD_LOGGING_ONLY
+  dynamic_substitutions: true      # expand ${_IMAGE} which nests ${_REPO} etc.
 
 images:
-  - ${_IMAGE}:${SHORT_SHA}
+  - ${_IMAGE}:${BUILD_ID}
   - ${_IMAGE}:latest
 
 steps:
@@ -31,7 +32,7 @@ steps:
       - -f
       - Dockerfile
       - -t
-      - ${_IMAGE}:${SHORT_SHA}
+      - ${_IMAGE}:${BUILD_ID}
       - -t
       - ${_IMAGE}:latest
       - .
@@ -39,7 +40,10 @@ steps:
   # --- Push ----------------------------------------------------------------
   - name: gcr.io/cloud-builders/docker
     id: push
-    args: [push, --all-tags, ${_IMAGE}]
+    args:
+      - push
+      - --all-tags
+      - ${_IMAGE}
 
   # --- Deploy --------------------------------------------------------------
   # --update-env-vars (not --set-env-vars) so a manually-set OPENFF_WORKER_URL
@@ -51,7 +55,7 @@ steps:
       - run
       - deploy
       - ${_SERVICE}
-      - --image=${_IMAGE}:${SHORT_SHA}
+      - --image=${_IMAGE}:${BUILD_ID}
       - --region=${_REGION}
       - --platform=managed
       - --allow-unauthenticated
