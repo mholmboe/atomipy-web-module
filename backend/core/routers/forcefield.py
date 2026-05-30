@@ -5,9 +5,16 @@ from typing import List, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
 
-from services import (
-    simulation_tasks
-)
+# Optional Celery task module. The web app does NOT require Celery/Redis to serve
+# — the frontend uses the synchronous build-stream path. Importing it here only
+# registers the async MD task for a Celery worker if one is running. In lean
+# environments (e.g. Colab via requirements.txt, which omits celery) this import
+# must not crash app startup, so it is guarded; the async /jobs endpoints below
+# degrade gracefully when Celery isn't available.
+try:
+    from services import simulation_tasks  # noqa: F401
+except Exception:
+    simulation_tasks = None
 
 router = APIRouter()
 
