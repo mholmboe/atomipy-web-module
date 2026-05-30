@@ -133,12 +133,15 @@ async def build_stream(request: BuildRequest):
                 os.path.join(ap_data_dir, "structures", "minerals", "UC_conf"),
                 os.path.join(BASE_DIR, "atomipy", "structures", "minerals", "UC_conf"),
             ]
+            print(f"DEBUG: potential_dirs={[ (p, os.path.exists(p)) for p in potential_dirs ]}", flush=True)
             uc_conf_dir = next((path for path in potential_dirs if os.path.exists(path)), None)
+            print(f"DEBUG: selected uc_conf_dir={uc_conf_dir}", flush=True)
             if uc_conf_dir:
                 try:
                     os.symlink(uc_conf_dir, os.path.join(work_dir, "UC_conf"))
-                except OSError:
-                    pass # Windows might fail without admin, but Mac/Linux is fine
+                    print(f"DEBUG: successfully created symlink at {os.path.join(work_dir, 'UC_conf')}", flush=True)
+                except Exception as e:
+                    print(f"DEBUG: symlink creation failed: {e}", flush=True)
 
             # Symlink uploads directory
             if os.path.exists(UPLOADS_DIR):
