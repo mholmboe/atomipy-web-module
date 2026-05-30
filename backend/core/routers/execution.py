@@ -39,14 +39,16 @@ import os
 import sys
 
 # Fallback to local project root if not running inside Docker
-if os.path.exists("/app") and os.access("/app", os.W_OK):
+if os.path.exists("/app"):
     BASE_DIR = "/app"
+    OUTPUTS_DIR = "/tmp/outputs"
 else:
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+    OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
 
-CACHE_DIR = os.path.join(BASE_DIR, "outputs/cache")
-UPLOADS_DIR = os.path.join(BASE_DIR, "outputs/uploads")
-PRESETS_DIR = os.path.join(BASE_DIR, "outputs/presets")
+CACHE_DIR = os.path.join(OUTPUTS_DIR, "cache")
+UPLOADS_DIR = os.path.join(OUTPUTS_DIR, "uploads")
+PRESETS_DIR = os.path.join(OUTPUTS_DIR, "presets")
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 os.makedirs(PRESETS_DIR, exist_ok=True)
@@ -630,7 +632,7 @@ async def organic_parametrize(request: Request):
     try:
         if input_mode == "file" and upload_path:
             # upload_path is relative to work_dir: "uploads/session/filename.ext"
-            full_path = os.path.join(BASE_DIR, "outputs", upload_path)
+            full_path = os.path.join(OUTPUTS_DIR, upload_path)
             if not os.path.exists(full_path):
                 raise HTTPException(status_code=404,
                                     detail=f"Uploaded file not found: {upload_path}")
