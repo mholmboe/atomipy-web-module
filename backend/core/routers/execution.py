@@ -285,6 +285,32 @@ async def build_stream(request: BuildRequest):
                         ]:
                             wrap_atomipy_function(func_name)
 
+                        def _materialize_ff_files(paths):
+                            """Write worker-returned FF files into the build dir.
+
+                            The OpenFF worker is a separate Cloud Run service with no
+                            shared filesystem, so it returns file *contents*; write them
+                            locally, preserving basenames so the .top's #include of the
+                            .itp resolves. Falls back to copying local paths when the
+                            worker shares /tmp (local dev). Returns local {top,gro,itp}."""
+                            local = {}
+                            for key in ("top", "gro", "itp"):
+                                src = paths.get(key)
+                                content = paths.get(f"{key}_content")
+                                base = os.path.basename(src) if src else f"organic_GMX.{key}"
+                                dest = os.path.join(os.getcwd(), base)
+                                if content is not None:
+                                    with open(dest, "w", encoding="utf-8") as fh:
+                                        fh.write(content)
+                                    local[key] = dest
+                                elif src and os.path.exists(src):
+                                    try:
+                                        _shutil.copy(src, dest)
+                                        local[key] = dest
+                                    except Exception:
+                                        local[key] = src
+                            return local
+
                         def parametrize_organic_gaff(smiles, version='gaff-2.11', charge_method='bcc'):
                             """
                             Parametrize an organic molecule via ACPYPE on the OpenFF worker.
@@ -313,18 +339,9 @@ async def build_stream(request: BuildRequest):
                             resp.raise_for_status()
                             paths = resp.json()
 
-                            # Copy organic FF files into work_dir so they are included in the results ZIP
-                            for key, suf in [("top", ".top"), ("gro", ".gro"), ("itp", ".itp")]:
-                                src = paths.get(key)
-                                if src and os.path.exists(src):
-                                    try:
-                                        dest = os.path.join(os.getcwd(), os.path.basename(src))
-                                        _shutil.copy(src, dest)
-                                    except Exception:
-                                        pass
-
-                            atoms, itp = ap.import_gaff_top(paths["top"])
-                            ap.import_gro_coords(paths["gro"], atoms)
+                            local = _materialize_ff_files(paths)
+                            atoms, itp = ap.import_gaff_top(local.get("top") or paths.get("top"))
+                            ap.import_gro_coords(local.get("gro") or paths.get("gro"), atoms)
                             box = paths.get("box", [50.0, 50.0, 50.0])
                             return SystemList(atoms, itp=itp, box=box), box
 
@@ -344,17 +361,9 @@ async def build_stream(request: BuildRequest):
                             resp.raise_for_status()
                             paths = resp.json()
 
-                            for key, suf in [("top", ".top"), ("gro", ".gro"), ("itp", ".itp")]:
-                                src = paths.get(key)
-                                if src and os.path.exists(src):
-                                    try:
-                                        dest = os.path.join(os.getcwd(), os.path.basename(src))
-                                        _shutil.copy(src, dest)
-                                    except Exception:
-                                        pass
-
-                            atoms, itp = ap.import_gaff_top(paths["top"])
-                            ap.import_gro_coords(paths["gro"], atoms)
+                            local = _materialize_ff_files(paths)
+                            atoms, itp = ap.import_gaff_top(local.get("top") or paths.get("top"))
+                            ap.import_gro_coords(local.get("gro") or paths.get("gro"), atoms)
                             box = paths.get("box", [50.0, 50.0, 50.0])
                             return SystemList(atoms, itp=itp, box=box), box
 
@@ -683,7 +692,23 @@ async def organic_parametrize(request: Request):
         paths = resp.json()
 
         import atomipy as ap
-        atoms, itp = ap.import_gaff_top(paths["top"])
+        # The worker is a separate Cloud Run service (no shared filesystem), so it
+        # returns file contents; materialize the .top (+ .itp, preserving its
+        # basename so the #include resolves) into a temp dir before importing.
+        top_content = paths.get("top_content")
+        if top_content is not None:
+            import tempfile as _tf
+            tmp_dir = _tf.mkdtemp(prefix="ff_preview_")
+            top_local = os.path.join(tmp_dir, os.path.basename(paths.get("top") or "organic_GMX.top"))
+            with open(top_local, "w", encoding="utf-8") as fh:
+                fh.write(top_content)
+            itp_content = paths.get("itp_content")
+            if itp_content is not None and paths.get("itp"):
+                with open(os.path.join(tmp_dir, os.path.basename(paths["itp"])), "w", encoding="utf-8") as fh:
+                    fh.write(itp_content)
+            atoms, itp = ap.import_gaff_top(top_local)
+        else:
+            atoms, itp = ap.import_gaff_top(paths["top"])
         n_atoms = len(atoms)
         return {
             "job_id":  f"preview_{n_atoms}atoms",

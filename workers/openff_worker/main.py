@@ -125,6 +125,22 @@ def _box_from_gro(gro_path: str) -> list:
     return [25.0, 25.0, 25.0, 90.0, 90.0, 90.0]
 
 
+def _read_text(path) -> "str | None":
+    """Return the text contents of a file, or None.
+
+    The worker and the core app run as SEPARATE Cloud Run services with no
+    shared filesystem, so responses must carry file *contents* (the caller
+    materializes them locally) — returning bare /tmp paths only works when the
+    two share a filesystem (local dev)."""
+    if not path:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return fh.read()
+    except Exception:
+        return None
+
+
 OPENFF_GROMACS_EXPERIMENTAL = _probe_gromacs_reader()
 OPENFF_GROMACS_STABLE = (
     OPENFF_GROMACS_EXPERIMENTAL
@@ -169,6 +185,8 @@ def parametrize_sage(smiles: str,
     return {
         "top": top_path,
         "gro": gro_path,
+        "top_content": _read_text(top_path),
+        "gro_content": _read_text(gro_path),
         "box": box,
         "forcefield": forcefield,
         "note": "monolithic .top — all FF parameters inlined, no .itp files",
@@ -241,6 +259,9 @@ def parametrize_gaff(smiles: str,
         "top": top_path,
         "itp": itp_path if os.path.exists(itp_path) else None,
         "gro": gro_path,
+        "top_content": _read_text(top_path),
+        "itp_content": _read_text(itp_path) if os.path.exists(itp_path) else None,
+        "gro_content": _read_text(gro_path),
         "box": box,
         "forcefield": atom_type,
         "charge_method": charge_method,
@@ -319,6 +340,9 @@ async def parametrize_gaff_file(
         "top": top_path,
         "itp": itp_path if os.path.exists(itp_path) else None,
         "gro": gro_path,
+        "top_content": _read_text(top_path),
+        "itp_content": _read_text(itp_path) if os.path.exists(itp_path) else None,
+        "gro_content": _read_text(gro_path),
         "box": box,
         "forcefield": atom_type,
         "charge_method": charge_method,

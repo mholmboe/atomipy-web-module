@@ -48,10 +48,10 @@ steps:
       - --image=${_IMAGE}:${SHORT_SHA}
       - --region=${_REGION}
       - --platform=managed
-      # The worker is internal-only; the main app calls it. Keep it private and
-      # grant the main service's identity run.invoker, OR use --allow-unauthenticated
-      # for simplicity if you prefer (less secure).
-      - --no-allow-unauthenticated
+      # The main app currently calls the worker over plain HTTP (no auth token),
+      # so the worker must stay public. Hardening TODO: have the main service send
+      # an ID token and switch this to --no-allow-unauthenticated.
+      - --allow-unauthenticated
       - --memory=4Gi
       - --cpu=2
       - --timeout=600
