@@ -12,4 +12,3 @@ __pycache__
 package-lock.json
 outputs
 uploads
-workers

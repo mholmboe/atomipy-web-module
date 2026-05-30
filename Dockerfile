@@ -1,12 +1,21 @@
-# --- Stage 1: Build the React frontend ---
+# =============================================================================
+# atomipy web module — unified single-image deployment
+#
+# One image runs the FastAPI core backend AND serves the built React frontend,
+# so there is exactly one process to deploy (Cloud Run) and one command to run
+# on Colab. The OpenFF small-molecule worker is a *separate* image/service
+# (see docker/Dockerfile.openff); this app reaches it via $OPENFF_WORKER_URL.
+# =============================================================================
+
+# --- Stage 1: Build the React frontend ---------------------------------------
 FROM node:20-slim AS frontend-build
 WORKDIR /app
 
-# Copy dependency files first for caching
+# Copy dependency manifests first for layer caching
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
-# Only copy frontend-related source files (avoids bloat from UC_conf/atomipy)
+# Only the frontend sources (avoids bloat from atomipy/UC_conf data)
 COPY src ./src
 COPY public ./public
 COPY index.html ./
@@ -16,49 +25,49 @@ COPY tailwind.config.ts ./
 COPY components.json ./
 COPY postcss.config.js ./
 
-# Build the frontend
 RUN npm run build
 
-# --- Stage 2: Final image with Python backend ---
-FROM python:3.11-slim
+# --- Stage 2: Python backend (conda env via micromamba) ----------------------
+FROM mambaorg/micromamba:1.5
 
-# Install git needed for atomipy, and OpenCL/GL system libraries required by OpenMM (including CPU POCL platform)
+# git is occasionally needed by deps; libgl1 satisfies a few transitive libs.
+#
+# NOTE: we intentionally do NOT install an OpenCL driver (pocl). With no OpenCL
+# device present, OpenMM auto-selects its robust native **CPU** platform for
+# simulations/energy-minimization (the generated script creates Simulation()
+# without an explicit platform). On a GPU host (Colab) the same script picks
+# CUDA. Installing pocl here would make OpenMM prefer CPU-OpenCL, whose device
+# detection is unreliable inside the Cloud Run sandbox.
+USER root
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     git \
-    ocl-icd-opencl-dev \
-    pocl-opencl-icd \
     libgl1 && \
     rm -rf /var/lib/apt/lists/*
+USER $MAMBA_USER
+
+# Create the atomipy-core environment (openmm, fastapi, atomipy deps, ...)
+COPY --chown=$MAMBA_USER:$MAMBA_USER envs/atomipy-core.yml /tmp/env.yml
+RUN micromamba install -y -n base -f /tmp/env.yml && \
+    micromamba clean --all --yes
 
 WORKDIR /app
 
-# Copy requirements and install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Backend code + the in-repo atomipy copy + the built frontend
+COPY --chown=$MAMBA_USER:$MAMBA_USER backend/core /app
+COPY --chown=$MAMBA_USER:$MAMBA_USER atomipy /app/atomipy
+COPY --chown=$MAMBA_USER:$MAMBA_USER --from=frontend-build /app/dist /app/dist
 
-# Install atomipy dependencies (Note: atomipy is copied locally as a folder)
-# We rely on requirements.txt for all underlying libraries (numpy, scipy, etc.)
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    MALLOC_ARENA_MAX=2 \
+    OMP_NUM_THREADS=1 \
+    FRONTEND_DIST=/app/dist
 
-# Copy the built frontend from the first stage
-COPY --from=frontend-build /app/dist ./dist
-
-# Copy the backend code and local library/data folders
-COPY app.py .
-COPY atomipy ./atomipy
-
-# Set environment variables
-ENV FLASK_APP=app.py
-ENV FLASK_ENV=production
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV MALLOC_ARENA_MAX=2
-ENV OMP_NUM_THREADS=1
-
-# Expose is documentation only for Cloud Run, but helpful for Render
+# Documentation only; Cloud Run injects $PORT (defaults to 8080).
 EXPOSE 8080
 
-# Run the app using gunicorn
-# Note: Cloud Run uses $PORT, Render can use $PORT or a fixed one.
-# We bind to 0.0.0.0 and the PORT environment variable.
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --workers 1 --worker-class gthread --threads 4 --timeout 300 app:app"]
+# micromamba's entrypoint activates the base env before running this command.
+# Shell form so ${PORT} expands at runtime.
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --workers ${WEB_CONCURRENCY:-1} --timeout-keep-alive 300"]

@@ -42,3 +42,15 @@ output.zip
 test_jmol.html
 test_payload.json
 .vite_from_old_dir_20260417/
+
+# Allow tracking of raw structure/forcefield presets inside the atomipy subfolder
+!atomipy/**/*.pdb
+!atomipy/**/*.gro
+!atomipy/**/*.top
+!atomipy/**/*.itp
+!atomipy/**/*.psf
+
+# Runtime artifacts (build outputs, uploads, redis dump)
+outputs/
+uploads/
+dump.rdb

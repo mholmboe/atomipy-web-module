@@ -122,6 +122,18 @@ async def build_stream(request: BuildRequest):
     if not script_code:
         raise HTTPException(status_code=400, detail="No script provided")
 
+    # On the public/online instance simulations are disabled (no GPU, build-only).
+    # MD/EM must be run locally or on Google Colab. The frontend already hides the
+    # run controls via the `disableSimulation` flag from /api/presets; this is the
+    # server-side enforcement.
+    disable_sim = os.environ.get("DISABLE_SIMULATION", "false").lower() == "true"
+    if disable_sim and "load_minff_into_openmm" in script_code:
+        raise HTTPException(
+            status_code=403,
+            detail="Simulation execution is disabled on this server instance. "
+                   "Run locally or in Google Colab to execute simulations.",
+        )
+
     BUILD_TIMEOUT = int(os.environ.get("BUILD_TIMEOUT_SECONDS", "600"))
     
     def generate():

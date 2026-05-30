@@ -5,4 +5,6 @@ RUN micromamba install -f /tmp/env.yml -n base --yes && \
 COPY workers/openff_worker /app
 WORKDIR /app
 ENV PYTHONPATH=/app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+EXPOSE 8001
+# Shell form so ${PORT} expands at runtime (Cloud Run injects $PORT, default 8080).
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8001}"]

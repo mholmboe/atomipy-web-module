@@ -86,22 +86,38 @@ The script will stream logs to `.dev-logs/` and open your frontend at `http://lo
 
 ## 🐳 Docker Deployment
 
-The application is containerized for easy deployment (e.g., on Render or Google App Engine).
+The app deploys as a **single image**: the FastAPI core backend serves both the
+API and the built React frontend. The OpenFF small-molecule worker is an
+optional second service.
 
 ```bash
+# Unified app + optional OpenFF worker
+docker compose up --build
+# open http://localhost:8080
+
+# Or just the main image:
 docker build -t atomipy-web .
-docker run -p 5002:5002 atomipy-web
+docker run -p 8080:8080 -e PORT=8080 atomipy-web
 ```
+
+### Cloud Run (atomipy.io)
+Deployment is automated from this GitHub repo via Cloud Build
+([`cloudbuild.yaml`](cloudbuild.yaml)): every push to `main` builds the image and
+deploys it to Cloud Run with `DISABLE_SIMULATION=true` (build-only; simulations
+run on Colab). The OpenFF worker has its own pipeline
+([`cloudbuild.openff.yaml`](cloudbuild.openff.yaml)). See the one-time setup
+notes at the top of those files.
 
 ---
 
 ## 🏗️ Architecture
 
-- **Frontend**: React, React Flow (for the node graph), Tailwind CSS, Shadcn UI.
-- **Core Backend**: FastAPI (Python), managing execution and native `atomipy` merging logic without heavy GMSO dependencies.
-- **Task Queue**: Celery + Redis for asynchronous molecular dynamics and OpenFF tasks.
-- **OpenFF Worker**: Isolated FastAPI microservice handling `openff-interchange` and `openff-toolkit` dependencies.
-- **Core Engine**: `atomipy` (Molecular geometry & purely native dictionary-based topology merging).
+- **Frontend**: React, React Flow (for the node graph), Tailwind CSS, Shadcn UI — built with Vite and served by the backend in production.
+- **Core Backend**: FastAPI (Python), serving the frontend, build-stream execution, and native `atomipy` merging logic without heavy GMSO dependencies.
+- **OpenFF Worker**: Isolated FastAPI microservice handling `openff-interchange` / `openff-toolkit` (GAFF/Sage), reached via `OPENFF_WORKER_URL`.
+- **Task Queue (optional)**: Celery + Redis for asynchronous jobs; not required for the build-only online path.
+- **Core Engine**: `atomipy` (molecular geometry & purely native dictionary-based topology merging).
+- **Legacy**: `app.py` (Flask) predates the FastAPI unification and is no longer in the serving path.
 
 ## 📄 License
 This project is part of the atomipy web module toolbox. See the main [atomipy](https://github.com/mholmboe/atomipy) repository for licensing details.

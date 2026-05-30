@@ -1,10 +1,20 @@
-flask
-flask-cors
-werkzeug
-gunicorn
-# atomipy is installed via git in the Dockerfile to get the latest version
-# but if you prefer a PyPI version, just list 'atomipy' here.
-# For now, we'll assume the Dockerfile handles the git installation.
+# Pip dependencies for the atomipy web module (FastAPI core backend).
+# Used by non-conda environments such as Google Colab. The conda equivalent is
+# envs/atomipy-core.yml — keep the two in sync.
+#
+# atomipy itself is the in-repo ./atomipy copy (added to PYTHONPATH); only its
+# third-party dependencies are listed here.
+
+# Web server
+fastapi
+uvicorn[standard]
+python-multipart        # FastAPI file uploads (UploadFile/File)
+requests
+
+# Simulation engine (PyPI ships manylinux wheels)
+openmm>=8.1
+
+# atomipy runtime deps
 numpy
 scipy
 pandas
@@ -12,4 +22,3 @@ matplotlib
 tqdm
 gemmi>=0.7.0
 numba>=0.50.0
-requests
