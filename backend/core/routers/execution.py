@@ -138,6 +138,11 @@ async def build_stream(request: BuildRequest):
             print(f"DEBUG: selected uc_conf_dir={uc_conf_dir}", flush=True)
             if uc_conf_dir:
                 try:
+                    print(f"DEBUG: files inside uc_conf_dir={os.listdir(uc_conf_dir)}", flush=True)
+                except Exception as e:
+                    print(f"DEBUG: listdir failed: {e}", flush=True)
+            if uc_conf_dir:
+                try:
                     os.symlink(uc_conf_dir, os.path.join(work_dir, "UC_conf"))
                     print(f"DEBUG: successfully created symlink at {os.path.join(work_dir, 'UC_conf')}", flush=True)
                 except Exception as e:
