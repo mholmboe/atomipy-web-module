@@ -101,12 +101,17 @@ docker run -p 8080:8080 -e PORT=8080 atomipy-web
 ```
 
 ### Cloud Run (atomipy.io)
-Deployment is automated from this GitHub repo via Cloud Build
-([`cloudbuild.yaml`](cloudbuild.yaml)): every push to `main` builds the image and
-deploys it to Cloud Run with `DISABLE_SIMULATION=true` (build-only; simulations
-run on Colab). The OpenFF worker has its own pipeline
-([`cloudbuild.openff.yaml`](cloudbuild.openff.yaml)). See the one-time setup
-notes at the top of those files.
+A Cloud Run **source-deploy trigger** on this GitHub repo auto-builds the root
+`Dockerfile` and deploys to the `atomipy-web-module` service on every push to
+`main` (project `atomipywebmodule`, region `europe-north1`; domains atomipy.io /
+www / top map to it). The service runs with `DISABLE_SIMULATION=false`
+(CPU energy-minimization / short MD allowed; the image ships no OpenCL driver so
+OpenMM uses the native CPU platform), `OPENFF_WORKER_URL` pointing at the
+`atomipywebmodule-openff-worker` service, and 4Gi memory.
+
+[`cloudbuild.yaml`](cloudbuild.yaml) / [`cloudbuild.openff.yaml`](cloudbuild.openff.yaml)
+are optional Infrastructure-as-Code / manual-deploy references (the live path is
+the source trigger; see headers in those files).
 
 ---
 

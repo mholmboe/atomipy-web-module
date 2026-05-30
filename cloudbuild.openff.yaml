@@ -1,18 +1,16 @@
-# Cloud Build pipeline for the OpenFF small-molecule worker (separate service).
+# Manual deploy for the OpenFF small-molecule worker.
 #
-# The worker rarely changes, so give it its own trigger (e.g. only on changes to
-# docker/Dockerfile.openff, envs/atomipy-openff.yml, or workers/**) or deploy it
-# manually with:
+# The worker (service: atomipywebmodule-openff-worker) already runs and rarely
+# changes; it has no auto-trigger. Rebuild/redeploy it manually when its env or
+# Dockerfile changes:
 #   gcloud builds submit --config cloudbuild.openff.yaml
 #
-# After the first deploy, point the main service at it:
-#   gcloud run services update atomipy-web-module --region=europe-north1 \
-#       --update-env-vars=OPENFF_WORKER_URL=https://<worker-url>
+# The main service already points at it via OPENFF_WORKER_URL.
 
 substitutions:
   _REGION: europe-north1
-  _SERVICE: atomipy-openff-worker
-  _REPO: atomipy
+  _SERVICE: atomipywebmodule-openff-worker  # existing worker service name
+  _REPO: cloud-run-source-deploy            # existing Artifact Registry repo
   _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}
 
 options:
