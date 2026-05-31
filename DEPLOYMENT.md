@@ -190,6 +190,24 @@ gcloud run deploy atomipy-web-module --source . --region REGION \
 #    deployment" on the GitHub repo (this creates the source-deploy trigger).
 ```
 
+### Concurrency & capacity (important)
+Each build/EM runs the generated script using **process-global state**
+(`os.chdir` into the build's temp dir + a redirected `stdout`), so **two builds
+must never share an instance** — they would corrupt each other's working dir and
+output streams. Therefore:
+
+- **`--concurrency=1` is required** on both services. Do **not** raise it.
+- Serve more users by **scaling out** (`--max-instances`), not up. With online
+  being EM-only (short runs) instances cycle quickly.
+- Current sizing: main app `concurrency=1, max-instances=20, min-instances=1`
+  (≈16 simultaneous users + page-load headroom, 40 vCPU); OpenFF worker
+  `concurrency=1, max-instances=8`.
+- To support **N concurrent users**, set `max-instances ≈ N + 25%`. Raise
+  `min-instances` to reduce cold-start latency during bursts (costs more, since
+  those instances are always on); the ~4 GiB image takes ~10–20 s to cold-start.
+- Watch the region's **CPU quota** (`max-instances × cpu` vCPU); request an
+  increase if you scale beyond it.
+
 **Operational notes**
 - The **main app needs ≥2 GiB** (4 GiB recommended): `/tmp` is RAM-backed on
   Cloud Run and build outputs are written there.

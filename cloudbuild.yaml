@@ -69,8 +69,12 @@ steps:
       # corrupt each other's streams ("I/O operation on closed file"). Cloud Run
       # scales out to more instances instead.
       - --concurrency=1
-      - --min-instances=0
-      - --max-instances=10
+      # Scale OUT (not up) for concurrent users — each build needs its own
+      # instance (global cwd/stdout). max-instances=20 supports ~16 simultaneous
+      # users + page-load headroom (40 vCPU). Raise min-instances to cut cold
+      # starts during bursts (costs more); raise max-instances for >16 users.
+      - --min-instances=1
+      - --max-instances=20
       # SIMULATION_MODE controls policy (em_only on the public instance).
       # The image ships no OpenCL driver, so OpenMM uses the native CPU
       # platform. Tighten BUILD_TIMEOUT_SECONDS / step caps later to bound cost.
