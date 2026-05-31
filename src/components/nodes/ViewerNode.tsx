@@ -161,7 +161,26 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   }, [pdb]);
   const isMulti = numFrames > 1;
 
+  // Keep a ref of the current frame so the JSmol load effect can restore it
+  // without re-running once per frame during playback.
+  const currentFrameRef = useRef(0);
+  useEffect(() => { currentFrameRef.current = currentFrame; }, [currentFrame]);
 
+  // Dispatch a frame change to whichever renderer is active.
+  //  - 3Dmol: direct, synchronous setFrame()
+  //  - JSmol: async applet script (Jmol frame/model numbers are 1-based)
+  const gotoFrame = useCallback((n: number) => {
+    if (renderer === "3dmol") {
+      if (viewerInstance.current?.setFrame) {
+        viewerInstance.current.setFrame(n);
+        viewerInstance.current.render();
+      }
+    } else if (renderer === "jsmol") {
+      if (jsmolAppletRef.current && window.Jmol) {
+        window.Jmol.script(jsmolAppletRef.current, `frame ${n + 1}`);
+      }
+    }
+  }, [renderer]);
 
   const setViewerOption = (patch: Partial<ViewerNodeData>) => {
     updateNodeData(id, { ...data, ...patch });
@@ -358,31 +377,25 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
 
   // ─── Custom Trajectory Animation Loop ─────────────────────────────────────
   useEffect(() => {
-    if (!isMulti || renderer !== "3dmol" || !viewerInstance.current || !viewerInstance.current.setFrame) return;
-    
-    let interval: NodeJS.Timeout;
+    if (!isMulti || (renderer !== "3dmol" && renderer !== "jsmol")) return;
+
+    let interval: ReturnType<typeof setInterval>;
     if (isPlaying) {
       interval = setInterval(() => {
         setCurrentFrame((prev) => {
           const next = (prev + 1) % numFrames;
-          if (viewerInstance.current?.setFrame) {
-            viewerInstance.current.setFrame(next);
-            viewerInstance.current.render();
-          }
+          gotoFrame(next);
           return next;
         });
       }, 100); // ~10 fps playback
     }
     return () => clearInterval(interval);
-  }, [isPlaying, isMulti, numFrames, renderer]);
+  }, [isPlaying, isMulti, numFrames, renderer, gotoFrame]);
 
   const handleFrameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const frame = parseInt(e.target.value) || 0;
     setCurrentFrame(frame);
-    if (viewerInstance.current?.setFrame) {
-      viewerInstance.current.setFrame(frame);
-      viewerInstance.current.render();
-    }
+    gotoFrame(frame);
   };
 
   // ─── JSmol rendering effect ───────────────────────────────────────────────
@@ -463,8 +476,15 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       lines.push("set perspectiveDepth true");
     }
 
+    // Multi-model PDB: Jmol loads each MODEL as a frame. Stop native animation
+    // so our React frame browser drives it, and restore the current frame.
+    if (isMulti) {
+      lines.push("animation off");
+      lines.push(`frame ${currentFrameRef.current + 1}`);
+    }
+
     return lines.join("; ");
-  }, [background, computeBonds, viewStyle, showHydrogens, showUnitCell, showAtomLabels, labelIsCharge, spin, projection]);
+  }, [background, computeBonds, viewStyle, showHydrogens, showUnitCell, showAtomLabels, labelIsCharge, spin, projection, isMulti]);
 
   useEffect(() => {
     if (renderer !== "jsmol") return;
@@ -742,7 +762,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
           )}
 
           {/* Trajectory Controls Overlay */}
-          {isMulti && renderer === "3dmol" && (
+          {isMulti && (renderer === "3dmol" || renderer === "jsmol") && (
             <div 
               className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-card/90 backdrop-blur-sm border border-border rounded-lg shadow-lg flex items-center gap-2 p-1.5 nodrag pointer-events-auto select-none"
               onPointerDown={(e) => e.stopPropagation()}
@@ -751,10 +771,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                 onClick={() => {
                   const next = (currentFrame - 1 + numFrames) % numFrames;
                   setCurrentFrame(next);
-                  if (viewerInstance.current?.setFrame) {
-                    viewerInstance.current.setFrame(next);
-                    viewerInstance.current.render();
-                  }
+                  gotoFrame(next);
                 }}
                 className="p-1 hover:bg-muted rounded-md text-muted-foreground transition-colors"
                 title="Previous Frame"
@@ -774,10 +791,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                 onClick={() => {
                   const next = (currentFrame + 1) % numFrames;
                   setCurrentFrame(next);
-                  if (viewerInstance.current?.setFrame) {
-                    viewerInstance.current.setFrame(next);
-                    viewerInstance.current.render();
-                  }
+                  gotoFrame(next);
                 }}
                 className="p-1 hover:bg-muted rounded-md text-muted-foreground transition-colors"
                 title="Next Frame"
