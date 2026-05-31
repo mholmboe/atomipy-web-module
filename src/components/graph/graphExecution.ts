@@ -1293,6 +1293,11 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const pressure = getNumber(data, "pressure", 1.0);
 
         pythonCode += `\n# Set up and execute OpenMM Molecular Dynamics Simulation\n`;
+        // Machine-readable marker of the ACTIVE simulation type, used by the
+        // server to enforce SIMULATION_MODE (e.g. em_only). Both the EM and MD
+        // code paths are always emitted (if/else), so the server cannot infer the
+        // active type from the body — this marker states it explicitly.
+        pythonCode += `# __ATOMIPY_SIM_TYPE__=${simType}\n`;
         pythonCode += `try:\n`;
         pythonCode += `    import openmm as mm\n`;
         pythonCode += `    import openmm.app as app\n`;

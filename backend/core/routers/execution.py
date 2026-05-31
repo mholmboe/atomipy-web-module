@@ -146,11 +146,23 @@ async def build_stream(request: BuildRequest):
     # Server-side enforcement of the simulation policy (the frontend also reflects
     # it via the /api/presets `simulationMode` flag, but this can't be bypassed).
     #   - 'disabled': no simulations at all (any OpenMM load is refused)
-    #   - 'em_only' : Energy Minimization allowed; NVT/NPT MD refused. MD scripts
-    #                 call simulation.step(); EM uses only minimizeEnergy().
+    #   - 'em_only' : Energy Minimization allowed; NVT/NPT MD refused.
+    #
+    # NB: the generated script ALWAYS contains both the EM (minimizeEnergy) and MD
+    # (simulation.step) branches as `if True/False: ... else: ...`, so the body
+    # cannot reveal the active type. The frontend emits an explicit marker
+    # `# __ATOMIPY_SIM_TYPE__=<minimize|nvt|npt>` (one per Simulate node) which we
+    # read here; fall back to the human-readable MD banner for older clients.
+    import re as _re
     _mode = simulation_mode()
-    _is_simulation = "load_minff_into_openmm" in script_code
-    _is_md = "simulation.step(" in script_code
+    _sim_types = [t.lower() for t in _re.findall(r"__ATOMIPY_SIM_TYPE__=([A-Za-z_]+)", script_code)]
+    if _sim_types:
+        _is_simulation = True
+        _is_md = any(t in ("nvt", "npt") for t in _sim_types)
+    else:
+        # Fallback: EM uses only minimizeEnergy; NVT/NPT print "Executing NVT/NPT MD".
+        _is_simulation = "load_minff_into_openmm" in script_code
+        _is_md = ("Executing NVT MD" in script_code) or ("Executing NPT MD" in script_code)
     if _mode == "disabled" and _is_simulation:
         raise HTTPException(
             status_code=403,
