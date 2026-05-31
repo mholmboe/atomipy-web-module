@@ -64,13 +64,16 @@ steps:
       # Long enough to stream a CPU energy-minimization / short run. The build
       # itself is capped by BUILD_TIMEOUT_SECONDS (default 600) inside the app.
       - --timeout=900
-      # Sims are CPU-bound; keep concurrency modest so jobs don't starve.
-      - --concurrency=4
+      # MUST stay 1: each build runs user scripts with a process-global
+      # redirect_stdout into a per-build log; concurrent builds in one instance
+      # corrupt each other's streams ("I/O operation on closed file"). Cloud Run
+      # scales out to more instances instead.
+      - --concurrency=1
       - --min-instances=0
-      - --max-instances=4
-      # DISABLE_SIMULATION=false -> CPU energy-minimization / short MD is allowed
-      # online. The image ships no OpenCL driver, so OpenMM uses the native CPU
+      - --max-instances=10
+      # SIMULATION_MODE controls policy (em_only on the public instance).
+      # The image ships no OpenCL driver, so OpenMM uses the native CPU
       # platform. Tighten BUILD_TIMEOUT_SECONDS / step caps later to bound cost.
-      - --update-env-vars=DISABLE_SIMULATION=false,WEB_CONCURRENCY=1,OPENFF_WORKER_URL=${_WORKER_URL}
+      - --update-env-vars=SIMULATION_MODE=em_only,WEB_CONCURRENCY=1,OPENFF_WORKER_URL=${_WORKER_URL}
 
 timeout: 1800s
