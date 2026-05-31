@@ -91,7 +91,7 @@ instance with explicit settings).
 | Backend | FastAPI :8000 (conda `atomipy-core`) | FastAPI in container | FastAPI via `uvicorn` (pip deps) |
 | Python deps | conda envs (`atomipy-core` / `-openff`) | conda (baked into image) | **pip** (`requirements.txt`) |
 | Simulations | OpenMM — **GPU if present**, else CPU | **CPU only** (image ships no OpenCL driver) | **GPU (CUDA)** |
-| `DISABLE_SIMULATION` | `false` | `false` | unset → `false` |
+| Simulation policy (`SIMULATION_MODE`) | `full` | **`em_only`** — EM allowed, NVT/NPT → Colab/local | `full` |
 | OpenFF worker | auto-started on :8001 by `restart_dev.sh` | separate Cloud Run service | **optional** Step 1b (micromamba) |
 | Celery + Redis | started by `restart_dev.sh` | not deployed (optional) | not installed |
 | Public URL | `http://localhost:8080` | `https://www.atomipy.io` | a `*.loca.lt` Localtunnel URL |
@@ -128,10 +128,11 @@ Local simulations use whatever OpenMM platform your machine offers (CUDA / Metal
 - **Two services:** `atomipy-web-module` (main, mapped to **atomipy.io /
   www.atomipy.io / top.atomipy.io**) and `atomipywebmodule-openff-worker`.
 - Deployed by the **source-deploy trigger** (§2). Runtime config:
-  `DISABLE_SIMULATION=false`, `OPENFF_WORKER_URL=<worker URL>`, **4 GiB** memory.
-- **CPU-only sims.** The image deliberately ships **no OpenCL driver**, so OpenMM
-  uses its native CPU platform — good for **energy minimization** and **short
-  MD**. For production-scale / long MD, use Colab (GPU).
+  `SIMULATION_MODE=em_only`, `OPENFF_WORKER_URL=<worker URL>`, **4 GiB** memory.
+- **CPU-only, EM-only.** The image deliberately ships **no OpenCL driver**, so
+  OpenMM uses its native CPU platform. `SIMULATION_MODE=em_only` allows **Energy
+  Minimization** but refuses **NVT/NPT MD** (server returns 403 and the UI
+  recommends Colab/local). For NVT/NPT MD, use Colab (GPU) or a local install.
 
 ### 3c. Google Colab (GPU)
 
@@ -156,7 +157,8 @@ simulations enabled on the **GPU**, exposed through a Localtunnel URL.
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `8080` | Port to listen on (Cloud Run injects this) |
-| `DISABLE_SIMULATION` | `false` | `true` = build-only; the server refuses MD/EM |
+| `SIMULATION_MODE` | `full` | `full` (all sims) · `em_only` (Energy Minimization only — NVT/NPT refused with a Colab/local recommendation) · `disabled` (no sims) |
+| `DISABLE_SIMULATION` | `false` | Legacy: `true` = `disabled`. Ignored when `SIMULATION_MODE` is set |
 | `OPENFF_WORKER_URL` | `http://127.0.0.1:8001` | URL of the OpenFF worker (Organic Molecule node) |
 | `WEB_CONCURRENCY` | `1` | uvicorn worker processes |
 | `FRONTEND_DIST` | `<backend>/dist` | Path to the built frontend; if absent, static serving is skipped (dev mode) |
@@ -177,10 +179,12 @@ gcloud artifacts repositories create atomipy --repository-format=docker --locati
 #    Must stay public: the main app calls it without an auth token.
 gcloud builds submit --config cloudbuild.openff.yaml
 
-# 2. Main app (frontend + backend + CPU sims)
+# 2. Main app (frontend + backend). SIMULATION_MODE=em_only is recommended for a
+#    public CPU instance (EM allowed, NVT/NPT pointed to Colab/local); use 'full'
+#    to allow all sims, or 'disabled' for build-only.
 gcloud run deploy atomipy-web-module --source . --region REGION \
   --allow-unauthenticated --memory 4Gi --cpu 2 --timeout 900 \
-  --set-env-vars DISABLE_SIMULATION=false,OPENFF_WORKER_URL=<worker-url>
+  --set-env-vars SIMULATION_MODE=em_only,OPENFF_WORKER_URL=<worker-url>
 
 # 3. (optional) Continuous deploys: Cloud Run console → "Set up continuous
 #    deployment" on the GitHub repo (this creates the source-deploy trigger).

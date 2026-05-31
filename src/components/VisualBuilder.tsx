@@ -1059,11 +1059,13 @@ export default function VisualBuilder() {
   useEffect(() => {
     fetch("/api/presets")
       .then((res) => res.json())
-      .then((data: { presets?: PresetOption[]; disableSimulation?: boolean }) => {
+      .then((data: { presets?: PresetOption[]; disableSimulation?: boolean; simulationMode?: string }) => {
         setPresets(Array.isArray(data.presets) ? data.presets : []);
         const disabled = !!data.disableSimulation;
         setDisableSimulation(disabled);
         (window as any).disableSimulation = disabled;
+        // 'full' | 'em_only' | 'disabled' — em_only allows EM but blocks NVT/NPT MD.
+        (window as any).simulationMode = data.simulationMode || (disabled ? "disabled" : "full");
       })
       .catch((err) => console.error("Failed to load presets", err));
   }, []);

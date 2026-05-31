@@ -53,6 +53,27 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 os.makedirs(PRESETS_DIR, exist_ok=True)
 
+
+def simulation_mode() -> str:
+    """Server simulation policy: 'full', 'em_only', or 'disabled'.
+
+    Controlled by the SIMULATION_MODE env var (full | em_only | disabled). The
+    legacy DISABLE_SIMULATION=true is honored as 'disabled' when SIMULATION_MODE
+    is unset. The online (CPU) instance uses 'em_only' so users can run Energy
+    Minimization but are pointed to Colab/local for NVT/NPT MD.
+    """
+    raw = os.environ.get("SIMULATION_MODE", "").strip().lower().replace("-", "_")
+    if raw in ("disabled", "none", "off"):
+        return "disabled"
+    if raw in ("em_only", "emonly", "em", "minimize"):
+        return "em_only"
+    if raw in ("full", "all", "on"):
+        return "full"
+    # Legacy fallback
+    if os.environ.get("DISABLE_SIMULATION", "false").lower() == "true":
+        return "disabled"
+    return "full"
+
 import ctypes
 
 # ---------------------------------------------------------------------------
@@ -122,16 +143,27 @@ async def build_stream(request: BuildRequest):
     if not script_code:
         raise HTTPException(status_code=400, detail="No script provided")
 
-    # On the public/online instance simulations are disabled (no GPU, build-only).
-    # MD/EM must be run locally or on Google Colab. The frontend already hides the
-    # run controls via the `disableSimulation` flag from /api/presets; this is the
-    # server-side enforcement.
-    disable_sim = os.environ.get("DISABLE_SIMULATION", "false").lower() == "true"
-    if disable_sim and "load_minff_into_openmm" in script_code:
+    # Server-side enforcement of the simulation policy (the frontend also reflects
+    # it via the /api/presets `simulationMode` flag, but this can't be bypassed).
+    #   - 'disabled': no simulations at all (any OpenMM load is refused)
+    #   - 'em_only' : Energy Minimization allowed; NVT/NPT MD refused. MD scripts
+    #                 call simulation.step(); EM uses only minimizeEnergy().
+    _mode = simulation_mode()
+    _is_simulation = "load_minff_into_openmm" in script_code
+    _is_md = "simulation.step(" in script_code
+    if _mode == "disabled" and _is_simulation:
         raise HTTPException(
             status_code=403,
             detail="Simulation execution is disabled on this server instance. "
                    "Run locally or in Google Colab to execute simulations.",
+        )
+    if _mode == "em_only" and _is_md:
+        raise HTTPException(
+            status_code=403,
+            detail="NVT/NPT molecular dynamics is disabled on the public server "
+                   "(CPU-only). Energy Minimization runs here — for NVT/NPT MD, "
+                   "download the Python script and run it on Google Colab (GPU) "
+                   "or a local install.",
         )
 
     BUILD_TIMEOUT = int(os.environ.get("BUILD_TIMEOUT_SECONDS", "600"))
@@ -769,8 +801,9 @@ async def list_presets():
                     }
                 })
                 
-    disable_sim = os.environ.get("DISABLE_SIMULATION", "false").lower() == "true"
+    _mode = simulation_mode()
     return {
         "presets": sorted(presets, key=lambda x: x["name"]),
-        "disableSimulation": disable_sim
+        "disableSimulation": _mode == "disabled",   # legacy flag
+        "simulationMode": _mode,                     # 'full' | 'em_only' | 'disabled'
     }

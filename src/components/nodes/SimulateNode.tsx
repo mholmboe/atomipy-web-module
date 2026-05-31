@@ -55,7 +55,10 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
   const excludeWater = data?.excludeWater ?? true;
 
   const isSimulationDisabled = (window as any).disableSimulation === true;
+  const simulationMode = (window as any).simulationMode || (isSimulationDisabled ? "disabled" : "full");
   const showMdFields = simType === "nvt" || simType === "npt";
+  // On the public CPU server (em_only) NVT/NPT MD is blocked — recommend Colab/local.
+  const mdBlockedHere = simulationMode === "em_only" && showMdFields;
 
   return (
     <div className={`bg-card w-[260px] shadow-lg rounded-xl border ${isSimulationDisabled ? "border-amber-500/40" : "border-emerald-500/50"} overflow-hidden font-sans select-none`}>
@@ -92,6 +95,15 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
             <option value="npt">NPT (constant pressure)</option>
           </select>
         </div>
+
+        {mdBlockedHere && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 text-[10px] text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
+            ⚠️ <strong>NVT/NPT runs on Colab or locally, not here</strong><br />
+            The public server is CPU-only and runs <strong>Energy Minimization</strong> only.
+            Configure {simType.toUpperCase()} here, then download the Python script and run it on
+            <strong> Google Colab (GPU)</strong> or a local install.
+          </div>
+        )}
 
         {/* Minimization steps — only for minimize */}
         {simType === "minimize" && (

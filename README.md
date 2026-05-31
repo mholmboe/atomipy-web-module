@@ -48,9 +48,10 @@ A powerful, node-based visual programming environment for designing, manipulatin
 Use the hosted version directly at:  
 👉 **[www.atomipy.io](https://www.atomipy.io)** (also mirrored at [atomipy.io](https://atomipy.io) and [top.atomipy.io](https://top.atomipy.io))
 
-The hosted site runs simulations on the **CPU** (no GPU) — fine for **energy
-minimization** and **short MD**. For production-scale or long MD, use the
-**GPU-accelerated Google Colab** launch below.
+The hosted site is **CPU-only** and runs **Energy Minimization** only
+(`SIMULATION_MODE=em_only`). **NVT/NPT MD is not available there** — the app
+recommends running it on the **GPU-accelerated Google Colab** launch below (or a
+local install).
 
 > **Simulation workflow tip:** always chain an **Energy Minimization (EM)** node
 > *before* an **NVT / NPT** node. Running NVT/NPT directly on a freshly built or
@@ -143,7 +144,8 @@ Key environment variables (main app):
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `8080` | Port to listen on (Cloud Run injects this) |
-| `DISABLE_SIMULATION` | `false` | `true` = build-only (refuses MD/EM) |
+| `SIMULATION_MODE` | `full` | `full` · `em_only` (EM only, NVT/NPT → Colab/local) · `disabled` |
+| `DISABLE_SIMULATION` | `false` | Legacy: `true` = `disabled` (ignored if `SIMULATION_MODE` set) |
 | `OPENFF_WORKER_URL` | `http://127.0.0.1:8001` | URL of the OpenFF worker |
 | `WEB_CONCURRENCY` | `1` | uvicorn worker processes |
 
