@@ -63,9 +63,16 @@ export function SolventNode({ id, data }: NodeComponentProps<SolventNodeData>) {
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">Water Model</label>
               <select className={selectCls} value={data.waterModel ?? "spce"} onChange={(e) => set("waterModel", e.target.value)} onPointerDown={(e) => e.stopPropagation()}>
-                <option value="spce">3-site (SPC/E, TIP3P, OPC3)</option>
-                <option value="tip4p">4-site (TIP4P, OPC)</option>
+                <option value="spce">SPC/E (3-site, standard)</option>
+                <option value="spc">SPC (3-site)</option>
+                <option value="tip3p">TIP3P (3-site)</option>
+                <option value="opc3">OPC3 (3-site, MINFF-optimized)</option>
+                <option value="opc">OPC (4-site)</option>
+                <option value="tip4pew">TIP4P-Ew (4-site)</option>
               </select>
+              <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
+                Sets the inserted water <em>and</em> the water force field used by Simulate / Export — for any system (pure water, organic, or mineral). No Forcefield node required.
+              </p>
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">Density (g/cm³)</label>

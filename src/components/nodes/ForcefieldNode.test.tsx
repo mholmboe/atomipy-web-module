@@ -44,10 +44,10 @@ describe("ForcefieldNode", () => {
   it("shows defaults and reveals advanced options on demand", () => {
     renderNode();
 
-    expect(screen.getByRole("combobox")).toHaveValue("minff");
+    expect(screen.getAllByRole("combobox")[0]).toHaveValue("minff");
     expect(screen.queryByLabelText(/Write typing log/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /More options/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Global options/i }));
 
     expect(screen.getByLabelText(/Reset MolID/i)).toBeChecked();
     expect(screen.getByLabelText(/Write typing log/i)).not.toBeChecked();
@@ -56,7 +56,7 @@ describe("ForcefieldNode", () => {
   it("updates derived log filename when changing forcefield from default log name", () => {
     renderNode({ forcefield: "minff", log: true, logFile: "minff.log" });
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "clayff" } });
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "clayff" } });
 
     expect(reactFlowMocks.updateNodeData).toHaveBeenCalledWith("force-1", {
       forcefield: "clayff",
@@ -68,7 +68,7 @@ describe("ForcefieldNode", () => {
   it("preserves custom log filename when changing forcefield", () => {
     renderNode({ forcefield: "minff", log: true, logFile: "custom-forcefield.log" });
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "clayff" } });
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "clayff" } });
 
     expect(reactFlowMocks.updateNodeData).toHaveBeenCalledWith("force-1", {
       forcefield: "clayff",
@@ -80,7 +80,7 @@ describe("ForcefieldNode", () => {
   it("enables log output with scheme-based default filename when missing", () => {
     renderNode({ forcefield: "clayff" });
 
-    fireEvent.click(screen.getByRole("button", { name: /More options/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Global options/i }));
     fireEvent.click(screen.getByLabelText(/Write typing log/i));
 
     expect(reactFlowMocks.updateNodeData).toHaveBeenCalledWith("force-1", {
@@ -93,7 +93,7 @@ describe("ForcefieldNode", () => {
   it("shows fallback log filename in UI when logging is enabled without explicit filename", () => {
     renderNode({ forcefield: "clayff", log: true });
 
-    fireEvent.click(screen.getByRole("button", { name: /More options/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Global options/i }));
 
     expect(screen.getByPlaceholderText("e.g. forcefield.log")).toHaveValue("clayff.log");
   });

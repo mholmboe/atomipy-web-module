@@ -1237,13 +1237,12 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           }
           return "500"; // fallback default
         };
-        // Resolution order: Forcefield node (back-compat) -> Solvate node -> default.
-        // Lets a pure-water system pick its water model on the Solvate node (no
-        // Forcefield node needed) without changing existing mineral/organic flows.
+        // Water model comes from the Solvate/Solvent node (independent of any
+        // Forcefield node) so pure-water, organic and mineral systems all pick it
+        // the same way. Falls back to a sensible default per FF family.
         const findUpstreamWaterModel = (startId: string, ffType: string): string => {
           const visited = new Set<string>();
           const queue = [startId];
-          let solvateWM: string | null = null;
           while (queue.length > 0) {
             const current = queue.shift()!;
             if (visited.has(current)) continue;
@@ -1252,25 +1251,21 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             for (const edge of parentEdges) {
               const parentNode = nodeMap.get(edge.source);
               if (parentNode) {
-                if (parentNode.type === "forcefield") {
-                  return getString(parentNode.data, "waterModel", ffType === "clayff" ? "SPCE" : "OPC3");
-                }
-                if ((parentNode.type === "solvate" || parentNode.type === "solvent") && solvateWM === null) {
+                if (parentNode.type === "solvate" || parentNode.type === "solvent") {
                   const v = getString(parentNode.data, "waterModel", "");
-                  if (v) solvateWM = v.toUpperCase();  // match FF block names (SPCE, OPC3, TIP4PEW…)
+                  if (v) return v.toUpperCase();  // match FF block names (SPCE, OPC3, TIP4PEW…)
                 }
                 queue.push(parentNode.id);
               }
             }
           }
-          if (solvateWM) return solvateWM;
           return ffType === "clayff" ? "SPCE" : "OPC3";
         };
-        // Forcefield node (back-compat) -> Ions node -> default.
+        // Ion-pair parameter set comes from the Ions node (independent of any
+        // Forcefield node). Falls back to a sensible default per FF family.
         const findUpstreamIonSet = (startId: string, ffType: string): string => {
           const visited = new Set<string>();
           const queue = [startId];
-          let ionsSet: string | null = null;
           while (queue.length > 0) {
             const current = queue.shift()!;
             if (visited.has(current)) continue;
@@ -1279,18 +1274,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             for (const edge of parentEdges) {
               const parentNode = nodeMap.get(edge.source);
               if (parentNode) {
-                if (parentNode.type === "forcefield") {
-                  return getString(parentNode.data, "ionSet", ffType === "clayff" ? "HFE_LM" : "IOD_LM");
-                }
-                if (parentNode.type === "ions" && ionsSet === null) {
+                if (parentNode.type === "ions" || parentNode.type === "addIons" || parentNode.type === "grid") {
                   const v = getString(parentNode.data, "ionSet", "");
-                  if (v) ionsSet = v;
+                  if (v) return v;
                 }
                 queue.push(parentNode.id);
               }
             }
           }
-          if (ionsSet) return ionsSet;
           return ffType === "clayff" ? "HFE_LM" : "IOD_LM";
         };
         const upstreamFF = findUpstreamForcefield(id);
@@ -2021,13 +2012,12 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           }
           return "500"; // fallback default
         };
-        // Resolution order: Forcefield node (back-compat) -> Solvate node -> default.
-        // Lets a pure-water system pick its water model on the Solvate node (no
-        // Forcefield node needed) without changing existing mineral/organic flows.
+        // Water model comes from the Solvate/Solvent node (independent of any
+        // Forcefield node) so pure-water, organic and mineral systems all pick it
+        // the same way. Falls back to a sensible default per FF family.
         const findUpstreamWaterModel = (startId: string, ffType: string): string => {
           const visited = new Set<string>();
           const queue = [startId];
-          let solvateWM: string | null = null;
           while (queue.length > 0) {
             const current = queue.shift()!;
             if (visited.has(current)) continue;
@@ -2036,25 +2026,21 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             for (const edge of parentEdges) {
               const parentNode = nodeMap.get(edge.source);
               if (parentNode) {
-                if (parentNode.type === "forcefield") {
-                  return getString(parentNode.data, "waterModel", ffType === "clayff" ? "SPCE" : "OPC3");
-                }
-                if ((parentNode.type === "solvate" || parentNode.type === "solvent") && solvateWM === null) {
+                if (parentNode.type === "solvate" || parentNode.type === "solvent") {
                   const v = getString(parentNode.data, "waterModel", "");
-                  if (v) solvateWM = v.toUpperCase();  // match FF block names (SPCE, OPC3, TIP4PEW…)
+                  if (v) return v.toUpperCase();  // match FF block names (SPCE, OPC3, TIP4PEW…)
                 }
                 queue.push(parentNode.id);
               }
             }
           }
-          if (solvateWM) return solvateWM;
           return ffType === "clayff" ? "SPCE" : "OPC3";
         };
-        // Forcefield node (back-compat) -> Ions node -> default.
+        // Ion-pair parameter set comes from the Ions node (independent of any
+        // Forcefield node). Falls back to a sensible default per FF family.
         const findUpstreamIonSet = (startId: string, ffType: string): string => {
           const visited = new Set<string>();
           const queue = [startId];
-          let ionsSet: string | null = null;
           while (queue.length > 0) {
             const current = queue.shift()!;
             if (visited.has(current)) continue;
@@ -2063,18 +2049,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             for (const edge of parentEdges) {
               const parentNode = nodeMap.get(edge.source);
               if (parentNode) {
-                if (parentNode.type === "forcefield") {
-                  return getString(parentNode.data, "ionSet", ffType === "clayff" ? "HFE_LM" : "IOD_LM");
-                }
-                if (parentNode.type === "ions" && ionsSet === null) {
+                if (parentNode.type === "ions" || parentNode.type === "addIons" || parentNode.type === "grid") {
                   const v = getString(parentNode.data, "ionSet", "");
-                  if (v) ionsSet = v;
+                  if (v) return v;
                 }
                 queue.push(parentNode.id);
               }
             }
           }
-          if (ionsSet) return ionsSet;
           return ffType === "clayff" ? "HFE_LM" : "IOD_LM";
         };
         const upstreamFF = findUpstreamForcefield(id);

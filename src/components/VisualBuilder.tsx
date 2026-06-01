@@ -1263,8 +1263,7 @@ export default function VisualBuilder() {
     if (type === "forcefield") {
       baseData.forcefield = "minff";
       baseData.minffVariant = "500";
-      baseData.waterModel = "OPC3";
-      baseData.ionSet = "IOD_LM";
+      // Water model now lives on the Solvent node; ion parameters on the Ions node.
       baseData.rmaxLong = 2.45;
       baseData.rmaxH = 1.2;
       baseData.log = false;

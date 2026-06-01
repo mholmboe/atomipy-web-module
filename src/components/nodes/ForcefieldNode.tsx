@@ -16,8 +16,6 @@ type ForcefieldNodeData = {
   rmaxH?: number;
   chargeMethod?: "am1bcc" | "gasteiger" | "none";
   minffVariant?: "0" | "250" | "500" | "1500";
-  waterModel?: "SPCE" | "OPC3" | "TIP3P" | "OPC" | "TIP4PEW" | "SPC";
-  ionSet?: "HFE_LM" | "IOD_LM" | "CM_LM" | "JC";
 };
 
 export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldNodeData>) {
@@ -30,8 +28,6 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
   const resetMolid = data?.resetMolid ?? true;
   const chargeMethod = data?.chargeMethod ?? "am1bcc";
   const isOrganic = ["openff_sage", "openff_parsley", "gaff"].includes(forcefield);
-  const waterModel = data?.waterModel ?? (forcefield === "clayff" ? "SPCE" : "OPC3");
-  const ionSet = data?.ionSet ?? (forcefield === "clayff" ? "HFE_LM" : "IOD_LM");
 
   const [activeTab, setActiveTab] = useState<"inorganic" | "organic">(isOrganic ? "organic" : "inorganic");
 
@@ -98,37 +94,9 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
               </div>
             )}
 
-            <div className="mt-2.5">
-              <label className="text-xs font-semibold text-muted-foreground block mb-1">Water Model</label>
-              <select
-                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
-                value={waterModel}
-                onChange={(e) => updateNodeData(id, { ...data, waterModel: e.target.value as any })}
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                <option value="SPCE">SPC/E (Standard mineral water)</option>
-                <option value="OPC3">OPC3 3-site (Optimized for MINFF)</option>
-                <option value="TIP3P">TIP3P (Standard organic/biological)</option>
-                <option value="OPC">OPC 4-site (High-precision liquid)</option>
-                <option value="TIP4PEW">TIP4P-Ewald (Four-site Ewald)</option>
-                <option value="SPC">SPC (Simple Point Charge)</option>
-              </select>
-            </div>
-
-            <div className="mt-2.5">
-              <label className="text-xs font-semibold text-muted-foreground block mb-1">Ion parameters</label>
-              <select
-                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
-                value={ionSet}
-                onChange={(e) => updateNodeData(id, { ...data, ionSet: e.target.value as any })}
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                <option value="HFE_LM">HFE (Hydration Free Energy, LM)</option>
-                <option value="IOD_LM">IOD (Ion-Oxygen Distance, LM)</option>
-                <option value="CM_LM">Crystal Metric (Combined, LM)</option>
-                <option value="JC">JC (Joung-Cheatham standard)</option>
-              </select>
-            </div>
+            <p className="text-[10px] text-muted-foreground mt-2.5 leading-snug">
+              Water model is set on the <strong>Solvent</strong> node and ion parameters on the <strong>Ions</strong> node.
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
