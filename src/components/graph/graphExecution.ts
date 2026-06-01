@@ -1395,7 +1395,10 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `                                 ion_model=_ion_model, organic_itps=_org_itps or None)\n`;
         pythonCode += `            \n`;
         pythonCode += `            _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
-        pythonCode += `            topology, system, positions = ap.load_minff_into_openmm(_top_path, _gro_path, _defines, include_dir=_minff_dir, rigid_water=True)\n`;
+        pythonCode += `            # write_merged_top emits a self-contained .top whose #defines reflect the\n`;
+        pythonCode += `            # ACTUAL mineral/water/ion composition, so pass NO external defines — only the\n`;
+        pythonCode += `            # parameter blocks the system actually uses get loaded (no MINFF in a MINFF-free run).\n`;
+        pythonCode += `            topology, system, positions = ap.load_minff_into_openmm(_top_path, _gro_path, [], include_dir=_minff_dir, rigid_water=True)\n`;
         pythonCode += `            _sim_atoms = list(${inAtoms})\n`;
         pythonCode += `            _is_parmed = False\n`;
         pythonCode += `        else:\n`;

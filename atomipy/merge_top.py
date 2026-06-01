@@ -629,11 +629,11 @@ def write_merged_top(
         # forcefield.itp is NOT used: it wraps ffnonbonded+ffbonded but also adds [ defaults ],
         # which would create a duplicate [ defaults ] block and override our gen-pairs=yes above.
         if has_mineral or has_water or has_ions:
+            # Activate only the atomtype blocks the system actually uses, so a
+            # MINFF-free / ion-free topology never pulls in unused parameter sets.
             if has_mineral:
-                # mineral FF variant define — only when minerals are present; organic /
-                # pure-solvent / pure-ion systems must not activate a mineral atomtype block
                 f.write(f'#define {minff_variant}\n')
-            if ion_model:
+            if ion_model and has_ions:
                 f.write(f'#define {ion_model}\n')
             f.write('#include "min.ff/ffnonbonded.itp"\n')  # atomtypes only, no [ defaults ]
             if has_mineral:
