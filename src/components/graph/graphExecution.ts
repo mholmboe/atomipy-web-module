@@ -112,8 +112,9 @@ export function checkWorkflowPrerequisites(nodes: Node[], edges: Edge[]): string
   nodes.forEach((node) => {
     if (node.type === "simulate") {
       const upstreams = getUpstreamNodeTypes(node.id);
-      if (!upstreams.has("forcefield")) {
-        warnings.push(`Warning (Simulation Node ${node.id}): A forcefield node must be connected upstream to run standard simulation parameters without crashes.`);
+      const hasSolventOrIons = upstreams.has("solvate") || upstreams.has("solvent") || upstreams.has("ions");
+      if (!upstreams.has("forcefield") && !hasSolventOrIons) {
+        warnings.push(`Warning (Simulation Node ${node.id}): connect a Forcefield node (mineral/organic) — or a Solvate/Ions node for a pure solvent/ion system — upstream so simulation parameters are defined.`);
       }
     }
     if (node.type === "solvate" || node.type === "solvent") {
@@ -967,7 +968,9 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         break;
       }
       case "solvate": {
-        const model = pyEscape(getString(data, "waterModel", "spce"));
+        const _wmSolv = getString(data, "waterModel", "spce");
+        // tip4pew shares the 4-site geometry but isn't a solvate insertion template
+        const model = pyEscape(_wmSolv.toLowerCase() === "tip4pew" ? "tip4p" : _wmSolv);
         const dens = getNumber(data, "density", 1.0) * 1000.0;
         const spacing = getNumber(data, "minDistance", 2.0);
         pythonCode += `${blockOutAtoms} = ap.solvate(limits=${inBox}, Box=${inBox}, density=${dens}, min_distance=${spacing}, solute_atoms=${inAtoms}, solvent_type='${model}', include_solute=True)\n`;
@@ -980,7 +983,9 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         break;
       }
       case "solvent": {
-        const model = pyEscape(getString(data, "waterModel", "spce"));
+        const _wmSolv = getString(data, "waterModel", "spce");
+        // tip4pew shares the 4-site geometry but isn't a solvate insertion template
+        const model = pyEscape(_wmSolv.toLowerCase() === "tip4pew" ? "tip4p" : _wmSolv);
         const dens = getNumber(data, "density", 1.0) * 1000.0;
         const spacing = getNumber(data, "minDistance", 2.0);
         pythonCode += `${blockOutAtoms} = ap.solvate(limits=${inBox}, Box=${inBox}, density=${dens}, min_distance=${spacing}, solute_atoms=${inAtoms}, solvent_type='${model}', include_solute=True)\n`;
@@ -993,7 +998,8 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         break;
       }
       case "waterModel": {
-        const model = pyEscape(getString(data, "value", "spce"));
+        const _wmConv = getString(data, "value", "spce");
+        const model = pyEscape(_wmConv.toLowerCase() === "tip4pew" ? "tip4p" : _wmConv);
         const numH2O = getNumber(data, "numH2O", 1);
         pythonCode += `${blockOutAtoms} = ap.solvate(limits=[30.0, 30.0, 30.0], Box=[30.0, 30.0, 30.0], solvent_type='${model}', min_distance=2.0, include_solute=False)\n`;
         pythonCode += `if len(${blockOutAtoms}) > ${numH2O} * 3:\n`;
@@ -1231,9 +1237,13 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           }
           return "500"; // fallback default
         };
+        // Resolution order: Forcefield node (back-compat) -> Solvate node -> default.
+        // Lets a pure-water system pick its water model on the Solvate node (no
+        // Forcefield node needed) without changing existing mineral/organic flows.
         const findUpstreamWaterModel = (startId: string, ffType: string): string => {
           const visited = new Set<string>();
           const queue = [startId];
+          let solvateWM: string | null = null;
           while (queue.length > 0) {
             const current = queue.shift()!;
             if (visited.has(current)) continue;
@@ -1245,15 +1255,22 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
                 if (parentNode.type === "forcefield") {
                   return getString(parentNode.data, "waterModel", ffType === "clayff" ? "SPCE" : "OPC3");
                 }
+                if ((parentNode.type === "solvate" || parentNode.type === "solvent") && solvateWM === null) {
+                  const v = getString(parentNode.data, "waterModel", "");
+                  if (v) solvateWM = v.toUpperCase();  // match FF block names (SPCE, OPC3, TIP4PEW…)
+                }
                 queue.push(parentNode.id);
               }
             }
           }
+          if (solvateWM) return solvateWM;
           return ffType === "clayff" ? "SPCE" : "OPC3";
         };
+        // Forcefield node (back-compat) -> Ions node -> default.
         const findUpstreamIonSet = (startId: string, ffType: string): string => {
           const visited = new Set<string>();
           const queue = [startId];
+          let ionsSet: string | null = null;
           while (queue.length > 0) {
             const current = queue.shift()!;
             if (visited.has(current)) continue;
@@ -1265,10 +1282,15 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
                 if (parentNode.type === "forcefield") {
                   return getString(parentNode.data, "ionSet", ffType === "clayff" ? "HFE_LM" : "IOD_LM");
                 }
+                if (parentNode.type === "ions" && ionsSet === null) {
+                  const v = getString(parentNode.data, "ionSet", "");
+                  if (v) ionsSet = v;
+                }
                 queue.push(parentNode.id);
               }
             }
           }
+          if (ionsSet) return ionsSet;
           return ffType === "clayff" ? "HFE_LM" : "IOD_LM";
         };
         const upstreamFF = findUpstreamForcefield(id);
@@ -1996,9 +2018,13 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           }
           return "500"; // fallback default
         };
+        // Resolution order: Forcefield node (back-compat) -> Solvate node -> default.
+        // Lets a pure-water system pick its water model on the Solvate node (no
+        // Forcefield node needed) without changing existing mineral/organic flows.
         const findUpstreamWaterModel = (startId: string, ffType: string): string => {
           const visited = new Set<string>();
           const queue = [startId];
+          let solvateWM: string | null = null;
           while (queue.length > 0) {
             const current = queue.shift()!;
             if (visited.has(current)) continue;
@@ -2010,15 +2036,22 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
                 if (parentNode.type === "forcefield") {
                   return getString(parentNode.data, "waterModel", ffType === "clayff" ? "SPCE" : "OPC3");
                 }
+                if ((parentNode.type === "solvate" || parentNode.type === "solvent") && solvateWM === null) {
+                  const v = getString(parentNode.data, "waterModel", "");
+                  if (v) solvateWM = v.toUpperCase();  // match FF block names (SPCE, OPC3, TIP4PEW…)
+                }
                 queue.push(parentNode.id);
               }
             }
           }
+          if (solvateWM) return solvateWM;
           return ffType === "clayff" ? "SPCE" : "OPC3";
         };
+        // Forcefield node (back-compat) -> Ions node -> default.
         const findUpstreamIonSet = (startId: string, ffType: string): string => {
           const visited = new Set<string>();
           const queue = [startId];
+          let ionsSet: string | null = null;
           while (queue.length > 0) {
             const current = queue.shift()!;
             if (visited.has(current)) continue;
@@ -2030,10 +2063,15 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
                 if (parentNode.type === "forcefield") {
                   return getString(parentNode.data, "ionSet", ffType === "clayff" ? "HFE_LM" : "IOD_LM");
                 }
+                if (parentNode.type === "ions" && ionsSet === null) {
+                  const v = getString(parentNode.data, "ionSet", "");
+                  if (v) ionsSet = v;
+                }
                 queue.push(parentNode.id);
               }
             }
           }
+          if (ionsSet) return ionsSet;
           return ffType === "clayff" ? "HFE_LM" : "IOD_LM";
         };
         const upstreamFF = findUpstreamForcefield(id);

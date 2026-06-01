@@ -7,6 +7,7 @@ import type { NodeComponentProps } from "./types";
 type IonsNodeData = {
   method?: "random" | "grid";
   ionType?: string;
+  ionSet?: "HFE_LM" | "IOD_LM" | "CM_LM" | "JC";
   // Ionize mode specific
   count?: number;
   minDistance?: number;
@@ -116,6 +117,24 @@ export function IonsNode({ id, data }: NodeComponentProps<IonsNodeData>) {
               />
             </div>
           )}
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground block mb-1">Ion parameters</label>
+          <select
+            className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
+            value={data.ionSet || "IOD_LM"}
+            onChange={(e) => handleChange("ionSet", e.target.value)}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <option value="HFE_LM">HFE (Hydration Free Energy, LM)</option>
+            <option value="IOD_LM">IOD (Ion-Oxygen Distance, LM)</option>
+            <option value="CM_LM">Crystal Metric (Combined, LM)</option>
+            <option value="JC">JC (Joung-Cheatham standard)</option>
+          </select>
+          <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
+            Simulation ion-pair potential set (used when no Forcefield node overrides it).
+          </p>
         </div>
 
         {method === "random" && (
