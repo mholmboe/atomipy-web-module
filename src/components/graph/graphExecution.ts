@@ -1388,7 +1388,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `            \n`;
         pythonCode += `            ap.write_merged_top(list(${inAtoms}), _itp, ${inBox}, _top_path, _gro_path,\n`;
         pythonCode += `                                 minff_variant=_ff_variant, water_model=_water_model,\n`;
-        pythonCode += `                                 ion_model=_ion_model, organic_itps=_org_itps or None, write_angles=${writeAngles ? "True" : "False"})\n`;
+        pythonCode += `                                 ion_model=_ion_model, organic_itps=_org_itps or None, angle_ka=${writeAngles ? mineralKangle : "None"})\n`;
         pythonCode += `            \n`;
         pythonCode += `            _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
         pythonCode += `            # write_merged_top emits a self-contained .top whose #defines reflect the\n`;
@@ -2122,7 +2122,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    for _k, _v in ${inAtoms}.itp.items():\n`;
           pythonCode += `        if _k.startswith('_source_itp') and _v and _v not in _org_itps:\n`;
           pythonCode += `            _org_itps.append(os.path.basename(_v))\n`;
-          pythonCode += `    ap.write_merged_top(_exp_atoms, ${inAtoms}.itp, _exp_box, '${outName}.top', '${outName}.gro', minff_variant='${ffVariant}', water_model='${waterLower}', ion_model='${ionCombine}', organic_itps=_org_itps or None, write_angles=${writeAngles ? "True" : "False"})\n`;
+          pythonCode += `    ap.write_merged_top(_exp_atoms, ${inAtoms}.itp, _exp_box, '${outName}.top', '${outName}.gro', minff_variant='${ffVariant}', water_model='${waterLower}', ion_model='${ionCombine}', organic_itps=_org_itps or None, angle_ka=${writeAngles ? mineralKangle : "None"})\n`;
         }
         pythonCode += `else:\n`;
         
