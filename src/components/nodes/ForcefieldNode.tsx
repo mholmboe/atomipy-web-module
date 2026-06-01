@@ -16,7 +16,7 @@ type ForcefieldNodeData = {
   rmaxH?: number;
   chargeMethod?: "am1bcc" | "gasteiger" | "none";
   minffVariant?: "0" | "250" | "500" | "1500" | "none";
-  clayffAngles?: "none" | "standard";
+  clayffAngles?: "none" | "0" | "250" | "500" | "1500";
 };
 
 export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldNodeData>) {
@@ -98,7 +98,7 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
 
             {forcefield === "clayff" && (
               <div className="mt-2.5">
-                <label className="text-xs font-semibold text-muted-foreground block mb-1">Angle terms</label>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">Angle terms (borrowed from MINFF)</label>
                 <select
                   className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
                   value={data.clayffAngles ?? "none"}
@@ -106,7 +106,10 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
                   onPointerDown={(e) => e.stopPropagation()}
                 >
                   <option value="none">No angles (default)</option>
-                  <option value="standard">Standard angles (M-O-H, same as MINFF)</option>
+                  <option value="0">Ka = 0 (Unbonded/Intercalated)</option>
+                  <option value="250">Ka = 250 (Soft bonded)</option>
+                  <option value="500">Ka = 500 (Standard)</option>
+                  <option value="1500">Ka = 1500 (Rigid framework)</option>
                 </select>
               </div>
             )}

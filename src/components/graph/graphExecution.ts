@@ -1284,7 +1284,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const clayffAngles = findUpstreamClayffAngles(id);
         // Angle terms: CLAYFF defaults to none; MINFF "none" also omits angles.
         // MINFF "none" still needs a nonbonded block → use GMINFF_k0 (Unbonded).
-        const writeAngles = upstreamFF === "clayff" ? (clayffAngles === "standard") : (minffVariant !== "none");
+        const writeAngles = upstreamFF === "clayff" ? (clayffAngles !== "none") : (minffVariant !== "none");
         const minffDefineVariant = minffVariant === "none" ? "0" : minffVariant;
         const waterModel = findUpstreamWaterModel(id, upstreamFF);
         const ionSet = findUpstreamIonSet(id, upstreamFF);
@@ -2085,7 +2085,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const clayffAngles = findUpstreamClayffAngles(id);
         // Angle terms: CLAYFF defaults to none; MINFF "none" also omits angles.
         // MINFF "none" still needs a nonbonded block → use GMINFF_k0 (Unbonded).
-        const writeAngles = upstreamFF === "clayff" ? (clayffAngles === "standard") : (minffVariant !== "none");
+        const writeAngles = upstreamFF === "clayff" ? (clayffAngles !== "none") : (minffVariant !== "none");
         const minffDefineVariant = minffVariant === "none" ? "0" : minffVariant;
         const waterModel = findUpstreamWaterModel(id, upstreamFF);
         const ionSet = findUpstreamIonSet(id, upstreamFF);
