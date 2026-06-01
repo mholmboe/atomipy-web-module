@@ -651,8 +651,11 @@ def write_merged_top(
         if has_water:
             wm = water_model.lower().replace('/', '').replace('-', '')
             wm_map = {
-                'spce': 'spce', 'spc': 'spc', 'opc3': 'opc3', 'opc': 'opc',
-                'tip3p': 'tip3p', 'tip4p': 'tip3p', 'tip3pfb': 'tip3p',
+                # 3-site
+                'spce': 'spce', 'spc': 'spc', 'tip3p': 'tip3p', 'opc3': 'opc3',
+                'tip3pfb': 'tip3p-fb',
+                # 4-site (each has its own M-site itp — must NOT collapse to a 3-site model)
+                'opc': 'opc', 'tip4p': 'tip4p', 'tip4pew': 'tip4pew', 'tip4pfb': 'tip4p-fb',
             }
             wm_file = wm_map.get(wm, 'spce')
             f.write(f'; Water model\n')
