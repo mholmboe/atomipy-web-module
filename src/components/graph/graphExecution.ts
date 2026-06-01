@@ -968,7 +968,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         break;
       }
       case "solvent": {
-        const _wmSolv = getString(data, "waterModel", "spce");
+        const _wmSolv = getString(data, "waterModel", "opc3");
         // tip4pew shares the 4-site geometry but isn't a solvate insertion template
         const model = pyEscape(_wmSolv.toLowerCase() === "tip4pew" ? "tip4p" : _wmSolv);
         const dens = getNumber(data, "density", 1.0) * 1000.0;
@@ -1211,6 +1211,27 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           }
           return "500"; // fallback default
         };
+        // CLAYFF angle terms (default "none" = no angles written).
+        const findUpstreamClayffAngles = (startId: string): string => {
+          const visited = new Set<string>();
+          const queue = [startId];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (visited.has(current)) continue;
+            visited.add(current);
+            const parentEdges = edges.filter(e => e.target === current);
+            for (const edge of parentEdges) {
+              const parentNode = nodeMap.get(edge.source);
+              if (parentNode) {
+                if (parentNode.type === "forcefield") {
+                  return getString(parentNode.data, "clayffAngles", "none");
+                }
+                queue.push(parentNode.id);
+              }
+            }
+          }
+          return "none";
+        };
         // Water model comes from the Solvate/Solvent node (independent of any
         // Forcefield node) so pure-water, organic and mineral systems all pick it
         // the same way. Falls back to a sensible default per FF family.
@@ -1260,6 +1281,11 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         };
         const upstreamFF = findUpstreamForcefield(id);
         const minffVariant = findUpstreamMinffVariant(id);
+        const clayffAngles = findUpstreamClayffAngles(id);
+        // Angle terms: CLAYFF defaults to none; MINFF "none" also omits angles.
+        // MINFF "none" still needs a nonbonded block → use GMINFF_k0 (Unbonded).
+        const writeAngles = upstreamFF === "clayff" ? (clayffAngles === "standard") : (minffVariant !== "none");
+        const minffDefineVariant = minffVariant === "none" ? "0" : minffVariant;
         const waterModel = findUpstreamWaterModel(id, upstreamFF);
         const ionSet = findUpstreamIonSet(id, upstreamFF);
         const logFile = pyEscape(getString(data, "logFile", "output.log"));
@@ -1277,7 +1303,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           ? ["CLAYFF_EXT", `${waterModel}_${ionSet}`, waterModel]
           : isOrganicFF
             ? [`${waterModel}_${ionSet}`, waterModel]
-            : [`GMINFF_k${minffVariant}`, `${waterModel}_${ionSet}`, waterModel];
+            : [`GMINFF_k${minffDefineVariant}`, `${waterModel}_${ionSet}`, waterModel];
         const definesExpr = `[${defines.map(d => `'${d}'`).join(", ")}]`;
 
         const constraintsExpr = constraintsStr === "None" ? "None"
@@ -1357,7 +1383,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `            \n`;
         pythonCode += `            ap.write_merged_top(list(${inAtoms}), _itp, ${inBox}, _top_path, _gro_path,\n`;
         pythonCode += `                                 minff_variant=_ff_variant, water_model=_water_model,\n`;
-        pythonCode += `                                 ion_model=_ion_model, organic_itps=_org_itps or None)\n`;
+        pythonCode += `                                 ion_model=_ion_model, organic_itps=_org_itps or None, write_angles=${writeAngles ? "True" : "False"})\n`;
         pythonCode += `            \n`;
         pythonCode += `            _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
         pythonCode += `            # write_merged_top emits a self-contained .top whose #defines reflect the\n`;
@@ -1371,7 +1397,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `            _top_path = "min_system.top"\n`;
         pythonCode += `            _gro_path = "min_system.gro"\n`;
         pythonCode += `            _sim_atoms = list(${inAtoms})\n`;
-        pythonCode += `            ap.write_top(_sim_atoms, Box=${inBox}, file_path=_top_path)\n`;
+        pythonCode += `            ap.write_top(_sim_atoms, Box=${inBox}, file_path=_top_path, explicit_angles=${writeAngles ? 1 : 0})\n`;
         pythonCode += `            ap.write_gro(_sim_atoms, ${inBox}, _gro_path)\n`;
         pythonCode += `            _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
         pythonCode += `            _defines = ${definesExpr}\n`;
@@ -1986,6 +2012,27 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           }
           return "500"; // fallback default
         };
+        // CLAYFF angle terms (default "none" = no angles written).
+        const findUpstreamClayffAngles = (startId: string): string => {
+          const visited = new Set<string>();
+          const queue = [startId];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (visited.has(current)) continue;
+            visited.add(current);
+            const parentEdges = edges.filter(e => e.target === current);
+            for (const edge of parentEdges) {
+              const parentNode = nodeMap.get(edge.source);
+              if (parentNode) {
+                if (parentNode.type === "forcefield") {
+                  return getString(parentNode.data, "clayffAngles", "none");
+                }
+                queue.push(parentNode.id);
+              }
+            }
+          }
+          return "none";
+        };
         // Water model comes from the Solvate/Solvent node (independent of any
         // Forcefield node) so pure-water, organic and mineral systems all pick it
         // the same way. Falls back to a sensible default per FF family.
@@ -2035,9 +2082,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         };
         const upstreamFF = findUpstreamForcefield(id);
         const minffVariant = findUpstreamMinffVariant(id);
+        const clayffAngles = findUpstreamClayffAngles(id);
+        // Angle terms: CLAYFF defaults to none; MINFF "none" also omits angles.
+        // MINFF "none" still needs a nonbonded block → use GMINFF_k0 (Unbonded).
+        const writeAngles = upstreamFF === "clayff" ? (clayffAngles === "standard") : (minffVariant !== "none");
+        const minffDefineVariant = minffVariant === "none" ? "0" : minffVariant;
         const waterModel = findUpstreamWaterModel(id, upstreamFF);
         const ionSet = findUpstreamIonSet(id, upstreamFF);
-        const ffVariant = upstreamFF === "clayff" ? "CLAYFF_EXT" : `GMINFF_k${minffVariant}`;
+        const ffVariant = upstreamFF === "clayff" ? "CLAYFF_EXT" : `GMINFF_k${minffDefineVariant}`;
         const waterLower = waterModel.toLowerCase();
         const ionCombine = `${waterModel}_${ionSet}`;
 
@@ -2060,7 +2112,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    for _k, _v in ${inAtoms}.itp.items():\n`;
           pythonCode += `        if _k.startswith('_source_itp') and _v and _v not in _org_itps:\n`;
           pythonCode += `            _org_itps.append(os.path.basename(_v))\n`;
-          pythonCode += `    ap.write_merged_top(_exp_atoms, ${inAtoms}.itp, _exp_box, '${outName}.top', '${outName}.gro', minff_variant='${ffVariant}', water_model='${waterLower}', ion_model='${ionCombine}', organic_itps=_org_itps or None)\n`;
+          pythonCode += `    ap.write_merged_top(_exp_atoms, ${inAtoms}.itp, _exp_box, '${outName}.top', '${outName}.gro', minff_variant='${ffVariant}', water_model='${waterLower}', ion_model='${ionCombine}', organic_itps=_org_itps or None, write_angles=${writeAngles ? "True" : "False"})\n`;
         }
         pythonCode += `else:\n`;
         

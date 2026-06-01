@@ -49,10 +49,13 @@ describe('graphExecution Python Generator', () => {
     ];
     
     const code = generatePythonCode(nodes, edges, 'minimal');
-    
-    // It should contain the ap.mix_systems generation since it sees the organic_atoms upstream
-    expect(code).toContain("ap.mix_systems");
-    expect(code).toContain("if hasattr(organic_atoms_0, 'atoms') and not isinstance(organic_atoms_0, list):");
+
+    // The spatial Merge node guards against itp-bearing (organic) inputs and
+    // redirects topology merges to the 'Add' node; mineral-only inputs go
+    // through ap.merge.
+    expect(code).toContain("if hasattr(organic_atoms_0, 'itp') or hasattr(structure_atoms_1, 'itp'):");
+    expect(code).toContain("please use the 'Add' node instead.");
+    expect(code).toContain("merged_2 = ap.merge(organic_atoms_0, structure_atoms_1, organic_box_0, type_mode='molid', min_distance=2)");
   });
 
   it('generates mixed system logic for export node', () => {
@@ -76,8 +79,11 @@ describe('graphExecution Python Generator', () => {
     ];
     
     const code = generatePythonCode(nodes, edges, 'minimal');
-    
-    expect(code).toContain("if hasattr(organic_atoms_0, 'atoms') and not isinstance(organic_atoms_0, list):");
-    expect(code).toContain("ap.export_mixed(organic_atoms_0, 'mixed_sys', targets=['pdb', 'amber'])");
+
+    // Export of an itp-bearing (mixed/organic) system is guarded on the itp
+    // attribute and writes coordinates via ap.write_pdb.
+    expect(code).toContain("if hasattr(organic_atoms_0, 'itp') and organic_atoms_0.itp is not None:");
+    expect(code).toContain("# Export Mixed/Organic System");
+    expect(code).toContain("ap.write_pdb(_exp_atoms, _exp_box, 'mixed_sys.pdb')");
   });
 });

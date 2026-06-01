@@ -471,7 +471,7 @@ const templateWorkflows: Array<{ id: string; name: string; graph: WorkflowGraph 
           id: "tmpl2_5",
           type: "solvent",
           position: { x: 840, y: 280 },
-          data: { mode: "solvate", waterModel: "spce", density: 1.0, minDistance: 2.25 },
+          data: { waterModel: "opc3", density: 1.0, minDistance: 2.25 },
         },
         {
           id: "tmpl2_6",
@@ -1377,12 +1377,9 @@ export default function VisualBuilder() {
       baseData.deltaThreshold = -0.5; baseData.maxAdditions = 10;
     }
     if (type === "solvent") {
-      baseData.mode = "solvate";
-      baseData.waterModel = "spce";
+      baseData.waterModel = "opc3";
       baseData.density = 1.0;
       baseData.minDistance = 2.25;
-      baseData.conversion = "spc2tip4p";
-      baseData.omDist = 0.15;
     }
     if (type === "analysis") {
       baseData.mode = "rdf";
