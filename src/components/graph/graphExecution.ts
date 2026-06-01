@@ -1286,6 +1286,11 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         // MINFF "none" still needs a nonbonded block → use GMINFF_k0 (Unbonded).
         const writeAngles = upstreamFF === "clayff" ? (clayffAngles !== "none") : (minffVariant !== "none");
         const minffDefineVariant = minffVariant === "none" ? "0" : minffVariant;
+        // Mineral-only topology (write_top/itp) uses atomipy's full angle model:
+        // scanned θ0 for metal O-M-O/M-O-M at force constant KANGLE, standard M-O-H,
+        // and ALL angles dropped when "none" (max_angle=0). Mirrors the mapping in
+        // atomipy-topology-generator (angle_terms -> explicit_angles/KANGLE/max_angle).
+        const mineralKangle = writeAngles ? Number(upstreamFF === "clayff" ? clayffAngles : minffVariant) : 0;
         const waterModel = findUpstreamWaterModel(id, upstreamFF);
         const ionSet = findUpstreamIonSet(id, upstreamFF);
         const logFile = pyEscape(getString(data, "logFile", "output.log"));
@@ -1397,7 +1402,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `            _top_path = "min_system.top"\n`;
         pythonCode += `            _gro_path = "min_system.gro"\n`;
         pythonCode += `            _sim_atoms = list(${inAtoms})\n`;
-        pythonCode += `            ap.write_top(_sim_atoms, Box=${inBox}, file_path=_top_path, explicit_angles=${writeAngles ? 1 : 0})\n`;
+        pythonCode += `            ap.write_top(_sim_atoms, Box=${inBox}, file_path=_top_path, explicit_angles=${writeAngles ? 1 : 0}, KANGLE=${mineralKangle}, max_angle=${writeAngles ? "None" : "0.0"})\n`;
         pythonCode += `            ap.write_gro(_sim_atoms, ${inBox}, _gro_path)\n`;
         pythonCode += `            _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
         pythonCode += `            _defines = ${definesExpr}\n`;
@@ -2087,6 +2092,11 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         // MINFF "none" still needs a nonbonded block → use GMINFF_k0 (Unbonded).
         const writeAngles = upstreamFF === "clayff" ? (clayffAngles !== "none") : (minffVariant !== "none");
         const minffDefineVariant = minffVariant === "none" ? "0" : minffVariant;
+        // Mineral-only topology (write_top/itp) uses atomipy's full angle model:
+        // scanned θ0 for metal O-M-O/M-O-M at force constant KANGLE, standard M-O-H,
+        // and ALL angles dropped when "none" (max_angle=0). Mirrors the mapping in
+        // atomipy-topology-generator (angle_terms -> explicit_angles/KANGLE/max_angle).
+        const mineralKangle = writeAngles ? Number(upstreamFF === "clayff" ? clayffAngles : minffVariant) : 0;
         const waterModel = findUpstreamWaterModel(id, upstreamFF);
         const ionSet = findUpstreamIonSet(id, upstreamFF);
         const ffVariant = upstreamFF === "clayff" ? "CLAYFF_EXT" : `GMINFF_k${minffDefineVariant}`;
@@ -2125,7 +2135,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         }
 
         if (topFmt === "gromacs") {
-          pythonCode += `    ap.write_itp(${inAtoms}, ${inBox}, '${outName}.itp')\n`;
+          pythonCode += `    ap.write_itp(${inAtoms}, ${inBox}, '${outName}.itp', explicit_angles=${writeAngles ? 1 : 0}, KANGLE=${mineralKangle}, max_angle=${writeAngles ? "None" : "0.0"})\n`;
         } else if (topFmt === "namd") {
           pythonCode += `    ap.write_psf(${inAtoms}, ${inBox}, '${outName}.psf')\n`;
         }
