@@ -1281,9 +1281,16 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const pdbFreq = getNumber(data, "pdbFreq", getNumber(data, "dcdFreq", 1000));
         const logFreq = getNumber(data, "logFreq", 1000);
 
+        // Organic-only / pure-solvent systems must NOT pull in a mineral FF block.
+        // Water atomtypes come from a direct water-model #include and ions from the
+        // ion-set define, both independent of GMINFF_k…/CLAYFF — so dropping the
+        // mineral define is safe and avoids loading unused mineral atomtypes.
+        const isOrganicFF = ["openff_sage", "openff_parsley", "gaff"].includes(upstreamFF);
         const defines = upstreamFF === "clayff"
           ? ["CLAYFF_EXT", `${waterModel}_${ionSet}`, waterModel]
-          : [`GMINFF_k${minffVariant}`, `${waterModel}_${ionSet}`, waterModel];
+          : isOrganicFF
+            ? [`${waterModel}_${ionSet}`, waterModel]
+            : [`GMINFF_k${minffVariant}`, `${waterModel}_${ionSet}`, waterModel];
         const definesExpr = `[${defines.map(d => `'${d}'`).join(", ")}]`;
 
         const constraintsExpr = constraintsStr === "None" ? "None"
