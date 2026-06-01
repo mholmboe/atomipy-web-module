@@ -1191,7 +1191,10 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           }
           return "minff"; // fallback default
         };
-        const findUpstreamMinffVariant = (startId: string): string => {
+        // Resolve the INORGANIC (MINFF/CLAYFF) forcefield node specifically. A mixed
+        // mineral+organic graph also has an organic forcefield node, so a plain BFS
+        // "first forcefield" could read the mineral Ka/variant off the organic node.
+        const findUpstreamMineralFF = (startId: string): Record<string, unknown> | null => {
           const visited = new Set<string>();
           const queue = [startId];
           while (queue.length > 0) {
@@ -1203,34 +1206,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
               const parentNode = nodeMap.get(edge.source);
               if (parentNode) {
                 if (parentNode.type === "forcefield") {
-                  return getString(parentNode.data, "minffVariant", "500");
+                  const ff = getString(parentNode.data, "forcefield", "minff");
+                  if (ff === "minff" || ff === "clayff") return parentNode.data as Record<string, unknown>;
                 }
                 queue.push(parentNode.id);
               }
             }
           }
-          return "500"; // fallback default
-        };
-        // CLAYFF angle terms (default "none" = no angles written).
-        const findUpstreamClayffAngles = (startId: string): string => {
-          const visited = new Set<string>();
-          const queue = [startId];
-          while (queue.length > 0) {
-            const current = queue.shift()!;
-            if (visited.has(current)) continue;
-            visited.add(current);
-            const parentEdges = edges.filter(e => e.target === current);
-            for (const edge of parentEdges) {
-              const parentNode = nodeMap.get(edge.source);
-              if (parentNode) {
-                if (parentNode.type === "forcefield") {
-                  return getString(parentNode.data, "clayffAngles", "none");
-                }
-                queue.push(parentNode.id);
-              }
-            }
-          }
-          return "none";
+          return null;
         };
         // Water model comes from the Solvate/Solvent node (independent of any
         // Forcefield node) so pure-water, organic and mineral systems all pick it
@@ -1280,17 +1263,19 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           return ffType === "clayff" ? "HFE_LM" : "IOD_LM";
         };
         const upstreamFF = findUpstreamForcefield(id);
-        const minffVariant = findUpstreamMinffVariant(id);
-        const clayffAngles = findUpstreamClayffAngles(id);
-        // Angle terms: CLAYFF defaults to none; MINFF "none" also omits angles.
-        // MINFF "none" still needs a nonbonded block → use GMINFF_k0 (Unbonded).
-        const writeAngles = upstreamFF === "clayff" ? (clayffAngles !== "none") : (minffVariant !== "none");
+        // Mineral FF + angle Ka come from the inorganic (MINFF/CLAYFF) node, not the
+        // first forcefield found (a mixed graph also has an organic forcefield node).
+        const mineralFFData = findUpstreamMineralFF(id);
+        const mineralFF = mineralFFData ? getString(mineralFFData, "forcefield", "minff") : "minff";
+        const minffVariant = mineralFFData ? getString(mineralFFData, "minffVariant", "500") : "500";
+        const clayffAngles = mineralFFData ? getString(mineralFFData, "clayffAngles", "none") : "none";
+        // CLAYFF defaults to no angles; MINFF "none" also omits angles (and still
+        // needs a nonbonded block → GMINFF_k0).
+        const writeAngles = mineralFF === "clayff" ? (clayffAngles !== "none") : (minffVariant !== "none");
         const minffDefineVariant = minffVariant === "none" ? "0" : minffVariant;
-        // Mineral-only topology (write_top/itp) uses atomipy's full angle model:
-        // scanned θ0 for metal O-M-O/M-O-M at force constant KANGLE, standard M-O-H,
-        // and ALL angles dropped when "none" (max_angle=0). Mirrors the mapping in
-        // atomipy-topology-generator (angle_terms -> explicit_angles/KANGLE/max_angle).
-        const mineralKangle = writeAngles ? Number(upstreamFF === "clayff" ? clayffAngles : minffVariant) : 0;
+        // atomipy's angle model: scanned θ0 for metal O-M-O/M-O-M at KANGLE, standard
+        // M-O-H, all angles dropped when "none". Ka from the inorganic FF node.
+        const mineralKangle = writeAngles ? Number(mineralFF === "clayff" ? clayffAngles : minffVariant) : 0;
         const waterModel = findUpstreamWaterModel(id, upstreamFF);
         const ionSet = findUpstreamIonSet(id, upstreamFF);
         const logFile = pyEscape(getString(data, "logFile", "output.log"));
@@ -1303,12 +1288,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         // Water atomtypes come from a direct water-model #include and ions from the
         // ion-set define, both independent of GMINFF_k…/CLAYFF — so dropping the
         // mineral define is safe and avoids loading unused mineral atomtypes.
-        const isOrganicFF = ["openff_sage", "openff_parsley", "gaff"].includes(upstreamFF);
-        const defines = upstreamFF === "clayff"
-          ? ["CLAYFF_EXT", `${waterModel}_${ionSet}`, waterModel]
-          : isOrganicFF
-            ? [`${waterModel}_${ionSet}`, waterModel]
-            : [`GMINFF_k${minffDefineVariant}`, `${waterModel}_${ionSet}`, waterModel];
+        // Include the mineral nonbonded define whenever an inorganic FF is upstream
+        // (independent of any organic FF), using the variant from that node.
+        const mineralDefine = mineralFF === "clayff" ? "CLAYFF_EXT" : `GMINFF_k${minffDefineVariant}`;
+        const defines = [
+          ...(mineralFFData ? [mineralDefine] : []),
+          `${waterModel}_${ionSet}`,
+          waterModel,
+        ];
         const definesExpr = `[${defines.map(d => `'${d}'`).join(", ")}]`;
 
         const constraintsExpr = constraintsStr === "None" ? "None"
@@ -1997,7 +1984,10 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           }
           return "minff"; // fallback default
         };
-        const findUpstreamMinffVariant = (startId: string): string => {
+        // Resolve the INORGANIC (MINFF/CLAYFF) forcefield node specifically. A mixed
+        // mineral+organic graph also has an organic forcefield node, so a plain BFS
+        // "first forcefield" could read the mineral Ka/variant off the organic node.
+        const findUpstreamMineralFF = (startId: string): Record<string, unknown> | null => {
           const visited = new Set<string>();
           const queue = [startId];
           while (queue.length > 0) {
@@ -2009,34 +1999,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
               const parentNode = nodeMap.get(edge.source);
               if (parentNode) {
                 if (parentNode.type === "forcefield") {
-                  return getString(parentNode.data, "minffVariant", "500");
+                  const ff = getString(parentNode.data, "forcefield", "minff");
+                  if (ff === "minff" || ff === "clayff") return parentNode.data as Record<string, unknown>;
                 }
                 queue.push(parentNode.id);
               }
             }
           }
-          return "500"; // fallback default
-        };
-        // CLAYFF angle terms (default "none" = no angles written).
-        const findUpstreamClayffAngles = (startId: string): string => {
-          const visited = new Set<string>();
-          const queue = [startId];
-          while (queue.length > 0) {
-            const current = queue.shift()!;
-            if (visited.has(current)) continue;
-            visited.add(current);
-            const parentEdges = edges.filter(e => e.target === current);
-            for (const edge of parentEdges) {
-              const parentNode = nodeMap.get(edge.source);
-              if (parentNode) {
-                if (parentNode.type === "forcefield") {
-                  return getString(parentNode.data, "clayffAngles", "none");
-                }
-                queue.push(parentNode.id);
-              }
-            }
-          }
-          return "none";
+          return null;
         };
         // Water model comes from the Solvate/Solvent node (independent of any
         // Forcefield node) so pure-water, organic and mineral systems all pick it
@@ -2086,20 +2056,22 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           return ffType === "clayff" ? "HFE_LM" : "IOD_LM";
         };
         const upstreamFF = findUpstreamForcefield(id);
-        const minffVariant = findUpstreamMinffVariant(id);
-        const clayffAngles = findUpstreamClayffAngles(id);
-        // Angle terms: CLAYFF defaults to none; MINFF "none" also omits angles.
-        // MINFF "none" still needs a nonbonded block → use GMINFF_k0 (Unbonded).
-        const writeAngles = upstreamFF === "clayff" ? (clayffAngles !== "none") : (minffVariant !== "none");
+        // Mineral FF + angle Ka come from the inorganic (MINFF/CLAYFF) node, not the
+        // first forcefield found (a mixed graph also has an organic forcefield node).
+        const mineralFFData = findUpstreamMineralFF(id);
+        const mineralFF = mineralFFData ? getString(mineralFFData, "forcefield", "minff") : "minff";
+        const minffVariant = mineralFFData ? getString(mineralFFData, "minffVariant", "500") : "500";
+        const clayffAngles = mineralFFData ? getString(mineralFFData, "clayffAngles", "none") : "none";
+        // CLAYFF defaults to no angles; MINFF "none" also omits angles (and still
+        // needs a nonbonded block → GMINFF_k0).
+        const writeAngles = mineralFF === "clayff" ? (clayffAngles !== "none") : (minffVariant !== "none");
         const minffDefineVariant = minffVariant === "none" ? "0" : minffVariant;
-        // Mineral-only topology (write_top/itp) uses atomipy's full angle model:
-        // scanned θ0 for metal O-M-O/M-O-M at force constant KANGLE, standard M-O-H,
-        // and ALL angles dropped when "none" (max_angle=0). Mirrors the mapping in
-        // atomipy-topology-generator (angle_terms -> explicit_angles/KANGLE/max_angle).
-        const mineralKangle = writeAngles ? Number(upstreamFF === "clayff" ? clayffAngles : minffVariant) : 0;
+        // atomipy's angle model: scanned θ0 for metal O-M-O/M-O-M at KANGLE, standard
+        // M-O-H, all angles dropped when "none". Ka from the inorganic FF node.
+        const mineralKangle = writeAngles ? Number(mineralFF === "clayff" ? clayffAngles : minffVariant) : 0;
         const waterModel = findUpstreamWaterModel(id, upstreamFF);
         const ionSet = findUpstreamIonSet(id, upstreamFF);
-        const ffVariant = upstreamFF === "clayff" ? "CLAYFF_EXT" : `GMINFF_k${minffDefineVariant}`;
+        const ffVariant = mineralFF === "clayff" ? "CLAYFF_EXT" : `GMINFF_k${minffDefineVariant}`;
         const waterLower = waterModel.toLowerCase();
         const ionCombine = `${waterModel}_${ionSet}`;
 
