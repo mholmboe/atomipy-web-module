@@ -32,6 +32,20 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
 
   const [activeTab, setActiveTab] = useState<"inorganic" | "organic">(isOrganic ? "organic" : "inorganic");
 
+  const changeForcefield = (newValue: ForcefieldType) => {
+    const next: ForcefieldNodeData = { ...data, forcefield: newValue };
+    if (log && (!data.logFile || data.logFile === `${forcefield}.log`)) {
+      next.logFile = `${newValue}.log`;
+    }
+    // Organic force fields have nothing to do with MINFF/CLAYFF angle terms —
+    // never carry/emit minffVariant or clayffAngles on an organic node.
+    if (["openff_sage", "openff_parsley", "gaff"].includes(newValue)) {
+      delete next.minffVariant;
+      delete next.clayffAngles;
+    }
+    updateNodeData(id, next);
+  };
+
   return (
     <div className="bg-card w-[250px] shadow-lg rounded-xl border border-amber-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
@@ -64,14 +78,7 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
             <select
               className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
               value={forcefield}
-              onChange={(e) => {
-                const newValue = e.target.value as ForcefieldType;
-                const updates: Partial<ForcefieldNodeData> = { forcefield: newValue };
-                if (log && (!data.logFile || data.logFile === `${forcefield}.log`)) {
-                  updates.logFile = `${newValue}.log`;
-                }
-                updateNodeData(id, { ...data, ...updates });
-              }}
+              onChange={(e) => changeForcefield(e.target.value as ForcefieldType)}
               onPointerDown={(e) => e.stopPropagation()}
             >
               <option value="minff">MINFF</option>
@@ -125,14 +132,7 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
               <select
                 className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
                 value={forcefield}
-                onChange={(e) => {
-                  const newValue = e.target.value as ForcefieldType;
-                  const updates: Partial<ForcefieldNodeData> = { forcefield: newValue };
-                  if (log && (!data.logFile || data.logFile === `${forcefield}.log`)) {
-                    updates.logFile = `${newValue}.log`;
-                  }
-                  updateNodeData(id, { ...data, ...updates });
-                }}
+                onChange={(e) => changeForcefield(e.target.value as ForcefieldType)}
                 onPointerDown={(e) => e.stopPropagation()}
               >
                 <option value="openff_sage">OpenFF Sage</option>

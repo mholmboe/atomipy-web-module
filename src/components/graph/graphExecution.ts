@@ -1171,49 +1171,50 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const cutoffNm = getNumber(data, "cutoff", 12.0) / 10.0;
         const constraintsStr = getString(data, "constraints", "HBonds");
         const wrapTrajectory = getBoolean(data, "wrapTrajectory", true);
+        // Walk upstream depth-first, visiting each node's inputs in handle order
+        // (in1 before in2 …) so the FIRST-connected branch of a Join/Add node takes
+        // precedence — e.g. an inorganic structure wired to in1 wins over an organic
+        // one on in2.
+        const orderedParents = (nodeId: string) =>
+          edges.filter(e => e.target === nodeId)
+               .sort((a, b) => String(a.targetHandle ?? "").localeCompare(String(b.targetHandle ?? "")));
         const findUpstreamForcefield = (startId: string): string => {
           const visited = new Set<string>();
-          const queue = [startId];
-          while (queue.length > 0) {
-            const current = queue.shift()!;
-            if (visited.has(current)) continue;
-            visited.add(current);
-            const parentEdges = edges.filter(e => e.target === current);
-            for (const edge of parentEdges) {
-              const parentNode = nodeMap.get(edge.source);
-              if (parentNode) {
-                if (parentNode.type === "forcefield") {
-                  return getString(parentNode.data, "forcefield", "minff");
-                }
-                queue.push(parentNode.id);
-              }
+          const dfs = (nodeId: string): string | null => {
+            if (visited.has(nodeId)) return null;
+            visited.add(nodeId);
+            for (const edge of orderedParents(nodeId)) {
+              const p = nodeMap.get(edge.source);
+              if (!p) continue;
+              if (p.type === "forcefield") return getString(p.data, "forcefield", "minff");
+              const found = dfs(p.id);
+              if (found !== null) return found;
             }
-          }
-          return "minff"; // fallback default
+            return null;
+          };
+          return dfs(startId) ?? "minff";
         };
         // Resolve the INORGANIC (MINFF/CLAYFF) forcefield node specifically. A mixed
         // mineral+organic graph also has an organic forcefield node, so a plain BFS
         // "first forcefield" could read the mineral Ka/variant off the organic node.
         const findUpstreamMineralFF = (startId: string): Record<string, unknown> | null => {
           const visited = new Set<string>();
-          const queue = [startId];
-          while (queue.length > 0) {
-            const current = queue.shift()!;
-            if (visited.has(current)) continue;
-            visited.add(current);
-            const parentEdges = edges.filter(e => e.target === current);
-            for (const edge of parentEdges) {
-              const parentNode = nodeMap.get(edge.source);
-              if (parentNode) {
-                if (parentNode.type === "forcefield") {
-                  const ff = getString(parentNode.data, "forcefield", "minff");
-                  if (ff === "minff" || ff === "clayff") return parentNode.data as Record<string, unknown>;
-                }
-                queue.push(parentNode.id);
+          const dfs = (nodeId: string): Record<string, unknown> | null => {
+            if (visited.has(nodeId)) return null;
+            visited.add(nodeId);
+            for (const edge of orderedParents(nodeId)) {
+              const p = nodeMap.get(edge.source);
+              if (!p) continue;
+              if (p.type === "forcefield") {
+                const ff = getString(p.data, "forcefield", "minff");
+                if (ff === "minff" || ff === "clayff") return p.data as Record<string, unknown>;
               }
+              const found = dfs(p.id);
+              if (found !== null) return found;
             }
-          }
-          return null;
+            return null;
+          };
+          return dfs(startId);
         };
         // Water model comes from the Solvate/Solvent node (independent of any
         // Forcefield node) so pure-water, organic and mineral systems all pick it
@@ -1964,49 +1965,50 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const outName = pyEscape(getString(data, "outputName", "system"));
         const structFmt = pyEscape(getString(data, "structureFormat", "pdb"));
         const topFmt = pyEscape(getString(data, "topologyFormat", "none"));
+        // Walk upstream depth-first, visiting each node's inputs in handle order
+        // (in1 before in2 …) so the FIRST-connected branch of a Join/Add node takes
+        // precedence — e.g. an inorganic structure wired to in1 wins over an organic
+        // one on in2.
+        const orderedParents = (nodeId: string) =>
+          edges.filter(e => e.target === nodeId)
+               .sort((a, b) => String(a.targetHandle ?? "").localeCompare(String(b.targetHandle ?? "")));
         const findUpstreamForcefield = (startId: string): string => {
           const visited = new Set<string>();
-          const queue = [startId];
-          while (queue.length > 0) {
-            const current = queue.shift()!;
-            if (visited.has(current)) continue;
-            visited.add(current);
-            const parentEdges = edges.filter(e => e.target === current);
-            for (const edge of parentEdges) {
-              const parentNode = nodeMap.get(edge.source);
-              if (parentNode) {
-                if (parentNode.type === "forcefield") {
-                  return getString(parentNode.data, "forcefield", "minff");
-                }
-                queue.push(parentNode.id);
-              }
+          const dfs = (nodeId: string): string | null => {
+            if (visited.has(nodeId)) return null;
+            visited.add(nodeId);
+            for (const edge of orderedParents(nodeId)) {
+              const p = nodeMap.get(edge.source);
+              if (!p) continue;
+              if (p.type === "forcefield") return getString(p.data, "forcefield", "minff");
+              const found = dfs(p.id);
+              if (found !== null) return found;
             }
-          }
-          return "minff"; // fallback default
+            return null;
+          };
+          return dfs(startId) ?? "minff";
         };
         // Resolve the INORGANIC (MINFF/CLAYFF) forcefield node specifically. A mixed
         // mineral+organic graph also has an organic forcefield node, so a plain BFS
         // "first forcefield" could read the mineral Ka/variant off the organic node.
         const findUpstreamMineralFF = (startId: string): Record<string, unknown> | null => {
           const visited = new Set<string>();
-          const queue = [startId];
-          while (queue.length > 0) {
-            const current = queue.shift()!;
-            if (visited.has(current)) continue;
-            visited.add(current);
-            const parentEdges = edges.filter(e => e.target === current);
-            for (const edge of parentEdges) {
-              const parentNode = nodeMap.get(edge.source);
-              if (parentNode) {
-                if (parentNode.type === "forcefield") {
-                  const ff = getString(parentNode.data, "forcefield", "minff");
-                  if (ff === "minff" || ff === "clayff") return parentNode.data as Record<string, unknown>;
-                }
-                queue.push(parentNode.id);
+          const dfs = (nodeId: string): Record<string, unknown> | null => {
+            if (visited.has(nodeId)) return null;
+            visited.add(nodeId);
+            for (const edge of orderedParents(nodeId)) {
+              const p = nodeMap.get(edge.source);
+              if (!p) continue;
+              if (p.type === "forcefield") {
+                const ff = getString(p.data, "forcefield", "minff");
+                if (ff === "minff" || ff === "clayff") return p.data as Record<string, unknown>;
               }
+              const found = dfs(p.id);
+              if (found !== null) return found;
             }
-          }
-          return null;
+            return null;
+          };
+          return dfs(startId);
         };
         // Water model comes from the Solvate/Solvent node (independent of any
         // Forcefield node) so pure-water, organic and mineral systems all pick it
