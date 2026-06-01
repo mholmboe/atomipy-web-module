@@ -101,7 +101,6 @@ import { AnalysisNode } from "./nodes/AnalysisNode";
 import { AtomPropertiesNode } from "./nodes/AtomPropertiesNode";
 import { CoordinateFrameNode } from "./nodes/CoordinateFrameNode";
 // Keep old nodes registered so saved workflows still load
-import { SolvateNode } from "./nodes/SolvateNode";
 import { PositionNode } from "./nodes/PositionNode";
 import { WrapNode } from "./nodes/WrapNode";
 import { AddHNode } from "./nodes/AddHNode";
@@ -118,7 +117,6 @@ import { RemoveNode } from "./nodes/RemoveNode";
 import { StatsNode } from "./nodes/StatsNode";
 import { BendNode } from "./nodes/BendNode";
 import { CondenseNode } from "./nodes/CondenseNode";
-import { WaterModelNode } from "./nodes/WaterModelNode";
 import { SimulateNode } from "./nodes/SimulateNode";
 import type { PresetOption } from "./nodes/types";
 import DeletableEdge from "./edges/DeletableEdge";
@@ -158,8 +156,6 @@ const nodeTypes = {
   grid: IonsNode,
   preset: StructureNode,
   upload: StructureNode,
-  solvate: SolvateNode,
-  waterModel: WaterModelNode,
   position: PositionNode,
   wrap: WrapNode,
   addH: AddHNode,
@@ -340,7 +336,6 @@ const validateWorkflow = (nodes: Node[], edges: Edge[]): string[] => {
     "resname",
     "molecule",
     "addIons",
-    "solvate",
     "wrap",
     "forcefield",
     "bondAngle",
@@ -474,9 +469,9 @@ const templateWorkflows: Array<{ id: string; name: string; graph: WorkflowGraph 
         },
         {
           id: "tmpl2_5",
-          type: "solvate",
+          type: "solvent",
           position: { x: 840, y: 280 },
-          data: { waterModel: "spce", density: 1.0, minDistance: 2.2 },
+          data: { mode: "solvate", waterModel: "spce", density: 1.0, minDistance: 2.25 },
         },
         {
           id: "tmpl2_6",
@@ -603,7 +598,6 @@ const NODE_PURPOSE_DOCS: Record<string, string> = {
   resname: "Assigns residue names used for topology/export workflows.",
   molecule: "Assigns molecule IDs and optional residue names.",
   addIons: "Adds ions inside the box with placement constraints.",
-  solvate: "Adds solvent molecules using density and distance settings.",
   wrap: "Wraps atoms back into periodic boundaries.",
   addH: "Adds hydrogens using bond valence heuristics.",
   stats: "Computes and writes structural statistics.",
@@ -614,7 +608,6 @@ const NODE_PURPOSE_DOCS: Record<string, string> = {
   atomProps: "Applies element/charge/mass annotations and optional COM reporting.",
   coordFrame: "Transform node for coordinate-frame conversions and cell-vector reporting tools.",
   trajectory: "Imports or writes trajectory frames.",
-  waterModel: "Converts/adjusts water model representations.",
   transform: "Spatial Ops node for translate/rotate/scale/bend transformations.",
   pbc: "Applies periodic-boundary operations (wrap/unwrap/condense).",
   edit: "Runs structural editing operations on current atoms.",
@@ -1285,11 +1278,6 @@ export default function VisualBuilder() {
       baseData.resname = "";
     }
 
-    if (type === "solvate") {
-      baseData.maxSolventMode = "max";
-      baseData.shellThickness = 10;
-      baseData.includeSolute = false;
-    }
 
     if (type === "bondAngle") {
       baseData.rmaxH = 1.2;
@@ -1452,10 +1440,6 @@ export default function VisualBuilder() {
       baseData.mode = "export";
       baseData.filename = "trajectory.pdb";
       baseData.format = "pdb";
-    }
-    if (type === "waterModel") {
-      baseData.conversion = "spc2tip4p";
-      baseData.omDist = 0.15;
     }
     if (type === "condense") {
       // no specific defaults needed
@@ -1700,7 +1684,6 @@ export default function VisualBuilder() {
         upload: 300,
         edit: 300,
         chemistry: 300,
-        solvate: 300,
         solvent: 300,
         insert: 300,
         export: 300,
@@ -1732,7 +1715,6 @@ export default function VisualBuilder() {
         addH: 240,
         rotate: 240,
         pbc: 240,
-        waterModel: 240,
         remove: 330,
         replicate: 220,
         add: 220,

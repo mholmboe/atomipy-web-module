@@ -197,7 +197,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
       }
 
       const passthroughTypes = new Set([
-        "position", "rotate", "wrap", "addIons", "ions", "solvate", "bondAngle", "bvs", "slice", "insert", 
+        "position", "rotate", "wrap", "addIons", "ions", "bondAngle", "bvs", "slice", "insert",
         "substitute", "fuse", "resname", "molecule", "merge", "add", "transform", "pbc", "edit", 
         "chemistry", "solvent", "analysis", "forcefield", "bend", "atomProps", "coordFrame", 
         "xrd", "viewer", "trajectory", "export", "simulate"

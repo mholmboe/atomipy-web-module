@@ -112,12 +112,12 @@ export function checkWorkflowPrerequisites(nodes: Node[], edges: Edge[]): string
   nodes.forEach((node) => {
     if (node.type === "simulate") {
       const upstreams = getUpstreamNodeTypes(node.id);
-      const hasSolventOrIons = upstreams.has("solvate") || upstreams.has("solvent") || upstreams.has("ions");
+      const hasSolventOrIons = upstreams.has("solvent") || upstreams.has("ions");
       if (!upstreams.has("forcefield") && !hasSolventOrIons) {
         warnings.push(`Warning (Simulation Node ${node.id}): connect a Forcefield node (mineral/organic) — or a Solvate/Ions node for a pure solvent/ion system — upstream so simulation parameters are defined.`);
       }
     }
-    if (node.type === "solvate" || node.type === "solvent") {
+    if (node.type === "solvent") {
       const upstreams = getUpstreamNodeTypes(node.id);
       if (!upstreams.has("box")) {
         warnings.push(`Warning (Solvate Node ${node.id}): A Box node is recommended upstream to set boundaries before solvent placement.`);
@@ -967,21 +967,6 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
-      case "solvate": {
-        const _wmSolv = getString(data, "waterModel", "spce");
-        // tip4pew shares the 4-site geometry but isn't a solvate insertion template
-        const model = pyEscape(_wmSolv.toLowerCase() === "tip4pew" ? "tip4p" : _wmSolv);
-        const dens = getNumber(data, "density", 1.0) * 1000.0;
-        const spacing = getNumber(data, "minDistance", 2.0);
-        pythonCode += `${blockOutAtoms} = ap.solvate(limits=${inBox}, Box=${inBox}, density=${dens}, min_distance=${spacing}, solute_atoms=${inAtoms}, solvent_type='${model}', include_solute=True)\n`;
-        // Propagate .itp so downstream Simulate nodes use the merged-topology path
-        pythonCode += `if hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None:\n`;
-        pythonCode += `    class _SL_solv(list): pass\n`;
-        pythonCode += `    _sl = _SL_solv(${blockOutAtoms}); _sl.itp = ${inAtoms}.itp; ${blockOutAtoms} = _sl\n`;
-        pythonCode += `${blockOutBox} = ${inBox}\n`;
-        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
-        break;
-      }
       case "solvent": {
         const _wmSolv = getString(data, "waterModel", "spce");
         // tip4pew shares the 4-site geometry but isn't a solvate insertion template
@@ -994,17 +979,6 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `    class _SL_solv2(list): pass\n`;
         pythonCode += `    _sl = _SL_solv2(${blockOutAtoms}); _sl.itp = ${inAtoms}.itp; ${blockOutAtoms} = _sl\n`;
         pythonCode += `${blockOutBox} = ${inBox}\n`;
-        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
-        break;
-      }
-      case "waterModel": {
-        const _wmConv = getString(data, "value", "spce");
-        const model = pyEscape(_wmConv.toLowerCase() === "tip4pew" ? "tip4p" : _wmConv);
-        const numH2O = getNumber(data, "numH2O", 1);
-        pythonCode += `${blockOutAtoms} = ap.solvate(limits=[30.0, 30.0, 30.0], Box=[30.0, 30.0, 30.0], solvent_type='${model}', min_distance=2.0, include_solute=False)\n`;
-        pythonCode += `if len(${blockOutAtoms}) > ${numH2O} * 3:\n`;
-        pythonCode += `    ${blockOutAtoms} = ${blockOutAtoms}[:${numH2O} * 3]\n`;
-        pythonCode += `${blockOutBox} = ap.Cell2Box_dim([30.0, 30.0, 30.0, 90.0, 90.0, 90.0])\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
@@ -1251,7 +1225,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             for (const edge of parentEdges) {
               const parentNode = nodeMap.get(edge.source);
               if (parentNode) {
-                if (parentNode.type === "solvate" || parentNode.type === "solvent") {
+                if (parentNode.type === "solvent") {
                   const v = getString(parentNode.data, "waterModel", "");
                   if (v) return v.toUpperCase();  // match FF block names (SPCE, OPC3, TIP4PEW…)
                 }
@@ -2026,7 +2000,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             for (const edge of parentEdges) {
               const parentNode = nodeMap.get(edge.source);
               if (parentNode) {
-                if (parentNode.type === "solvate" || parentNode.type === "solvent") {
+                if (parentNode.type === "solvent") {
                   const v = getString(parentNode.data, "waterModel", "");
                   if (v) return v.toUpperCase();  // match FF block names (SPCE, OPC3, TIP4PEW…)
                 }
