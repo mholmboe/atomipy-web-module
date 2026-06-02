@@ -70,20 +70,23 @@ describe('graphExecution Python Generator', () => {
         id: 'export-1',
         type: 'export',
         position: { x: 100, y: 0 },
-        data: { outputName: 'mixed_sys', structureFormat: 'pdb', topologyFormat: 'prmtop' }
+        data: { outputName: 'mixed_sys', structureFormat: 'pdb', topologyFormat: 'itp' }
       }
     ];
-    
+
     const edges: Edge[] = [
       { id: 'e1', source: 'org-1', target: 'export-1', targetHandle: 'in' }
     ];
-    
+
     const code = generatePythonCode(nodes, edges, 'minimal');
 
-    // Export of an itp-bearing (mixed/organic) system is guarded on the itp
-    // attribute and writes coordinates via ap.write_pdb.
+    // Structure is written unconditionally; GROMACS topology writes a full,
+    // self-contained .top (write_merged_top when an itp is present) plus a
+    // modular .itp for the inorganic part.
+    expect(code).toContain("ap.write_pdb(list(organic_atoms_0), organic_box_0, 'mixed_sys.pdb', write_conect=False, write_element=True)");
     expect(code).toContain("if hasattr(organic_atoms_0, 'itp') and organic_atoms_0.itp is not None:");
-    expect(code).toContain("# Export Mixed/Organic System");
-    expect(code).toContain("ap.write_pdb(_exp_atoms, _exp_box, 'mixed_sys.pdb')");
+    expect(code).toContain("ap.write_merged_top(list(organic_atoms_0), organic_atoms_0.itp,");
+    expect(code).toContain("'mixed_sys.top'");
+    expect(code).toContain("ap.write_itp(_inorg,");
   });
 });

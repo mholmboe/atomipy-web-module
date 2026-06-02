@@ -7,7 +7,7 @@ import type { NodeComponentProps } from "./types";
 type ExportNodeData = {
   outputName?: string;
   structureFormat?: "xyz" | "gro" | "pdb" | "cif" | "pqr" | "poscar" | "sdf";
-  topologyFormat?: "none" | "itp" | "lmp" | "psf" | "prmtop";
+  topologyFormat?: "none" | "itp" | "lmp" | "psf";
   angleTerms?: "none" | "0" | "250" | "500" | "1500";
   writeConect?: boolean;
   writeElement?: boolean;
@@ -66,25 +66,6 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
           </select>
         </div>
 
-        <div className="flex items-center justify-between mt-3 mb-2 px-1">
-          <label className="text-xs font-semibold text-muted-foreground flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              className="nodrag w-3.5 h-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              checked={data.isMinffTailored || false}
-              onChange={(e) => updateNodeData(id, { ...data, isMinffTailored: e.target.checked })}
-              onPointerDown={(e) => e.stopPropagation()}
-            />
-            MINFF tailored system
-          </label>
-        </div>
-
-        {data.isMinffTailored && (
-            <div className="text-[10px] text-amber-700 bg-amber-100 p-1.5 rounded-md mt-1 mb-2 border border-amber-300">
-              ⚠️ <b>Warning:</b> AMBER and NAMD topology exports are disabled for MINFF tailored systems to prevent loss of custom angle terms.
-            </div>
-        )}
-
         <div>
           <label className="text-xs font-semibold text-muted-foreground block mb-1 mt-2">Topology File (Optional)</label>
           <select
@@ -94,11 +75,13 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
             onPointerDown={(e) => e.stopPropagation()}
           >
             <option value="none">None</option>
-            <option value="itp">GROMACS topology (.itp)</option>
-            <option value="lmp">LAMMPS data (.data)</option>
-            <option value="psf" disabled={data.isMinffTailored}>NAMD/OPENMM topology (.psf)</option>
-            <option value="prmtop" disabled={data.isMinffTailored}>AMBER topology (.prmtop)</option>
+            <option value="itp">GROMACS topology (.top + .itp)</option>
+            <option value="lmp">LAMMPS data (.data) — inorganic</option>
+            <option value="psf">NAMD/OpenMM topology (.psf) — inorganic</option>
           </select>
+          <div className="text-[10px] text-muted-foreground bg-muted/40 p-1.5 rounded-md mt-1 border border-border">
+            GROMACS writes the full system (mineral + ions + water + organics). LAMMPS/NAMD write the inorganic MINFF/CLAYFF system (mineral + ions + water); organics are excluded.
+          </div>
         </div>
 
         {topologyFormat === "psf" && (

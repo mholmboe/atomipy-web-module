@@ -249,7 +249,7 @@ const nodeCategories = [
         desc: "Write the final structure and optional topology files to the output bundle.",
         features: [
           "Structure: .pdb, .gro, .xyz, .cif, .poscar, .sdf, .pqr",
-          "Topology: .itp (GROMACS), .data (LAMMPS), .psf (NAMD), .prmtop (AMBER)",
+          "Topology: .top/.itp (GROMACS), .data (LAMMPS), .psf (NAMD/OpenMM)",
           "Configurable output filename",
           "Multiple export nodes allowed per workflow",
         ],
@@ -444,7 +444,7 @@ const About = () => {
               <div className="space-y-3">
                 <h3 className="font-semibold">Topology Output</h3>
                 <div className="flex flex-wrap gap-2">
-                  {[".itp (GROMACS)", ".data (LAMMPS)", ".psf (NAMD/OpenMM)", ".prmtop (AMBER)"].map((fmt) => (
+                  {[".top/.itp (GROMACS)", ".data (LAMMPS)", ".psf (NAMD/OpenMM)"].map((fmt) => (
                     <span key={fmt} className="text-xs px-2 py-1 rounded-md border bg-background text-muted-foreground">{fmt}</span>
                   ))}
                 </div>
