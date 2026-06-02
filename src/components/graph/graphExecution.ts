@@ -1437,7 +1437,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `            _top_path = "min_system.top"\n`;
         pythonCode += `            _gro_path = "min_system.gro"\n`;
         pythonCode += `            _sim_atoms = list(${inAtoms})\n`;
-        pythonCode += `            ap.write_top(_sim_atoms, Box=${inBox}, file_path=_top_path, explicit_angles=${writeAngles ? 1 : 0}, KANGLE=${mineralKangle}, max_angle=${writeAngles ? "None" : "0.0"})\n`;
+        pythonCode += `            ap.write_gmx_top(_sim_atoms, Box=${inBox}, file_path=_top_path, explicit_angles=${writeAngles ? 1 : 0}, KANGLE=${mineralKangle}, max_angle=${writeAngles ? "None" : "0.0"})\n`;
         pythonCode += `            ap.write_gro(_sim_atoms, ${inBox}, _gro_path)\n`;
         pythonCode += `            _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
         pythonCode += `            _defines = ${definesExpr}\n`;
