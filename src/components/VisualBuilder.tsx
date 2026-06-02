@@ -936,10 +936,15 @@ const generateNotebookFromStrictScript = (nodes: Node[], strictScriptWithMarkers
 
 const cleanNodesForStorage = (nds: any[]): any[] => {
   return nds.map((node) => {
-    if (!node || !node.data) return node;
-    const { pdb, plotData, charges, ...restData } = node.data;
+    if (!node) return node;
+    // Drop transient UI flags. Persisting `selected` is what made a restored
+    // session silently run only the "selected subgraph" (excluding downstream
+    // nodes such as Simulate) — the main Run button truncates to selection.
+    const { selected, dragging, ...restNode } = node;
+    if (!restNode.data) return restNode;
+    const { pdb, plotData, charges, ...restData } = restNode.data;
     return {
-      ...node,
+      ...restNode,
       data: restData,
     };
   });
@@ -1520,8 +1525,14 @@ export default function VisualBuilder() {
 
   const applyWorkflowGraph = useCallback(
     (graph: WorkflowGraph) => {
-      // Clean nodes to remove bulky data like presets before setting state
-      const cleanedNodes = deepClone(graph.nodes).map((node) => {
+      // Clean nodes to remove bulky data like presets before setting state.
+      // Also drop transient UI flags (selected/dragging) so a loaded workflow
+      // never auto-truncates the run to a stale "selected subgraph".
+      const cleanedNodes = deepClone(graph.nodes).map((rawNode) => {
+        const { selected, dragging, ...node } = rawNode as Record<string, unknown> & {
+          data?: Record<string, unknown>;
+          type?: string;
+        };
         if (node.data && typeof node.data === "object") {
           const { presets: _p, ...cleanData } = node.data as Record<string, unknown>;
           if (["structure", "insert", "molecule", "preset", "upload"].includes(node.type || "")) {
@@ -1991,7 +2002,19 @@ export default function VisualBuilder() {
         }
         activeNodes = nodes.filter((n) => visited.has(n.id));
         activeEdges = edges.filter((e) => visited.has(e.source) && visited.has(e.target));
-        toast.info(`Running ${activeNodes.length} selected node(s) & upstream dependencies...`);
+        // If the selection drops downstream output nodes (e.g. Simulate), make it
+        // obvious — this is the usual cause of "it never runs the simulation".
+        const excludedDownstream = nodes.filter(
+          (n) => !visited.has(n.id) && ["simulate", "export", "xrd", "bvs", "stats", "bondAngle"].includes(n.type || ""),
+        );
+        if (excludedDownstream.length > 0) {
+          toast.warning(
+            `Running the SELECTED subgraph only — ${excludedDownstream.length} downstream node(s) (e.g. ${excludedDownstream[0].type}) are NOT included. Click an empty spot on the canvas to clear the selection, then Run to execute the full workflow.`,
+            { duration: 8000 },
+          );
+        } else {
+          toast.info(`Running ${activeNodes.length} selected node(s) & upstream dependencies...`);
+        }
       }
     }
 
