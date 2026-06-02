@@ -143,6 +143,28 @@ export function checkWorkflowPrerequisites(nodes: Node[], edges: Edge[]): string
     tip4pew: ["HFE_LM", "IOD_LM"],
   };
 
+  // Collect all nodes upstream of a target (for inspecting their data).
+  const getUpstreamNodes = (targetId: string): Node[] => {
+    const revAdj = new Map<string, string[]>();
+    nodes.forEach((n) => revAdj.set(n.id, []));
+    edges.forEach((e) => { if (revAdj.has(e.target)) revAdj.get(e.target)!.push(e.source); });
+    const out: Node[] = [];
+    const visited = new Set<string>();
+    const queue = [targetId];
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      if (visited.has(curr)) continue;
+      visited.add(curr);
+      const n = nodeMap.get(curr);
+      if (n && curr !== targetId) out.push(n);
+      queue.push(...(revAdj.get(curr) || []));
+    }
+    return out;
+  };
+  const isOrganicNode = (n: Node): boolean =>
+    (n.type === "forcefield" && ["gaff", "openff_sage", "openff_parsley"].includes(getString(n.data, "forcefield", ""))) ||
+    (n.type === "structure" && getString(n.data, "source", "") === "organic");
+
   nodes.forEach((node) => {
     if (node.type === "simulate") {
       const upstreams = getUpstreamNodeTypes(node.id);
@@ -172,6 +194,20 @@ export function checkWorkflowPrerequisites(nodes: Node[], edges: Edge[]): string
         if (compat && !compat.includes(ionSet)) {
           warnings.push(
             `Warning (Ions Node ${node.id} + Solvent Node ${solvent.id}): ion parameters '${ionSet}' are not defined for the '${water.toUpperCase()}' water model and will be substituted at run time. Compatible ion sets for ${water.toUpperCase()}: ${compat.join(", ")} — or switch the water model.`
+          );
+        }
+      }
+    }
+    if (node.type === "export") {
+      // LAMMPS .data and NAMD .psf are inorganic-only — warn if the system has
+      // organic molecules (which will be excluded). Use GROMACS for organics.
+      const topFmt = getString(node.data, "topologyFormat", "none");
+      if (topFmt === "lmp" || topFmt === "psf") {
+        const hasOrganic = getUpstreamNodes(node.id).some(isOrganicNode);
+        if (hasOrganic) {
+          const fmtLabel = topFmt === "lmp" ? "LAMMPS .data" : "NAMD .psf";
+          warnings.push(
+            `Warning (Export Node ${node.id}): ${fmtLabel} export is inorganic-only — organic molecule(s) in this system will be excluded. Use the GROMACS topology (.top) to include organics.`,
           );
         }
       }
