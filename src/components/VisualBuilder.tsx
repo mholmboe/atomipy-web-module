@@ -2008,9 +2008,11 @@ export default function VisualBuilder() {
           (n) => !visited.has(n.id) && ["simulate", "export", "xrd", "bvs", "stats", "bondAngle"].includes(n.type || ""),
         );
         if (excludedDownstream.length > 0) {
-          toast.warning(
-            `Running the SELECTED subgraph only — ${excludedDownstream.length} downstream node(s) (e.g. ${excludedDownstream[0].type}) are NOT included. Click an empty spot on the canvas to clear the selection, then Run to execute the full workflow.`,
-            { duration: 8000 },
+          // Intentional subgraph run is fine — just make the scope explicit so a
+          // stray selection isn't mistaken for a full run.
+          toast.info(
+            `Running selected subgraph: ${activeNodes.length} node(s) + upstream. Downstream nodes (e.g. ${excludedDownstream[0].type}) are not included — clear the selection to run the whole workflow.`,
+            { duration: 6000 },
           );
         } else {
           toast.info(`Running ${activeNodes.length} selected node(s) & upstream dependencies...`);
