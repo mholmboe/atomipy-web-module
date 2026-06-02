@@ -109,6 +109,40 @@ export function checkWorkflowPrerequisites(nodes: Node[], edges: Edge[]): string
     return upstreamTypes;
   };
 
+  // Undirected adjacency: find the Solvent (water-model) node in the same system
+  // as an Ions node regardless of their relative order in the pipeline.
+  const undirected = new Map<string, string[]>();
+  nodes.forEach((n) => undirected.set(n.id, []));
+  edges.forEach((e) => {
+    undirected.get(e.source)?.push(e.target);
+    undirected.get(e.target)?.push(e.source);
+  });
+  const findConnectedNodeOfType = (startId: string, type: string): Node | null => {
+    const visited = new Set<string>();
+    const queue = [startId];
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      if (visited.has(curr)) continue;
+      visited.add(curr);
+      const n = nodeMap.get(curr);
+      if (n && curr !== startId && n.type === type) return n;
+      for (const nb of undirected.get(curr) || []) queue.push(nb);
+    }
+    return null;
+  };
+
+  // Water model -> ion parameter sets that exist natively in the FF library.
+  // Keep in sync with min.ff/ions.itp (#ifdef {WATER}_{SET} blocks). Anything
+  // not listed is auto-substituted at run time by write_merged_top (and logged).
+  const ION_COMPAT: Record<string, string[]> = {
+    spce: ["JC", "HFE_LM", "IOD_LM"],
+    spc: ["JC"],
+    tip3p: ["JC", "HFE_LM", "IOD_LM"],
+    opc3: ["HFE_LM", "IOD_LM", "CM_LM"],
+    opc: ["HFE_LM", "IOD_LM", "CM_LM"],
+    tip4pew: ["HFE_LM", "IOD_LM"],
+  };
+
   nodes.forEach((node) => {
     if (node.type === "simulate") {
       const upstreams = getUpstreamNodeTypes(node.id);
@@ -127,6 +161,19 @@ export function checkWorkflowPrerequisites(nodes: Node[], edges: Edge[]): string
       const upstreams = getUpstreamNodeTypes(node.id);
       if (!upstreams.has("box") && !upstreams.has("forcefield")) {
         warnings.push(`Warning (Ions Node ${node.id}): Upstream box dimensions or forcefield charges are recommended to define limits for ionization placement.`);
+      }
+      // Ion-parameter / water-model compatibility (order-independent: the Solvent
+      // node may sit before or after the Ions node).
+      const solvent = findConnectedNodeOfType(node.id, "solvent");
+      if (solvent) {
+        const water = getString(solvent.data, "waterModel", "opc3").toLowerCase();
+        const ionSet = getString(node.data, "ionSet", "IOD_LM");
+        const compat = ION_COMPAT[water];
+        if (compat && !compat.includes(ionSet)) {
+          warnings.push(
+            `Warning (Ions Node ${node.id} + Solvent Node ${solvent.id}): ion parameters '${ionSet}' are not defined for the '${water.toUpperCase()}' water model and will be substituted at run time. Compatible ion sets for ${water.toUpperCase()}: ${compat.join(", ")} — or switch the water model.`
+          );
+        }
       }
     }
   });
