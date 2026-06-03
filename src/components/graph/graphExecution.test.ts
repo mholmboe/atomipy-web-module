@@ -105,4 +105,45 @@ describe('graphExecution Python Generator', () => {
     const code = generatePythonCode(nodes, edges, 'minimal');
     expect(code).toContain("ap.join_and_reorder(*_list_branches)");
   });
+
+  it('replicates an organic as nx*ny*nz molecules and preserves its .itp', () => {
+    const nodes: Node[] = [
+      { id: 'org-1', type: 'organic', position: { x: 0, y: 0 }, data: { smiles: 'CCO', forcefield: 'gaff-2.11' } },
+      { id: 'rep-1', type: 'replicate', position: { x: 100, y: 0 }, data: { x: 2, y: 2, z: 1 } },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'org-1', target: 'rep-1', targetHandle: 'in' },
+    ];
+
+    const code = generatePythonCode(nodes, edges, 'minimal');
+
+    // Topology-carrying input -> distinct molids (so [ molecules ] count = 2*2*1)
+    expect(code).toMatch(/_repl_has_itp = getattr\(\w+, 'itp', None\) is not None/);
+    expect(code).toContain("keep_molid=(False if _repl_has_itp else True)");
+    // .itp is re-attached to the replicated output (otherwise it'd be dropped)
+    expect(code).toMatch(/if _repl_has_itp: \w+\.itp = \w+\.itp/);
+    // default (all axes "same") -> organic auto-separates, inorganic stays one molecule
+    expect(code).toContain("keep_molid=(False if _repl_has_itp else True)");
+  });
+
+  it('replicates clay layers: continuous in x,y but separate molecules in z', () => {
+    const nodes: Node[] = [
+      { id: 'clay-1', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'preset', value: 'pyrophyllite.pdb' } },
+      { id: 'rep-1', type: 'replicate', position: { x: 100, y: 0 },
+        data: { x: 2, y: 2, z: 3, sameMoleculeX: true, sameMoleculeY: true, sameMoleculeZ: false } },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'clay-1', target: 'rep-1', targetHandle: 'in' },
+    ];
+
+    const code = generatePythonCode(nodes, edges, 'minimal');
+
+    // X and Y are "same molecule" (one continuous layer); Z is "separate".
+    expect(code).toContain("replicate=[2, 1, 1], keep_molid=(False if _repl_has_itp else True)");
+    expect(code).toContain("replicate=[1, 2, 1], keep_molid=(False if _repl_has_itp else True)");
+    expect(code).toContain("replicate=[1, 1, 3], keep_molid=False");
+    // Separate axis (Z) must be applied AFTER the same axes (X, Y) so molids stay contiguous.
+    expect(code.indexOf("replicate=[1, 1, 3]")).toBeGreaterThan(code.indexOf("replicate=[2, 1, 1]"));
+    expect(code.indexOf("replicate=[1, 1, 3]")).toBeGreaterThan(code.indexOf("replicate=[1, 2, 1]"));
+  });
 });

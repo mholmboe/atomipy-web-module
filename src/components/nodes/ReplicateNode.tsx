@@ -8,7 +8,10 @@ type ReplicateNodeData = {
   x?: number;
   y?: number;
   z?: number;
-  keepMolid?: boolean;
+  keepMolid?: boolean; // legacy — migrated to sameMolecule{X,Y,Z}
+  sameMoleculeX?: boolean;
+  sameMoleculeY?: boolean;
+  sameMoleculeZ?: boolean;
   keepResname?: boolean;
   renumberIndex?: boolean;
 };
@@ -21,9 +24,19 @@ export function ReplicateNode({ id, data = {} }: NodeComponentProps<ReplicateNod
     updateNodeData(id, { ...data, [axis]: parseInt(value) || 1 });
   };
 
-  const handleBooleanChange = (field: "keepMolid" | "keepResname" | "renumberIndex", value: boolean) => {
+  const handleBooleanChange = (
+    field: "sameMoleculeX" | "sameMoleculeY" | "sameMoleculeZ" | "keepResname" | "renumberIndex",
+    value: boolean,
+  ) => {
     updateNodeData(id, { ...data, [field]: value });
   };
+
+  // Default: one continuous molecule along each axis (legacy keepMolid migrates here).
+  // Organic (.itp) inputs are always separate molecules regardless of these toggles.
+  const legacyKeep = data.keepMolid ?? true;
+  const sameX = data.sameMoleculeX ?? legacyKeep;
+  const sameY = data.sameMoleculeY ?? legacyKeep;
+  const sameZ = data.sameMoleculeZ ?? legacyKeep;
 
   return (
     <div className="bg-card w-[220px] shadow-lg rounded-xl border border-secondary overflow-hidden font-sans select-none">
@@ -77,16 +90,41 @@ export function ReplicateNode({ id, data = {} }: NodeComponentProps<ReplicateNod
 
         {showMore && (
           <div className="space-y-2 border border-border rounded-md p-2 bg-muted/30">
+            <div className="text-xs font-semibold text-muted-foreground">Copies form one molecule along:</div>
             <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
-              Keep original molid
+              X axis
               <input
                 type="checkbox"
                 className="nodrag"
-                checked={data.keepMolid ?? true}
-                onChange={(e) => handleBooleanChange("keepMolid", e.target.checked)}
+                checked={sameX}
+                onChange={(e) => handleBooleanChange("sameMoleculeX", e.target.checked)}
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </label>
+            <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
+              Y axis
+              <input
+                type="checkbox"
+                className="nodrag"
+                checked={sameY}
+                onChange={(e) => handleBooleanChange("sameMoleculeY", e.target.checked)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </label>
+            <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
+              Z axis
+              <input
+                type="checkbox"
+                className="nodrag"
+                checked={sameZ}
+                onChange={(e) => handleBooleanChange("sameMoleculeZ", e.target.checked)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </label>
+            <div className="text-[10px] text-muted-foreground leading-tight">
+              Ticked = copies stay one continuous molecule along that axis (e.g. a clay layer in X/Y);
+              unticked = separate molecules (e.g. stacked layers in Z). Organic (GAFF) inputs are always separate.
+            </div>
             <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
               Keep original resname
               <input

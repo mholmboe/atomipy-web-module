@@ -658,10 +658,41 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const nx = getNumber(data, "x", 1);
         const ny = getNumber(data, "y", 1);
         const nz = getNumber(data, "z", 1);
-        const keepMolid = getBoolean(data, "keepMolid", true) ? "True" : "False";
+        // Per-axis "same molecule" flags. Default true = one continuous molecule
+        // along that axis, so an inorganic framework stays a single molecule by
+        // default (legacy keepMolid migrates to all three). Untick an axis to make
+        // copies along it separate molecules — a clay supercell is one molecule in
+        // X and Y (continuous layer) but separate molecules in Z (stacked layers).
+        const legacyKeep = getBoolean(data, "keepMolid", true);
+        const sameX = getBoolean(data, "sameMoleculeX", legacyKeep);
+        const sameY = getBoolean(data, "sameMoleculeY", legacyKeep);
+        const sameZ = getBoolean(data, "sameMoleculeZ", legacyKeep);
         const keepResname = getBoolean(data, "keepResname", true) ? "True" : "False";
         const renumberIndex = getBoolean(data, "renumberIndex", true) ? "True" : "False";
-        pythonCode += `${blockOutAtoms}, ${blockOutBox}, _ = ap.replicate_system(${inAtoms}, ${inBox}, replicate=[${nx}, ${ny}, ${nz}], keep_molid=${keepMolid}, keep_resname=${keepResname}, renumber_index=${renumberIndex})\n`;
+        // Replicate one axis at a time, "same molecule" axes first and "separate"
+        // axes last, so new molids are appended as contiguous blocks (a valid,
+        // contiguous GROMACS [ molecules ] section). The molecule count then falls
+        // out of get_mol_sequence's molid grouping. An organic input (.itp) is
+        // always separate on every axis (keep_molid False), and its .itp/#defines is
+        // preserved so the replicated GAFF molecule keeps its forcefield.
+        const axes = [
+          { n: nx, vec: `[${nx}, 1, 1]`, same: sameX },
+          { n: ny, vec: `[1, ${ny}, 1]`, same: sameY },
+          { n: nz, vec: `[1, 1, ${nz}]`, same: sameZ },
+        ];
+        const ordered = [...axes.filter((a) => a.same), ...axes.filter((a) => !a.same)].filter((a) => a.n > 1);
+        pythonCode += `_repl_has_itp = getattr(${inAtoms}, 'itp', None) is not None\n`;
+        pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+        pythonCode += `${blockOutBox} = ${inBox}\n`;
+        for (const a of ordered) {
+          const keepExpr = a.same ? "(False if _repl_has_itp else True)" : "False";
+          pythonCode += `${blockOutAtoms}, ${blockOutBox}, _ = ap.replicate_system(${blockOutAtoms}, ${blockOutBox}, replicate=${a.vec}, keep_molid=${keepExpr}, keep_resname=${keepResname}, renumber_index=${renumberIndex})\n`;
+        }
+        pythonCode += `if _repl_has_itp or getattr(${inAtoms}, '_defines', None) is not None:\n`;
+        pythonCode += `    class _SL_repl(list): pass\n`;
+        pythonCode += `    ${blockOutAtoms} = _SL_repl(${blockOutAtoms})\n`;
+        pythonCode += `    if _repl_has_itp: ${blockOutAtoms}.itp = ${inAtoms}.itp\n`;
+        pythonCode += `    if getattr(${inAtoms}, '_defines', None) is not None: ${blockOutAtoms}._defines = ${inAtoms}._defines\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
