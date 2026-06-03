@@ -934,7 +934,7 @@ const generateNotebookFromStrictScript = (nodes: Node[], strictScriptWithMarkers
   );
 };
 
-const cleanNodesForStorage = (nds: any[]): any[] => {
+const cleanNodesForStorage = (nds: Node[]): Node[] => {
   return nds.map((node) => {
     if (!node) return node;
     // Drop transient UI flags. Persisting `selected` is what made a restored
@@ -1529,10 +1529,7 @@ export default function VisualBuilder() {
       // Also drop transient UI flags (selected/dragging) so a loaded workflow
       // never auto-truncates the run to a stale "selected subgraph".
       const cleanedNodes = deepClone(graph.nodes).map((rawNode) => {
-        const { selected, dragging, ...node } = rawNode as Record<string, unknown> & {
-          data?: Record<string, unknown>;
-          type?: string;
-        };
+        const { selected, dragging, ...node } = rawNode;
         if (node.data && typeof node.data === "object") {
           const { presets: _p, ...cleanData } = node.data as Record<string, unknown>;
           if (["structure", "insert", "molecule", "preset", "upload"].includes(node.type || "")) {
