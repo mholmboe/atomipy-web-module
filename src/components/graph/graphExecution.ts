@@ -557,16 +557,11 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `if len(_organic_branches) > 0:\n`;
           pythonCode += `    if len(_list_branches) > 0:\n`;
           if (reorder) {
-            pythonCode += `        # Reorder molids sequentially across list branches\n`;
-            pythonCode += `        curr_molid = 1\n`;
-            pythonCode += `        for branch_atoms in _list_branches:\n`;
-            pythonCode += `            if not branch_atoms: continue\n`;
-            pythonCode += `            m_ids = sorted(list(set(a.get('molid', 1) for a in branch_atoms)))\n`;
-            pythonCode += `            m_map = {old: curr_molid + i for i, old in enumerate(m_ids)}\n`;
-            pythonCode += `            for a in branch_atoms: a['molid'] = m_map.get(a.get('molid', 1), curr_molid)\n`;
-            pythonCode += `            curr_molid += len(m_ids)\n`;
+            pythonCode += `        # Reorder molids sequentially across list branches using join_and_reorder\n`;
+            pythonCode += `        _inorganic_combined = ap.join_and_reorder(*_list_branches)\n`;
+          } else {
+            pythonCode += `        _inorganic_combined = ap.update(*_list_branches, force=True)\n`;
           }
-          pythonCode += `        _inorganic_combined = ap.update(*_list_branches, force=True)\n`;
           if (customMolid !== undefined || customResname) {
             const molidArg = customMolid !== undefined ? `, molid=${customMolid}` : "";
             const resArg = customResname ? `, resname='${customResname}'` : "";
@@ -582,23 +577,19 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    ${blockOutBox} = ${gatheredStates[0].box}\n`;
           pythonCode += `else:\n`;
           if (reorder) {
-            pythonCode += `    # Reorder molids sequentially across joined branches\n`;
-            pythonCode += `    curr_molid = 1\n`;
-            pythonCode += `    for branch_atoms in [${atomArgs}]:\n`;
-            pythonCode += `        if not branch_atoms: continue\n`;
-            pythonCode += `        m_ids = sorted(list(set(a.get('molid', 1) for a in branch_atoms)))\n`;
-            pythonCode += `        m_map = {old: curr_molid + i for i, old in enumerate(m_ids)}\n`;
-            pythonCode += `        for a in branch_atoms: a['molid'] = m_map.get(a.get('molid', 1), curr_molid)\n`;
-            pythonCode += `        curr_molid += len(m_ids)\n`;
-            pythonCode += `    ${blockOutAtoms} = ap.update(${atomArgs}, force=True) # Refresh combined list\n`;
+            pythonCode += `    # Join branches and sequentially reorder their molids using join_and_reorder\n`;
+            pythonCode += `    ${blockOutAtoms} = ap.join_and_reorder(*_list_branches)\n`;
           } else {
-            pythonCode += `    ${blockOutAtoms} = ap.update(${atomArgs}, force=True)\n`;
+            pythonCode += `    ${blockOutAtoms} = ap.update(*_list_branches, force=True)\n`;
           }
+          
           if (customMolid !== undefined || customResname) {
-            const molidArg = customMolid !== undefined ? `, molid=${customMolid}` : "";
-            const resArg = customResname ? `, resname='${customResname}'` : "";
-            pythonCode += `    ${blockOutAtoms} = ap.molecule(${blockOutAtoms}${molidArg}${resArg})\n`;
+            const molidArg = customMolid !== undefined ? `molid=${customMolid}` : "";
+            const resArg = customResname ? `resname='${customResname}'` : "";
+            const args = [molidArg, resArg].filter(Boolean).join(", ");
+            pythonCode += `    ${blockOutAtoms} = ap.molecule(${blockOutAtoms}, ${args})\n`;
           }
+          
           pythonCode += `    ${blockOutBox} = ${gatheredStates[0].box}\n`;
           pythonCode += `\n`;
 
@@ -2198,32 +2189,40 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         }
 
         // --- Topology file ---
+        if (topFmt === "itp" || topFmt === "lmp" || topFmt === "psf") {
+          pythonCode += `from atomipy.classify import classify_atom as _classify\n`;
+        }
+
         if (topFmt === "itp") {
-          // GROMACS: a full, self-contained .top (organic molecules are #included
-          // when present via write_merged_top), PLUS a single modular .itp that
-          // separates the mineral / water / ion moleculetypes.
+          // GROMACS: a full, self-contained .top via the proven write_merged_top
+          // (mineral inline + #include water/ions + #include organic_GMX.itp when
+          // present), PLUS a modular .itp for the inorganic part. The mineral itp
+          // is built from mineral atoms ONLY (water/ions handled via includes) —
+          // mirrors the Simulate reconstruct path.
+          pythonCode += `_solvent_ion_res = {'SOL','WAT','HOH','TIP3','OPC','OPC3','SPC','SPCE','TIP4','TIP5','ION','NA','CL','K','LI','CS','RB','F','BR','I','CA','MG','ZN','NA+','CL-','K+','CA2+','MG2+','ZN2+'}\n`;
           pythonCode += `if hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None:\n`;
+          pythonCode += `    _exp_itp = ${inAtoms}.itp\n`;
           pythonCode += `    _org_itps = []\n`;
-          pythonCode += `    for _k, _v in ${inAtoms}.itp.items():\n`;
+          pythonCode += `    for _k, _v in _exp_itp.items():\n`;
           pythonCode += `        if _k.startswith('_source_itp') and _v:\n`;
           pythonCode += `            _bn = str(_v).replace('\\\\', '/').split('/')[-1]\n`;
           pythonCode += `            if _bn not in _org_itps: _org_itps.append(_bn)\n`;
-          pythonCode += `    ap.write_merged_top(list(${inAtoms}), ${inAtoms}.itp, ${inBox}, '${outName}.top', '${outName}.gro', minff_variant='${exportFfVariant}', water_model='${waterLower}', ion_model='${ionCombine}', organic_itps=_org_itps or None, angle_ka=${exportAngleKaPy})\n`;
           pythonCode += `else:\n`;
-          pythonCode += `    ap.write_gmx_top(list(${inAtoms}), Box=${inBox}, file_path='${outName}.top', explicit_angles=${exportExplicit}, KANGLE=${exportKangle}, max_angle=${exportMaxAngle})\n`;
-          // Modular .itp for the inorganic part (mineral + water + ions), organic excluded.
-          pythonCode += `from atomipy.composition import classify_atom as _classify\n`;
+          pythonCode += `    _mineral_atoms = [a for a in ${inAtoms} if str(a.get('resname','')).upper() not in _solvent_ion_res]\n`;
+          pythonCode += `    if _mineral_atoms:\n`;
+          pythonCode += `        _, _exp_itp, _ = ap.merge_top({'atoms': _mineral_atoms, 'itp': None, 'box': ${inBox}})\n`;
+          pythonCode += `    else:\n`;
+          pythonCode += `        _exp_itp = {'_original_itps': [], 'atomtypes': {}, '_component_labels': ['Solvent/Ions']}\n`;
+          pythonCode += `    _org_itps = []\n`;
+          pythonCode += `ap.write_merged_top(list(${inAtoms}), _exp_itp, ${inBox}, '${outName}.top', '${outName}.gro', minff_variant='${exportFfVariant}', water_model='${waterLower}', ion_model='${ionCombine}', organic_itps=_org_itps or None, angle_ka=${exportAngleKaPy})\n`;
           pythonCode += `_inorg = [a for a in list(${inAtoms}) if _classify(a) != 'organic']\n`;
           pythonCode += `if _inorg:\n`;
           pythonCode += `    ap.write_itp(_inorg, ${inBox}, '${outName}.itp', explicit_angles=${exportExplicit}, KANGLE=${exportKangle}, max_angle=${exportMaxAngle})\n`;
         } else if (topFmt === "lmp") {
-          // LAMMPS .data: inorganic only (MINFF/CLAYFF mineral + ions + water).
-          pythonCode += `from atomipy.composition import classify_atom as _classify\n`;
+          // LAMMPS .data: inorganic-only (mineral + ions + water).
           pythonCode += `_inorg = [a for a in list(${inAtoms}) if _classify(a) != 'organic']\n`;
           pythonCode += `_n_org = len(list(${inAtoms})) - len(_inorg)\n`;
           pythonCode += `if _n_org: print(f"Export: LAMMPS .data is inorganic-only; {_n_org} organic atom(s) excluded (use the GROMACS .top for organics).")\n`;
-          // Load Pair Coeffs with layered fallback so an unavailable ion/water
-          // block (e.g. SPC has no Li-Merz set) doesn't drop the mineral coeffs.
           pythonCode += `_ffp = None\n`;
           pythonCode += `for _blocks in (['${lmpMineralBlock}', '${ionCombine}', '${waterUpper}'], ['${lmpMineralBlock}', '${waterUpper}'], ['${lmpMineralBlock}']):\n`;
           pythonCode += `    try:\n`;
@@ -2233,12 +2232,22 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `if _ffp is None: print("Export: could not load LAMMPS Pair Coeffs; writing .data without them.")\n`;
           pythonCode += `ap.write_lmp(_inorg, Box=${inBox}, file_path='${outName}.data', forcefield=_ffp, KANGLE=${exportKangle}, max_angle=${exportMaxAngle})\n`;
         } else if (topFmt === "psf") {
-          // NAMD/OpenMM .psf: inorganic only (MINFF/CLAYFF mineral + ions + water).
-          pythonCode += `from atomipy.composition import classify_atom as _classify\n`;
+          // NAMD/OpenMM .psf: inorganic-only (mineral + ions + water).
           pythonCode += `_inorg = [a for a in list(${inAtoms}) if _classify(a) != 'organic']\n`;
           pythonCode += `_n_org = len(list(${inAtoms})) - len(_inorg)\n`;
           pythonCode += `if _n_org: print(f"Export: NAMD .psf is inorganic-only; {_n_org} organic atom(s) excluded.")\n`;
           pythonCode += `ap.write_psf(_inorg, Box=${inBox}, file_path='${outName}.psf', max_angle=${exportMaxAngle})\n`;
+        }
+
+        // Optional: topology-graph JSON for the viewer (guarded — never breaks the export).
+        if (topFmt !== "none") {
+          pythonCode += `try:\n`;
+          pythonCode += `    import atomipy.write_topology as _awtop\n`;
+          pythonCode += `    from atomipy.topology import build_topology_from_atoms as _bt\n`;
+          pythonCode += `    _hub = _bt([a for a in list(${inAtoms}) if _classify(a) != 'organic'], ${inBox}, KANGLE=${exportKangle}, max_angle=${exportMaxAngle})\n`;
+          pythonCode += `    _awtop.write_json(_hub, '${outName}_topology.json')\n`;
+          pythonCode += `except Exception as _e:\n`;
+          pythonCode += `    print(f"Export: topology-graph JSON skipped ({_e}).")\n`;
         }
         break;
       }

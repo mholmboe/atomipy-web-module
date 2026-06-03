@@ -81,12 +81,28 @@ describe('graphExecution Python Generator', () => {
     const code = generatePythonCode(nodes, edges, 'minimal');
 
     // Structure is written unconditionally; GROMACS topology writes a full,
-    // self-contained .top (write_merged_top when an itp is present) plus a
+    // self-contained .top via write_merged_top (organics #included) plus a
     // modular .itp for the inorganic part.
     expect(code).toContain("ap.write_pdb(list(organic_atoms_0), organic_box_0, 'mixed_sys.pdb', write_conect=False, write_element=True)");
-    expect(code).toContain("if hasattr(organic_atoms_0, 'itp') and organic_atoms_0.itp is not None:");
-    expect(code).toContain("ap.write_merged_top(list(organic_atoms_0), organic_atoms_0.itp,");
+    expect(code).toContain("from atomipy.classify import classify_atom as _classify");
+    expect(code).toContain("ap.write_merged_top(list(organic_atoms_0), _exp_itp,");
     expect(code).toContain("'mixed_sys.top'");
     expect(code).toContain("ap.write_itp(_inorg,");
+  });
+
+  it('generates join_and_reorder logic for add node', () => {
+    const nodes: Node[] = [
+      { id: 'org-1', type: 'organic', position: { x: 0, y: 0 }, data: { smiles: 'CCO', forcefield: 'gaff-2.11' } },
+      { id: 'clay-1', type: 'structure', position: { x: 0, y: 100 }, data: { source: 'preset', value: 'pyrophyllite.pdb' } },
+      { id: 'add-1', type: 'add', position: { x: 100, y: 50 }, data: { reorder: true } }
+    ];
+    
+    const edges: Edge[] = [
+      { id: 'e1', source: 'org-1', target: 'add-1', targetHandle: 'in' },
+      { id: 'e2', source: 'clay-1', target: 'add-1', targetHandle: 'in' }
+    ];
+    
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    expect(code).toContain("ap.join_and_reorder(*_list_branches)");
   });
 });
