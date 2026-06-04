@@ -105,6 +105,7 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain("ap.assign_dummy_mineral_params(");
     expect(code).toContain("metal_site='Alo'");
     expect(code).toContain("charge_mode='pauling'");
+    expect(code).toMatch(/assign_dummy_mineral_params\([^)]*Box=/);  // coordination for O charges
     // Simulate node detects the dummy framework, builds the bond-free top, and freezes
     expect(code).toContain("_dummy_frame = [a for a in");
     expect(code).toContain("ap.write_dummy_system_top(");
