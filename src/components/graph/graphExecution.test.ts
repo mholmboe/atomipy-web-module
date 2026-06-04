@@ -146,4 +146,27 @@ describe('graphExecution Python Generator', () => {
     expect(code.indexOf("replicate=[1, 1, 3]")).toBeGreaterThan(code.indexOf("replicate=[2, 1, 1]"));
     expect(code.indexOf("replicate=[1, 1, 3]")).toBeGreaterThan(code.indexOf("replicate=[1, 2, 1]"));
   });
+
+  it('topology editor attaches a [molecules] override that export forwards', () => {
+    const nodes: Node[] = [
+      { id: 'org-1', type: 'organic', position: { x: 0, y: 0 }, data: { smiles: 'CCO', forcefield: 'gaff-2.11' } },
+      { id: 'topo-1', type: 'topology', position: { x: 100, y: 0 },
+        data: { molecules: [{ name: 'organic', count: '3' }, { name: 'SOL', count: '196' }, { name: '', count: '' }] } },
+      { id: 'exp-1', type: 'export', position: { x: 200, y: 0 },
+        data: { outputName: 'sys', structureFormat: 'pdb', topologyFormat: 'itp' } },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'org-1', target: 'topo-1', targetHandle: 'in' },
+      { id: 'e2', source: 'topo-1', target: 'exp-1', targetHandle: 'in' },
+    ];
+
+    const code = generatePythonCode(nodes, edges, 'minimal');
+
+    // Editor rows -> explicit override (blank rows dropped); export forwards it.
+    expect(code).toContain("._mol_counts_override = [('organic', 3), ('SOL', 196)]");
+    expect(code).toContain("mol_counts_override=getattr(");
+    // The node emits the detected sequence so the editor can auto-populate.
+    expect(code).toContain("print('__MOLSEQ__topo-1=");
+    expect(code).toContain("ap.get_mol_sequence_typed(");
+  });
 });

@@ -40,6 +40,7 @@ import {
   FlaskConical,
   Maximize,
   FileOutput,
+  ListOrdered,
   Box,
   Eye,
   GitMerge,
@@ -80,6 +81,7 @@ import { generatePythonCode, checkWorkflowPrerequisites } from "./graph/graphExe
 import { StructureNode } from "./nodes/StructureNode";
 import { ReplicateNode } from "./nodes/ReplicateNode";
 import { ExportNode } from "./nodes/ExportNode";
+import { TopologyNode } from "./nodes/TopologyNode";
 import { IonsNode } from "./nodes/IonsNode";
 import { BoxNode } from "./nodes/BoxNode";
 import { MergeNode } from "./nodes/MergeNode";
@@ -148,6 +150,7 @@ const nodeTypes = {
   plot: PlotNode,
   viewer: ViewerNode,
   export: ExportNode,
+  topology: TopologyNode,
   trajectory: TrajectoryNode,
   simulate: SimulateNode,
   organic: StructureNode,
@@ -942,7 +945,7 @@ const cleanNodesForStorage = (nds: Node[]): Node[] => {
     // nodes such as Simulate) — the main Run button truncates to selection.
     const { selected, dragging, ...restNode } = node;
     if (!restNode.data) return restNode;
-    const { pdb, plotData, charges, ...restData } = restNode.data;
+    const { pdb, plotData, charges, detectedMolecules, ...restData } = restNode.data;
     return {
       ...restNode,
       data: restData,
@@ -2127,7 +2130,24 @@ export default function VisualBuilder() {
               if (statusMessage) setBuildStatus(statusMessage);
             } else if (data.type === "log") {
               const logLine = typeof data.message === "string" ? data.message.trim() : "";
-              if (logLine &&
+              // Topology editor: detected [ molecules ] sequence for a node
+              // (__MOLSEQ__<nodeId>=<json>) — store on the node, hide from logs.
+              const msMatch = logLine.match(/^__MOLSEQ__([^=]+)=(.*)$/);
+              if (msMatch) {
+                const msNodeId = msMatch[1];
+                try {
+                  const detected = JSON.parse(msMatch[2]);
+                  if (Array.isArray(detected)) {
+                    setNodes((nds) =>
+                      nds.map((n) =>
+                        n.id === msNodeId ? { ...n, data: { ...n.data, detectedMolecules: detected } } : n,
+                      ),
+                    );
+                  }
+                } catch {
+                  /* ignore malformed marker */
+                }
+              } else if (logLine &&
                 !logLine.includes("__PLOT_") &&
                 !logLine.includes("__VISUALIZE_") &&
                 !logLine.includes("__NODE_START_") &&
@@ -2358,6 +2378,9 @@ export default function VisualBuilder() {
             </Button>
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
               <FileOutput className="w-4 h-4 text-slate-500" /> Export
+            </Button>
+            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("topology")} title="Override the [ molecules ] topology section">
+              <ListOrdered className="w-4 h-4 text-slate-500" /> Topology
             </Button>
 
             <div className="h-4 w-[1px] bg-slate-200 mx-1" />

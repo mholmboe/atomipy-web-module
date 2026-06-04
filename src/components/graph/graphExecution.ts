@@ -696,6 +696,37 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
+      case "topology": {
+        // Passthrough that attaches a user-defined GROMACS [ molecules ] override
+        // (name + count rows from the Topology editor) onto the system. Export and
+        // Simulate forward it to write_merged_top, which writes it verbatim in place
+        // of the auto-detected sequence. Empty rows -> no override (auto-detect).
+        const molRows = Array.isArray((data as { molecules?: unknown }).molecules)
+          ? ((data as { molecules?: { name?: string; count?: string | number }[] }).molecules ?? [])
+          : [];
+        const pairs = molRows
+          .filter((r) => r && String(r.name ?? "").trim() && Number(r.count) > 0)
+          .map((r) => `('${pyEscape(String(r.name).trim())}', ${Math.trunc(Number(r.count))})`);
+        pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+        pythonCode += `${blockOutBox} = ${inBox}\n`;
+        if (pairs.length > 0) {
+          pythonCode += `class _SL_topo(list): pass\n`;
+          pythonCode += `${blockOutAtoms} = _SL_topo(${inAtoms})\n`;
+          pythonCode += `${blockOutAtoms}._mol_counts_override = [${pairs.join(", ")}]\n`;
+          pythonCode += `for _a in ('itp', '_defines', '_top_path'):\n`;
+          pythonCode += `    if hasattr(${inAtoms}, _a): setattr(${blockOutAtoms}, _a, getattr(${inAtoms}, _a))\n`;
+        }
+        // Emit the detected [ molecules ] sequence (name, count, type) so the
+        // Topology editor can show/pre-fill the apparent composition after a run.
+        pythonCode += `try:\n`;
+        pythonCode += `    import json as _json_ms\n`;
+        pythonCode += `    _ms_typed = ap.get_mol_sequence_typed(list(${inAtoms}))\n`;
+        pythonCode += `    print('__MOLSEQ__${id}=' + _json_ms.dumps([{'name': _n, 'count': _c, 'type': _k} for (_n, _c, _k) in _ms_typed]))\n`;
+        pythonCode += `except Exception:\n`;
+        pythonCode += `    pass\n`;
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        break;
+      }
       case "transform": {
         const tMode = getString(data, "mode", "translate");
         if (tMode === "translate") {
@@ -1481,7 +1512,8 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `            \n`;
         pythonCode += `            ap.write_merged_top(list(${inAtoms}), _itp, ${inBox}, _top_path, _gro_path,\n`;
         pythonCode += `                                 minff_variant=_ff_variant, water_model=_water_model,\n`;
-        pythonCode += `                                 ion_model=_ion_model, organic_itps=_org_itps or None, angle_ka=${writeAngles ? mineralKangle : "None"})\n`;
+        pythonCode += `                                 ion_model=_ion_model, organic_itps=_org_itps or None, angle_ka=${writeAngles ? mineralKangle : "None"},\n`;
+        pythonCode += `                                 mol_counts_override=getattr(${inAtoms}, '_mol_counts_override', None))\n`;
         pythonCode += `            \n`;
         pythonCode += `            _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
         pythonCode += `            # write_merged_top emits a self-contained .top whose #defines reflect the\n`;
@@ -2245,7 +2277,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    else:\n`;
           pythonCode += `        _exp_itp = {'_original_itps': [], 'atomtypes': {}, '_component_labels': ['Solvent/Ions']}\n`;
           pythonCode += `    _org_itps = []\n`;
-          pythonCode += `ap.write_merged_top(list(${inAtoms}), _exp_itp, ${inBox}, '${outName}.top', '${outName}.gro', minff_variant='${exportFfVariant}', water_model='${waterLower}', ion_model='${ionCombine}', organic_itps=_org_itps or None, angle_ka=${exportAngleKaPy})\n`;
+          pythonCode += `ap.write_merged_top(list(${inAtoms}), _exp_itp, ${inBox}, '${outName}.top', '${outName}.gro', minff_variant='${exportFfVariant}', water_model='${waterLower}', ion_model='${ionCombine}', organic_itps=_org_itps or None, angle_ka=${exportAngleKaPy}, mol_counts_override=getattr(${inAtoms}, '_mol_counts_override', None))\n`;
           pythonCode += `_inorg = [a for a in list(${inAtoms}) if _classify(a) != 'organic']\n`;
           pythonCode += `if _inorg:\n`;
           pythonCode += `    ap.write_itp(_inorg, ${inBox}, '${outName}.itp', explicit_angles=${exportExplicit}, KANGLE=${exportKangle}, max_angle=${exportMaxAngle})\n`;
