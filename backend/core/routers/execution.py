@@ -827,3 +827,27 @@ async def list_presets():
         "disableSimulation": _mode == "disabled",   # legacy flag
         "simulationMode": _mode,                     # 'full' | 'em_only' | 'disabled'
     }
+
+
+@router.get("/molecules")
+async def list_molecules():
+    """Bundled organic molecule library (Chemical JSON), grouped by category.
+
+    Returns the manifest of ~428 GAFF/OpenFF-parameterizable small molecules
+    (amino acids, nucleobases, sugars, alcohols, fatty acids, etc.) vendored
+    from the Avogadro2 molecules library. Each entry's ``file`` is the
+    category-relative path passed to ``ap.load_molecule``.
+    """
+    try:
+        import atomipy as ap
+        cats = ap.molecule_categories()
+        return {
+            "categories": [
+                {"name": c, "molecules": ap.list_molecules(c)} for c in cats
+            ],
+            "count": len(ap.list_molecules()),
+            "attribution": "Avogadro2 molecules library (BSD-3-Clause, "
+                           "(c) 2016 Geoffrey Hutchison, University of Pittsburgh)",
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"molecule library unavailable: {exc}")
