@@ -95,11 +95,11 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
                   onChange={(e) => updateNodeData(id, { ...data, minffVariant: e.target.value as any })}
                   onPointerDown={(e) => e.stopPropagation()}
                 >
+                  <option value="none">No angles (no angle terms; k0 nonbonded)</option>
                   <option value="0">Ka = 0 (Unbonded/Intercalated)</option>
                   <option value="250">Ka = 250 (Soft bonded)</option>
                   <option value="500">Ka = 500 (Standard default)</option>
                   <option value="1500">Ka = 1500 (Rigid framework)</option>
-                  <option value="none">No angles (no angle terms; k0 nonbonded)</option>
                 </select>
               </div>
             )}
