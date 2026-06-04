@@ -774,39 +774,52 @@ async def list_presets():
     
     presets = []
     if uc_conf_dir:
-        for fname in os.listdir(uc_conf_dir):
-            if fname.endswith((".pdb", ".gro", ".cif")):
-                name = fname.split(".")[0]
-                if "_GII_" in name:
-                    name = name.split("_GII_")[0]
-                display_name = name.replace("_", " ").strip()
-                
-                a, b, c, alpha, beta, gamma = None, None, None, None, None, None
-                filepath = os.path.join(uc_conf_dir, fname)
-                if fname.endswith(".pdb"):
-                    try:
-                        with open(filepath, "r", encoding="utf-8") as f:
-                            for line in f:
-                                if line.startswith("CRYST1"):
-                                    a = float(line[6:15])
-                                    b = float(line[15:24])
-                                    c = float(line[24:33])
-                                    alpha = float(line[33:40])
-                                    beta = float(line[40:47])
-                                    gamma = float(line[47:54])
-                                    break
-                    except Exception:
-                        pass
-                
-                presets.append({
-                    "id": fname,
-                    "name": display_name,
-                    "fileName": fname,
-                    "metrics": {
-                        "a": a, "b": b, "c": c,
-                        "alpha": alpha, "beta": beta, "gamma": gamma
-                    }
-                })
+        # Structure files at the top level AND one level of subfolders (e.g.
+        # 'zeolites/'). A subfolder entry's fileName carries its relative path so
+        # the loader reads UC_conf/<fileName> (e.g. UC_conf/zeolites/FAU_...pdb).
+        _entries = []  # (relpath_from_UC_conf, base_filename, full_path, group_or_None)
+        for fname in sorted(os.listdir(uc_conf_dir)):
+            full = os.path.join(uc_conf_dir, fname)
+            if os.path.isfile(full) and fname.endswith((".pdb", ".gro", ".cif")):
+                _entries.append((fname, fname, full, None))
+            elif os.path.isdir(full):
+                for sub in sorted(os.listdir(full)):
+                    if sub.endswith((".pdb", ".gro", ".cif")):
+                        _entries.append((f"{fname}/{sub}", sub, os.path.join(full, sub), fname))
+
+        for relpath, base, filepath, group in _entries:
+            name = base.split(".")[0]
+            if "_GII_" in name:
+                name = name.split("_GII_")[0]
+            display_name = name.replace("_", " ").strip()
+            if group:
+                display_name = f"{display_name} ({group.rstrip('s')})"  # e.g. "FAU (zeolite)"
+
+            a, b, c, alpha, beta, gamma = None, None, None, None, None, None
+            if filepath.endswith(".pdb"):
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        for line in f:
+                            if line.startswith("CRYST1"):
+                                a = float(line[6:15])
+                                b = float(line[15:24])
+                                c = float(line[24:33])
+                                alpha = float(line[33:40])
+                                beta = float(line[40:47])
+                                gamma = float(line[47:54])
+                                break
+                except Exception:
+                    pass
+
+            presets.append({
+                "id": relpath,
+                "name": display_name,
+                "fileName": relpath,
+                "metrics": {
+                    "a": a, "b": b, "c": c,
+                    "alpha": alpha, "beta": beta, "gamma": gamma
+                }
+            })
                 
     _mode = simulation_mode()
     return {
