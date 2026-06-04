@@ -104,7 +104,7 @@ describe('graphExecution Python Generator', () => {
     // Forcefield node assigns dummy params
     expect(code).toContain("ap.assign_dummy_mineral_params(");
     expect(code).toContain("metal_site='Alo'");
-    expect(code).toContain("charge_scale=0.5");
+    expect(code).toContain("charge_mode='pauling'");
     // Simulate node detects the dummy framework, builds the bond-free top, and freezes
     expect(code).toContain("_dummy_frame = [a for a in");
     expect(code).toContain("ap.write_dummy_system_top(");

@@ -20,6 +20,7 @@ type ForcefieldNodeData = {
   moleculeName?: string;
   // Frozen "dummy" model for non-MINFF inorganics
   dummyMetalSite?: "Alo" | "Sit" | "Mgo";
+  dummyChargeMode?: "pauling" | "half";
   dummyChargeScale?: number;
 };
 
@@ -129,10 +130,34 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
             {forcefield === "dummy" && (
               <div className="mt-2.5 space-y-2">
                 <div className="text-[10px] leading-relaxed text-amber-700 bg-amber-500/10 border border-amber-500/30 rounded-md p-2">
-                  ⚠️ <b>Not MINFF-compatible.</b> Builds a <b>frozen dummy</b>: charges =
-                  ½ × oxidation state, O LJ = OPC3, metal LJ = a small site, framework
-                  frozen. Qualitative only — <b>EM / NVT only</b> (no NPT).
+                  ⚠️ <b>Not MINFF-compatible.</b> Builds a <b>frozen dummy</b>: borrowed
+                  MINFF LJ (O→OPC3, metals→small site, F→F⁻), framework frozen.
+                  Qualitative only — <b>EM / NVT only</b> (no NPT).
                 </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">Charge model</label>
+                  <select
+                    className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+                    value={data.dummyChargeMode ?? "pauling"}
+                    onChange={(e) => updateNodeData(id, { ...data, dummyChargeMode: e.target.value as any })}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <option value="pauling">Pauling effective (q_eff; H=+0.4, anions balance)</option>
+                    <option value="half">Half oxidation state (0.5 × q_formal)</option>
+                  </select>
+                </div>
+                {(data.dummyChargeMode ?? "pauling") === "half" && (
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Charge scale (× oxidation state)</label>
+                    <input
+                      type="number" step="0.05" min="0" max="1"
+                      className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 h-7"
+                      value={data.dummyChargeScale ?? 0.5}
+                      onChange={(e) => updateNodeData(id, { ...data, dummyChargeScale: parseFloat(e.target.value) || 0.5 })}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground block mb-1">Metal LJ site</label>
                   <select
@@ -145,16 +170,6 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
                     <option value="Sit">Sit — Si tetrahedral (σ=0.082 nm, smallest)</option>
                     <option value="Mgo">Mgo — Mg octahedral (σ=0.196 nm, roomier)</option>
                   </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground block mb-1">Charge scale (× oxidation state)</label>
-                  <input
-                    type="number" step="0.05" min="0" max="1"
-                    className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 h-7"
-                    value={data.dummyChargeScale ?? 0.5}
-                    onChange={(e) => updateNodeData(id, { ...data, dummyChargeScale: parseFloat(e.target.value) || 0.5 })}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  />
                 </div>
               </div>
             )}
