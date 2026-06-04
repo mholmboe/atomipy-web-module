@@ -802,6 +802,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `${blockOutAtoms} = ap.center(${inAtoms}, Box=${boxArg}, resname=${resnameArg}, dim='${pyEscape(centerDim)}')\n`;
           stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         }
+        // Preserve organic .itp / topology metadata: ap.translate/rotate/scale/
+        // bend/center return plain lists and would otherwise drop it, so a
+        // transformed organic degrades into a mineral component downstream (MIN_1).
+        pythonCode += `if hasattr(${inAtoms}, 'itp') or hasattr(${inAtoms}, '_defines') or hasattr(${inAtoms}, '_top_path'):\n`;
+        pythonCode += `    class _SL_tf(list): pass\n`;
+        pythonCode += `    ${blockOutAtoms} = _SL_tf(${blockOutAtoms})\n`;
+        pythonCode += `    for _a in ('itp', '_defines', '_top_path'):\n`;
+        pythonCode += `        if hasattr(${inAtoms}, _a): setattr(${blockOutAtoms}, _a, getattr(${inAtoms}, _a))\n`;
         break;
       }
       case "bend": {
