@@ -157,13 +157,15 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
           </div>
         )}
 
+        {activeTab === "inorganic" && (
+          <>
         <button
           type="button"
           className="nodrag w-full flex items-center justify-between text-xs font-semibold text-muted-foreground border border-border rounded-md px-2 py-1.5 bg-background hover:bg-muted/50 mt-2"
           onClick={() => setShowMore((prev) => !prev)}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          Global options
+          Global options (mineral typing)
           {showMore ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
 
@@ -237,6 +239,8 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
               </div>
             )}
           </div>
+        )}
+          </>
         )}
       </div>
 

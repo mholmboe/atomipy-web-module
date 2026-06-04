@@ -2379,9 +2379,6 @@ export default function VisualBuilder() {
             <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("export")} title="Export">
               <FileOutput className="w-4 h-4 text-slate-500" /> Export
             </Button>
-            <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("topology")} title="Override the [ molecules ] topology section">
-              <ListOrdered className="w-4 h-4 text-slate-500" /> Topology
-            </Button>
 
             <div className="h-4 w-[1px] bg-slate-200 mx-1" />
 
@@ -2486,6 +2483,9 @@ export default function VisualBuilder() {
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("trajectory")} title="Trajectory">
                   <History className="w-4 h-4 text-slate-500" /> Traj
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("topology")} title="Override the [ molecules ] topology section">
+                  <ListOrdered className="w-4 h-4 text-slate-500" /> Topology
                 </Button>
               </div>
               <div className="w-full flex justify-center">

@@ -570,11 +570,22 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    else:\n`;
           pythonCode += `        _inorganic_combined = []\n`;
           pythonCode += `    \n`;
-          pythonCode += `    _temp_mixed = _inorganic_combined\n`;
+          // Merge the inorganic (mineral/solvent/ions) with the organic component(s)
+          // via the real multi-component merger. ap.mix_systems does NOT exist — the
+          // old call crashed, so the organic-branch path never worked. merge_top
+          // builds the mineral itp inline and KEEPS each organic's GAFF itp; we carry
+          // the merged itp forward so the downstream .top #includes the organic and
+          // names/counts it correctly (instead of rebuilding it as a mineral -> MIN_1).
+          pythonCode += `    _mix_components = []\n`;
+          pythonCode += `    if _inorganic_combined:\n`;
+          pythonCode += `        _mix_components.append({'atoms': list(_inorganic_combined), 'itp': None, 'box': ${gatheredStates[0].box}})\n`;
           pythonCode += `    for _ob in _organic_branches:\n`;
-          pythonCode += `        _temp_mixed = ap.mix_systems(_temp_mixed, _ob, box=${gatheredStates[0].box})\n`;
-          pythonCode += `    ${blockOutAtoms} = _temp_mixed\n`;
-          pythonCode += `    ${blockOutBox} = ${gatheredStates[0].box}\n`;
+          pythonCode += `        _mix_components.append({'atoms': list(_ob), 'itp': getattr(_ob, 'itp', None), 'box': ${gatheredStates[0].box}})\n`;
+          pythonCode += `    _mix_atoms, _mix_itp, _mix_box = ap.merge_top(*_mix_components, output_box=${gatheredStates[0].box})\n`;
+          pythonCode += `    class _SL_mix(list): pass\n`;
+          pythonCode += `    ${blockOutAtoms} = _SL_mix(_mix_atoms)\n`;
+          pythonCode += `    ${blockOutAtoms}.itp = _mix_itp\n`;
+          pythonCode += `    ${blockOutBox} = _mix_box or ${gatheredStates[0].box}\n`;
           pythonCode += `else:\n`;
           if (reorder) {
             pythonCode += `    # Join branches and sequentially reorder their molids using join_and_reorder\n`;
@@ -1109,7 +1120,21 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const model = pyEscape(_wmSolv.toLowerCase() === "tip4pew" ? "tip4p" : _wmSolv);
         const dens = getNumber(data, "density", 1.0) * 1000.0;
         const spacing = getNumber(data, "minDistance", 2.0);
-        pythonCode += `${blockOutAtoms} = ap.solvate(limits=${inBox}, Box=${inBox}, density=${dens}, min_distance=${spacing}, solute_atoms=${inAtoms}, solvent_type='${model}', include_solute=True)\n`;
+        // Max-solvent mode: 'max' fills the box at the given density, 'count'
+        // inserts an EXACT number, 'shell' makes a solvation shell. This was
+        // previously unwired — solvate always used its 'max' default, so the
+        // UI's "Fixed count" was ignored (e.g. set 194 but got ~198).
+        const maxMode = getString(data, "maxSolventMode", "max");
+        let maxSolventArg = "'max'";
+        if (maxMode === "count") {
+          maxSolventArg = `${Math.max(1, Math.trunc(getNumber(data, "maxSolventCount", 100)))}`;
+        } else if (maxMode === "shell") {
+          const th = getNumber(data, "shellThickness", 15);
+          const nearest = [10, 15, 20, 25, 30].reduce((a, b) => (Math.abs(b - th) < Math.abs(a - th) ? b : a), 10);
+          maxSolventArg = `'shell${nearest}'`;
+        }
+        const includeSolute = getBoolean(data, "includeSolute", true) ? "True" : "False";
+        pythonCode += `${blockOutAtoms} = ap.solvate(limits=${inBox}, Box=${inBox}, density=${dens}, min_distance=${spacing}, solute_atoms=${inAtoms}, solvent_type='${model}', max_solvent=${maxSolventArg}, include_solute=${includeSolute})\n`;
         // Propagate .itp so downstream Simulate nodes use the merged-topology path
         pythonCode += `if hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None:\n`;
         pythonCode += `    class _SL_solv2(list): pass\n`;
@@ -1286,12 +1311,31 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `    ${blockOutBox} = ${inBox}\n`;
         } else {
+          // Global options (mineral typing only): bond-detection cutoffs, typing
+          // log, and resetMolid (separate water so its O don't perturb Al/Mg
+          // coordination, and put the mineral framework on a single molid).
+          const rmaxLong = getNumber(data, "rmaxLong", 2.45);
+          const rmaxH = getNumber(data, "rmaxH", 1.2);
+          const doLog = getBoolean(data, "log", false);
+          const logFile = pyEscape(getString(data, "logFile", `${ff}.log`));
+          const resetMolid = getBoolean(data, "resetMolid", false);
+          const logArgs = doLog ? `, log=True, log_file='${logFile}'` : "";
           pythonCode += `if ${inBox} is None:\n`;
           pythonCode += `    raise ValueError("Forcefield node (${ff.toUpperCase()}) requires a mineral structure with a simulation box. Connect a mineral source node, not an organic molecule node.")\n`;
-          if (ff === "minff") {
-            pythonCode += `${blockOutAtoms} = ap.minff(${inAtoms}, ${inBox})\n`;
+          if (resetMolid) {
+            pythonCode += `_ff_SOL, _ff_noSOL = ap.find_H2O(${inAtoms}, ${inBox})\n`;
+            pythonCode += `_ff_noSOL = ap.assign_resname(_ff_noSOL)\n`;
+            pythonCode += `_ff_MIN = [a for a in _ff_noSOL if a.get('resname') == 'MIN']\n`;
+            pythonCode += `_ff_OTHER = [a for a in _ff_noSOL if a.get('resname') != 'MIN']\n`;
+            pythonCode += `if _ff_MIN: _ff_MIN = ap.update(_ff_MIN, molid=1)\n`;
+            pythonCode += `_ff_in = ap.update(_ff_MIN, _ff_OTHER, _ff_SOL)\n`;
           } else {
-            pythonCode += `${blockOutAtoms} = ap.clayff(${inAtoms}, ${inBox})\n`;
+            pythonCode += `_ff_in = ${inAtoms}\n`;
+          }
+          if (ff === "minff") {
+            pythonCode += `${blockOutAtoms} = ap.minff(_ff_in, ${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArgs})\n`;
+          } else {
+            pythonCode += `${blockOutAtoms} = ap.clayff(_ff_in, ${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArgs})\n`;
           }
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         }
