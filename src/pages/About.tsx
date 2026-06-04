@@ -340,6 +340,50 @@ const About = () => {
             </div>
           </section>
 
+          {/* ── Multi-component systems ── */}
+          <section className="space-y-4">
+            <div className="flex items-center gap-2 text-primary font-semibold uppercase tracking-wider text-sm">
+              <Combine className="h-4 w-4" />
+              <span>Multi-Component Systems</span>
+            </div>
+            <h2 className="text-2xl font-bold">Mixing Multiple Minerals &amp; Organics</h2>
+            <p className="text-muted-foreground">
+              Combine several different minerals (e.g. pyrophyllite + kaolinite) and/or several different
+              organics (e.g. methanol + ethanol) in one system. The rule:{" "}
+              <strong className="text-foreground">each distinct component is its own branch, joined with an Add node.</strong>
+            </p>
+            <pre className="rounded-xl border bg-card p-4 font-mono text-xs leading-relaxed overflow-x-auto whitespace-pre">{`Mineral A → Forcefield (MINFF/CLAYFF) ┐
+Mineral B → Forcefield (MINFF/CLAYFF) ┤
+Organic A → Forcefield (GAFF/OpenFF)  ┼─► Add ─► Ions / Solvent ─► Simulate / Export
+Organic B → Forcefield (GAFF/OpenFF)  ┘`}</pre>
+            <ul className="list-disc pl-5 space-y-1.5 text-sm text-muted-foreground">
+              <li>
+                <strong className="text-foreground">One Forcefield node per component.</strong> One OpenFF/ACPYPE
+                call per organic branch — two organics means two branches (you can't parametrize two molecules on
+                one branch).
+              </li>
+              <li>
+                <strong className="text-foreground">Names are automatic &amp; unique:</strong> minerals become{" "}
+                <code className="text-foreground bg-muted px-1 rounded">MIN</code>,{" "}
+                <code className="text-foreground bg-muted px-1 rounded">MIN_1</code>, …; a single organic stays{" "}
+                <code className="text-foreground bg-muted px-1 rounded">organic</code>, multiple become{" "}
+                <code className="text-foreground bg-muted px-1 rounded">organic_1</code>,{" "}
+                <code className="text-foreground bg-muted px-1 rounded">organic_2</code>, ….
+              </li>
+              <li>
+                <strong className="text-foreground">Optional naming:</strong> each Forcefield node has a
+                "Molecule name" field (e.g. <code className="text-foreground bg-muted px-1 rounded">PYRO</code>,{" "}
+                <code className="text-foreground bg-muted px-1 rounded">EtOH</code>) that sets the moleculetype/residue name.
+              </li>
+              <li>
+                <strong className="text-foreground">Counts:</strong> replicated copies are set on the Replicate node;
+                an exact water count on the Solvent node (More options → Max Molecules → Fixed count). The Topology
+                node lets you review/override the final{" "}
+                <code className="text-foreground bg-muted px-1 rounded">[ molecules ]</code> section.
+              </li>
+            </ul>
+          </section>
+
           {/* ── Node reference ── */}
           <section className="space-y-8">
             <div className="flex items-center gap-2 text-primary font-semibold uppercase tracking-wider text-sm">

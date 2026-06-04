@@ -39,6 +39,67 @@ A powerful, node-based visual programming environment for designing, manipulatin
 
 ---
 
+## 🧬 Building Multi-Component Systems (multiple minerals &/or organics)
+
+You can combine **several different minerals** (e.g. pyrophyllite + kaolinite) and/or
+**several different organic molecules** (e.g. methanol + ethanol) in one simulation.
+The rule is simple: **each distinct component is its own branch, joined with an `Add` node.**
+
+### Topology
+
+```
+Mineral A  → Forcefield (MINFF/CLAYFF) ─┐
+Mineral B  → Forcefield (MINFF/CLAYFF) ─┤
+Organic A  → Forcefield (GAFF/OpenFF)  ─┼──► Add (Join) ──► Ions / Solvent ──► Simulate / Export
+Organic B  → Forcefield (GAFF/OpenFF)  ─┘
+```
+
+- **One Forcefield node per component** (mineral or organic).
+- **One OpenFF/ACPYPE call per organic branch** — you cannot parametrize two molecules
+  on a single branch. Two organics = two branches. (Each organic branch is
+  `Structure (SMILES/file) → … → Forcefield (organic)`.)
+- Feed every branch into a single **Add** node, then continue to Ions, Solvent,
+  Simulate, or Export.
+
+### Molecule naming (automatic — no setup needed)
+
+Each component is given a **unique GROMACS `[ moleculetype ]`/residue name** so the merged
+`.top` is valid (no duplicate or dangling molecule types):
+
+- **Minerals**: `MIN`, `MIN_1`, `MIN_2`, …
+- **Organics**: a single organic stays `organic`; multiple become `organic_1`, `organic_2`, …
+
+They appear in the final `[ molecules ]` section, e.g.:
+
+```
+[ molecules ]
+MIN        1
+MIN_1      1
+organic_1  180
+organic_2  90
+SOL        2000
+Na         6
+Cl         6
+```
+
+### Optionally name your components
+
+Each **Forcefield** node has an optional **"Molecule name"** field (on both the Inorganic
+and Organic tabs). Set it to give a component a meaningful name — `PYRO`, `KAOL`, `MeOH`,
+`EtOH` — instead of the auto name. The value becomes the `[ moleculetype ]`/residue name.
+
+### Good to know
+
+- **Topology wins over the structure file.** GROMACS/OpenMM trust the `.top`
+  `[ molecules ]` section over residue names in the `.gro`/`.pdb`. The optional
+  **Topology** node lets you review the detected `[ molecules ]` after a run and
+  override it (name + count) directly.
+- **Counts:** replicated copies (e.g. `organic_1 180`) are set on the **Replicate** node;
+  an *exact* water count is set on the **Solvent** node → *More options → Max Molecules →
+  Fixed count*.
+
+---
+
 ## 🛠️ Getting Started
 
 > 📖 For the full installation & deployment reference (local / online / Colab
