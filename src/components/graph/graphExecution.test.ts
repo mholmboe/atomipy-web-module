@@ -37,6 +37,39 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain("ap.parametrize_organic_gaff('CCO', version='gaff-2.11', basename='organic_2')");
   });
 
+  it('loads a bundled library molecule, writes an SDF, and parametrizes from it', () => {
+    const nodes: Node[] = [
+      { id: 'org-1', type: 'organic', position: { x: 0, y: 0 },
+        data: { inputMode: 'library', libraryMolecule: 'amino_acids/L-alanine.cjson', forcefield: 'gaff-2.11' } },
+    ];
+    const edges: Edge[] = [];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+
+    // Curated geometry is loaded and written to SDF (with bond orders), then
+    // the .sdf path feeds the file-based GAFF path (not SMILES).
+    expect(code).toContain("ap.load_molecule('amino_acids/L-alanine.cjson')");
+    expect(code).toContain("ap.write_sdf(");
+    expect(code).toContain("ap.parametrize_organic_file('organic.sdf'");
+    expect(code).not.toContain('parametrize_organic_gaff');
+  });
+
+  it('defers library molecule to a downstream forcefield node via the .sdf path', () => {
+    const nodes: Node[] = [
+      { id: 'struct-1', type: 'structure', position: { x: 0, y: 0 },
+        data: { source: 'organic', inputMode: 'library', libraryMolecule: 'nucleobases/adenine.cjson' } },
+      { id: 'ff-1', type: 'forcefield', position: { x: 100, y: 0 }, data: { forcefield: 'gaff' } },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'struct-1', target: 'ff-1', targetHandle: 'in' },
+    ];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+
+    // Structure node loads + writes the SDF and hands the path to the FF node.
+    expect(code).toContain("ap.load_molecule('nucleobases/adenine.cjson')");
+    expect(code).toContain("ap.write_sdf(");
+    expect(code).toMatch(/structure_atoms_\d+ = "organic\.sdf"/);
+  });
+
   it('generates mixed system logic for merge node when organic node is upstream', () => {
     const nodes: Node[] = [
       {

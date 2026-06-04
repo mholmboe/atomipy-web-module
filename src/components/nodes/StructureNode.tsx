@@ -21,11 +21,15 @@ type StructureNodeData = {
   smiles?: string;
   forcefield?: string;
   conformers?: number;
-  inputMode?: "smiles" | "file";
+  inputMode?: "smiles" | "file" | "library";
   uploadedFilePath?: string;
   uploadedFileName?: string;
   previewJobId?: string;
   chargeMethod?: "am1bcc" | "gasteiger" | "none";
+  // Bundled organic library selection (category-relative cjson path, e.g.
+  // "amino_acids/L-alanine.cjson"). Set inputMode "library" to use it. No
+  // visual picker yet — populated via raw node data or /api/molecules.
+  libraryMolecule?: string;
 };
 
 export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData>) {

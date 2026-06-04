@@ -448,10 +448,22 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           const file = pyEscape(getString(data, "value", "unknown.pdb"));
           pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'UC_conf/${file}')\n`;
         } else {
-          // source === "organic" (SMILES or organic file)
+          // source === "organic" (SMILES, uploaded file, or bundled library molecule)
           const smiles = pyEscape(getString(data, "smiles", ""));
           const inputMode = getString(data, "inputMode", "smiles");
           const uploadPath = pyEscape(getString(data, "uploadedFilePath", ""));
+          const libraryMol = pyEscape(getString(data, "libraryMolecule", ""));
+          const isLibrary = (inputMode === "library" || !!libraryMol) && !!libraryMol;
+
+          // Bundled-library molecules carry curated 3D geometry + bond orders;
+          // load and write an SDF up front so downstream GAFF/Sage parametrizes
+          // from the real structure (the .sdf path then flows like an upload).
+          const libSdf = `${organicBasename(n)}.sdf`;
+          if (isLibrary) {
+            pythonCode += `# Organic molecule from bundled library: ${libraryMol}\n`;
+            pythonCode += `_lib_${blockOutAtoms}, _ = ap.load_molecule('${libraryMol}')\n`;
+            pythonCode += `ap.write_sdf(_lib_${blockOutAtoms}, '${libSdf}')\n`;
+          }
 
           // Defer parametrization only if the organic node is directly connected to a forcefield node.
           // If there are intermediate nodes (like System Box, Spatial Ops, etc.), we must parameterize immediately
@@ -463,7 +475,9 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
 
           if (hasDownstreamFF) {
             pythonCode += `# Organic structure definition (parameterized downstream in Forcefield node)\n`;
-            if (inputMode === "file" && uploadPath) {
+            if (isLibrary) {
+              pythonCode += `${blockOutAtoms} = "${libSdf}"\n`;
+            } else if (inputMode === "file" && uploadPath) {
               pythonCode += `${blockOutAtoms} = "${uploadPath}"\n`;
             } else {
               pythonCode += `${blockOutAtoms} = "${smiles}"\n`;
@@ -472,7 +486,9 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           } else {
             pythonCode += `\n# Parametrize Organic Molecule (Fallback / Standalone)\n`;
             pythonCode += `try:\n`;
-            if (inputMode === "file" && uploadPath) {
+            if (isLibrary) {
+              pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${libSdf}', version='gaff-2.11', basename='${organicBasename(n)}')\n`;
+            } else if (inputMode === "file" && uploadPath) {
               pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${uploadPath}', version='gaff-2.11', basename='${organicBasename(n)}')\n`;
             } else {
               pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff('${smiles}', version='gaff-2.11', basename='${organicBasename(n)}')\n`;
@@ -2129,10 +2145,21 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const ff = pyEscape(getString(data, "forcefield", "gaff-2.11"));
         const inputMode = getString(data, "inputMode", "smiles");
         const uploadPath = pyEscape(getString(data, "uploadedFilePath", ""));
+        const libraryMol = pyEscape(getString(data, "libraryMolecule", ""));
+        const isLibrary = (inputMode === "library" || !!libraryMol) && !!libraryMol;
+        const libSdf = `${organicBasename(n)}.sdf`;
+
+        if (isLibrary) {
+          pythonCode += `# Organic molecule from bundled library: ${libraryMol}\n`;
+          pythonCode += `_lib_${blockOutAtoms}, _ = ap.load_molecule('${libraryMol}')\n`;
+          pythonCode += `ap.write_sdf(_lib_${blockOutAtoms}, '${libSdf}')\n`;
+        }
 
         pythonCode += `\n# Parametrize Organic Molecule\n`;
         pythonCode += `try:\n`;
-        if (inputMode === "file" && uploadPath) {
+        if (isLibrary) {
+          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${libSdf}', version='${ff}', basename='${organicBasename(n)}')\n`;
+        } else if (inputMode === "file" && uploadPath) {
           pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${uploadPath}', version='${ff}', basename='${organicBasename(n)}')\n`;
         } else {
           pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff('${smiles}', version='${ff}', basename='${organicBasename(n)}')\n`;

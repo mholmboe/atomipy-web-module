@@ -693,12 +693,31 @@ async def organic_parametrize(request: Request):
     version       = body.get("forcefield", "gaff-2.11")
     input_mode    = body.get("inputMode", "smiles")
     upload_path   = body.get("uploadedFilePath", "")
+    library_mol   = body.get("libraryMolecule", "")  # e.g. "amino_acids/L-alanine.cjson"
 
     worker_url = os.environ.get("OPENFF_WORKER_URL", "http://127.0.0.1:8001")
     v = version.lower()
 
     try:
-        if input_mode == "file" and upload_path:
+        if (input_mode == "library" or library_mol) and library_mol:
+            # Load the bundled cjson molecule and write an SDF (with bond orders)
+            # so antechamber/acpype can perceive atom types, then route through
+            # the same file-based GAFF worker endpoint as an uploaded structure.
+            import atomipy as ap
+            import tempfile as _tf
+            atoms_lib, _cell = ap.load_molecule(library_mol)
+            sdf_dir = _tf.mkdtemp(prefix="lib_mol_")
+            base = os.path.splitext(os.path.basename(library_mol))[0]
+            sdf_path = os.path.join(sdf_dir, f"{base}.sdf")
+            ap.write_sdf(atoms_lib, sdf_path)
+            with open(sdf_path, "rb") as fh:
+                resp = req_lib.post(
+                    f"{worker_url}/parametrize/gaff-file",
+                    files={"file": (os.path.basename(sdf_path), fh)},
+                    params={"version": version, "charge_method": "bcc"},
+                    timeout=180,
+                )
+        elif input_mode == "file" and upload_path:
             # upload_path is relative to work_dir: "uploads/session/filename.ext"
             full_path = os.path.join(OUTPUTS_DIR, upload_path)
             if not os.path.exists(full_path):
