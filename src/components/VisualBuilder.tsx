@@ -1959,7 +1959,7 @@ export default function VisualBuilder() {
     [applyWorkflowGraph],
   );
 
-  const handleCompileAndRun = async (targetNodeId?: string) => {
+  const handleCompileAndRun = async (targetNodeId?: string, opts?: { useSelection?: boolean }) => {
     if (nodes.length === 0) {
       toast.error("Workflow Empty", {
         description: "Please add some nodes to your system before building.",
@@ -1987,37 +1987,37 @@ export default function VisualBuilder() {
       activeEdges = edges.filter((e) => visited.has(e.source) && visited.has(e.target));
       const targetType = nodes.find((n) => n.id === targetNodeId)?.type || "node";
       toast.info(`Running workflow up to ${targetType}...`);
-    } else {
-      if (selectedNodes.length > 0) {
-        const visited = new Set<string>();
-        const queue = selectedNodes.map((n) => n.id);
-        while (queue.length > 0) {
-          const curId = queue.shift()!;
-          if (visited.has(curId)) continue;
-          visited.add(curId);
-          const parents = edges
-            .filter((e) => e.target === curId)
-            .map((e) => e.source);
-          queue.push(...parents);
-        }
-        activeNodes = nodes.filter((n) => visited.has(n.id));
-        activeEdges = edges.filter((e) => visited.has(e.source) && visited.has(e.target));
-        // If the selection drops downstream output nodes (e.g. Simulate), make it
-        // obvious — this is the usual cause of "it never runs the simulation".
-        const excludedDownstream = nodes.filter(
-          (n) => !visited.has(n.id) && ["simulate", "export", "xrd", "bvs", "stats", "bondAngle"].includes(n.type || ""),
-        );
-        if (excludedDownstream.length > 0) {
-          // Intentional subgraph run is fine — just make the scope explicit so a
-          // stray selection isn't mistaken for a full run.
-          toast.info(
-            `Running selected subgraph: ${activeNodes.length} node(s) + upstream. Downstream nodes (e.g. ${excludedDownstream[0].type}) are not included — clear the selection to run the whole workflow.`,
-            { duration: 6000 },
-          );
-        } else {
-          toast.info(`Running ${activeNodes.length} selected node(s) & upstream dependencies...`);
-        }
+    } else if (opts?.useSelection && selectedNodes.length > 0) {
+      // Explicit "Run selected subgraph" only — the main Run button never lands
+      // here, so a stray node selection can no longer silently truncate the run.
+      const visited = new Set<string>();
+      const queue = selectedNodes.map((n) => n.id);
+      while (queue.length > 0) {
+        const curId = queue.shift()!;
+        if (visited.has(curId)) continue;
+        visited.add(curId);
+        const parents = edges
+          .filter((e) => e.target === curId)
+          .map((e) => e.source);
+        queue.push(...parents);
       }
+      activeNodes = nodes.filter((n) => visited.has(n.id));
+      activeEdges = edges.filter((e) => visited.has(e.source) && visited.has(e.target));
+      const excludedDownstream = nodes.filter(
+        (n) => !visited.has(n.id) && ["simulate", "export", "xrd", "bvs", "stats", "bondAngle"].includes(n.type || ""),
+      );
+      if (excludedDownstream.length > 0) {
+        toast.info(
+          `Running selected subgraph: ${activeNodes.length} node(s) + upstream. Downstream nodes (e.g. ${excludedDownstream[0].type}) are not included.`,
+          { duration: 6000 },
+        );
+      } else {
+        toast.info(`Running ${activeNodes.length} selected node(s) & upstream dependencies...`);
+      }
+    } else if (selectedNodes.length > 0) {
+      // Main Run with a node incidentally selected: run the FULL workflow, but
+      // say so — selecting a node must not quietly become a partial run.
+      toast.info(`Running the full workflow (${nodes.length} nodes) — selection ignored.`, { duration: 4000 });
     }
 
     const validationErrors = validateWorkflow(activeNodes, activeEdges);
@@ -2832,6 +2832,19 @@ export default function VisualBuilder() {
               <Play className="w-3.5 h-3.5" />
               <span>Run up to this node</span>
             </button>
+
+            {nodes.filter((n) => n.selected).length > 0 && (
+              <button
+                onClick={() => {
+                  handleCompileAndRun(undefined, { useSelection: true });
+                  setMenu(null);
+                }}
+                className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all duration-150 text-left w-full font-medium"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>Run selected subgraph</span>
+              </button>
+            )}
 
             <button
               onClick={() => handleDuplicateNode(menu.id)}
