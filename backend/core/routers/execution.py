@@ -841,8 +841,10 @@ async def list_presets():
             })
                 
     _mode = simulation_mode()
+    # Sort alphabetically, but push subfolder groups (e.g. zeolites) to the end
+    # of the dropdown — a preset whose fileName carries a '/' lives in a subfolder.
     return {
-        "presets": sorted(presets, key=lambda x: x["name"]),
+        "presets": sorted(presets, key=lambda x: ("/" in x["fileName"], x["name"])),
         "disableSimulation": _mode == "disabled",   # legacy flag
         "simulationMode": _mode,                     # 'full' | 'em_only' | 'disabled'
     }
