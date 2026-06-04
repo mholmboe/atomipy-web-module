@@ -89,6 +89,25 @@ describe('graphExecution Python Generator', () => {
     expect(code).not.toContain("basename='organic'");
   });
 
+  it('loads an uploaded structure from its full session path (not the bare filename)', () => {
+    const nodes: Node[] = [
+      { id: 'struct-1', type: 'structure', position: { x: 0, y: 0 },
+        data: { source: 'upload', filename: 'Pyr_0181afb498d5.pdb', path: 'uploads/default_session/Pyr_0181afb498d5.pdb' } },
+    ];
+    const code = generatePythonCode(nodes, [], 'minimal');
+    expect(code).toContain("ap.import_auto(f'uploads/default_session/Pyr_0181afb498d5.pdb')");
+    expect(code).not.toContain("ap.import_auto(f'uploads/Pyr_0181afb498d5.pdb')");
+  });
+
+  it('falls back to uploads/<filename> when no path is stored', () => {
+    const nodes: Node[] = [
+      { id: 'struct-1', type: 'structure', position: { x: 0, y: 0 },
+        data: { source: 'upload', filename: 'legacy.pdb' } },
+    ];
+    const code = generatePythonCode(nodes, [], 'minimal');
+    expect(code).toContain("ap.import_auto(f'uploads/legacy.pdb')");
+  });
+
   it('generates a frozen dummy-mineral path for the non-MINFF forcefield', () => {
     const nodes: Node[] = [
       { id: 'struct-1', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'preset', value: 'MnO.cif' } },

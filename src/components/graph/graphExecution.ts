@@ -468,8 +468,11 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
       case "structure": {
         const source = getString(data, "source", "preset");
         if (source === "upload") {
-          const upFilename = pyEscape(getString(data, "filename", "uploaded.pdb"));
-          pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'uploads/${upFilename}')\n`;
+          // Use the stored relative path (uploads/<session>/<file>) — the upload
+          // endpoint nests files under a session dir, so the bare filename alone
+          // doesn't resolve in the build work dir.
+          const upPath = pyEscape(getString(data, "path", "")) || `uploads/${pyEscape(getString(data, "filename", "uploaded.pdb"))}`;
+          pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'${upPath}')\n`;
         } else if (source === "preset") {
           const file = pyEscape(getString(data, "value", "unknown.pdb"));
           pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'UC_conf/${file}')\n`;
@@ -545,8 +548,8 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         break;
       }
       case "upload": {
-        const upFilename = pyEscape(getString(data, "filename", "uploaded.pdb"));
-        pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'uploads/${upFilename}')\n`;
+        const upPath = pyEscape(getString(data, "path", "")) || `uploads/${pyEscape(getString(data, "filename", "uploaded.pdb"))}`;
+        pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'${upPath}')\n`;
         pythonCode += `if ${blockOutBox} is None or (not isinstance(${blockOutBox}, str) and hasattr(${blockOutBox}, '__len__') and len(${blockOutBox}) == 0):\n`;
         pythonCode += `    ${blockOutBox} = [50.0, 50.0, 50.0, 90.0, 90.0, 90.0]\n`;
         pythonCode += `if hasattr(${blockOutBox}, '__len__') and len(${blockOutBox}) in [3, 6]:\n`;
@@ -1061,8 +1064,8 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const insertedVar = `inserted_${index}`;
 
         if (source === "upload") {
-          const upFilename = pyEscape(getString(data, "filename", "uploaded.pdb"));
-          pythonCode += `${templateAtoms}, _ = ap.import_auto(f'uploads/${upFilename}')\n`;
+          const upPath = pyEscape(getString(data, "path", "")) || `uploads/${pyEscape(getString(data, "filename", "uploaded.pdb"))}`;
+          pythonCode += `${templateAtoms}, _ = ap.import_auto(f'${upPath}')\n`;
         } else {
           const file = pyEscape(getString(data, "value", "unknown.pdb"));
           pythonCode += `${templateAtoms}, _ = ap.import_auto(f'UC_conf/${file}')\n`;
