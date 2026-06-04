@@ -67,6 +67,8 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [showMore, setShowMore] = useState(false);
   const organicFileInputRef = useRef<HTMLInputElement>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [inorgScan, setInorgScan] = useState<{ minffCompatible: boolean; unsupported: string[]; elements: string[]; nAtoms: number } | null>(null);
 
   const presets = data.presets || [];
   const smiles = data.smiles || "";
@@ -166,6 +168,35 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
   const clearOrganicFile = () => {
     updateNodeData(id, { ...data, uploadedFilePath: undefined, uploadedFileName: undefined });
   };
+
+  const handleInorganicScan = async () => {
+    setIsScanning(true);
+    setInorgScan(null);
+    try {
+      const response = await fetch("/api/inorganic/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source,
+          fileName: source === "preset" ? data.value : data.filename,
+          uploadedFilePath: data.uploadedFilePath || data.path || data.filename,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || "Scan failed");
+      setInorgScan(result);
+      if (result.minffCompatible) {
+        toast.success(`MINFF compatible — ${result.elements.join(", ")}`);
+      } else {
+        toast.warning(`Not MINFF-typeable: ${result.unsupported.join(", ")} — use the Dummy forcefield.`);
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+  const canScan = (source === "preset" && !!data.value) || (source === "upload" && !!data.filename);
 
   const handleParametrize = async () => {
     const target = inputMode === "library" ? data.libraryMolecule
@@ -314,6 +345,32 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
                   )}
                 </label>
               </div>
+            )}
+
+            {/* Preview & Validate — scan elements for MINFF compatibility */}
+            <button
+              type="button"
+              className="nodrag w-full flex justify-center py-1.5 bg-primary/20 text-primary hover:bg-primary/30 rounded-md text-xs font-semibold transition-colors disabled:opacity-40"
+              onClick={handleInorganicScan}
+              disabled={!canScan || isScanning}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {isScanning ? "Scanning…" : "Preview & Validate"}
+            </button>
+
+            {inorgScan && (
+              inorgScan.minffCompatible ? (
+                <div className="text-[10px] text-green-600 bg-green-500/10 p-2 rounded border border-green-500/20 leading-relaxed">
+                  ✓ MINFF compatible — {inorgScan.nAtoms} atoms ({inorgScan.elements.join(", ")}).
+                  Use the MINFF or CLAYFF forcefield.
+                </div>
+              ) : (
+                <div className="text-[10px] text-amber-700 bg-amber-500/10 p-2 rounded border border-amber-500/30 leading-relaxed">
+                  ⚠️ <b>Not MINFF-typeable:</b> {inorgScan.unsupported.join(", ")} ha{inorgScan.unsupported.length > 1 ? "ve" : "s"} no
+                  MINFF framework type. Set the <b>Forcefield</b> node to <b>“Dummy (non-MINFF)”</b> to run a frozen
+                  qualitative model (EM/NVT). Elements: {inorgScan.elements.join(", ")}.
+                </div>
+              )
             )}
           </div>
         ) : (

@@ -850,6 +850,50 @@ async def list_presets():
     }
 
 
+@router.post("/inorganic/scan")
+async def inorganic_scan(request: Request):
+    """Scan an inorganic structure (preset or upload) for MINFF compatibility.
+
+    Loads the structure, collects its elements, and flags any that have no MINFF
+    framework type (the same set the dummy-mineral path uses). When unsupported
+    elements are present, the UI steers the user to the 'Dummy (non-MINFF)'
+    forcefield.
+    """
+    import atomipy as ap
+    from atomipy.oxidation import _norm_element
+
+    body = await request.json()
+    source = body.get("source", "preset")
+    file_name = body.get("fileName", "")
+    upload_path = body.get("uploadedFilePath", "")
+
+    # Resolve the structure path.
+    if source == "upload" and upload_path:
+        path = os.path.join(OUTPUTS_DIR, upload_path)
+    else:
+        uc_conf = os.path.join(os.path.dirname(ap.__file__), "structures", "minerals", "UC_conf")
+        path = os.path.join(uc_conf, file_name)
+    if not file_name and not upload_path:
+        raise HTTPException(status_code=400, detail="No structure selected to scan.")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"Structure not found: {file_name or upload_path}")
+
+    try:
+        atoms, _ = ap.import_auto(path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not read structure: {exc}")
+
+    supported = set(ap.MINFF_FRAMEWORK_ELEMENTS)
+    elements = sorted({_norm_element(a) for a in atoms if _norm_element(a)})
+    unsupported = [e for e in elements if e not in supported]
+    return {
+        "nAtoms": len(atoms),
+        "elements": elements,
+        "unsupported": unsupported,
+        "minffCompatible": len(unsupported) == 0,
+    }
+
+
 @router.get("/molecules")
 async def list_molecules():
     """Bundled organic molecule library (Chemical JSON), grouped by category.
