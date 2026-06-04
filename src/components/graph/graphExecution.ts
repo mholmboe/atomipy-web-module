@@ -1561,6 +1561,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `            for _k, _v in _itp.items():\n`;
         pythonCode += `                if _k.startswith('_source_itp') and _v and _v not in _org_itps:\n`;
         pythonCode += `                    _org_itps.append(_os.path.basename(_v))\n`;
+        pythonCode += `            # merge_top (Add node) keeps each component's source itp under\n`;
+        pythonCode += `            # _original_itps; pull the organic #includes from there too, else a\n`;
+        pythonCode += `            # mixed organic+mineral .top lists 'organic' in [molecules] with no\n`;
+        pythonCode += `            # [moleculetype] -> OpenMM "Unknown molecule type: organic".\n`;
+        pythonCode += `            for _oi in _itp.get('_original_itps', []) or []:\n`;
+        pythonCode += `                _src = _oi.get('_source_itp') if isinstance(_oi, dict) else None\n`;
+        pythonCode += `                if _src and _os.path.basename(_src) not in _org_itps:\n`;
+        pythonCode += `                    _org_itps.append(_os.path.basename(_src))\n`;
         pythonCode += `            \n`;
         pythonCode += `            ap.write_merged_top(list(${inAtoms}), _itp, ${inBox}, _top_path, _gro_path,\n`;
         pythonCode += `                                 minff_variant=_ff_variant, water_model=_water_model,\n`;
