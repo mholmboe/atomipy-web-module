@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { FileInput, Upload, File, Loader2, X, ChevronDown, ChevronUp } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
@@ -8,6 +8,32 @@ import type { NodeComponentProps, PresetOption } from "./types";
 import { STRUCTURE_FILE_ACCEPT, isSupportedStructureFile, uploadStructureFile } from "@/lib/uploads";
 
 const ORGANIC_FILE_ACCEPT = ".mol2,.sdf,.mol,.pdb";
+
+// ---- Bundled organic molecule library (GET /api/molecules) ----------------
+// Static data; fetch once and share the result across all StructureNode
+// instances via a module-level cache so node data isn't bloated with ~428 rows.
+type LibMolecule = { name: string; file: string; formula?: string; natoms?: number; category?: string };
+type LibCategory = { name: string; molecules: LibMolecule[] };
+let _molLibCache: LibCategory[] | null = null;
+let _molLibPromise: Promise<LibCategory[]> | null = null;
+
+function useMoleculeLibrary(): LibCategory[] {
+  const [cats, setCats] = useState<LibCategory[]>(_molLibCache ?? []);
+  useEffect(() => {
+    if (_molLibCache) { setCats(_molLibCache); return; }
+    if (!_molLibPromise) {
+      _molLibPromise = fetch("/api/molecules")
+        .then((r) => r.json())
+        .then((d) => { _molLibCache = Array.isArray(d?.categories) ? d.categories : []; return _molLibCache!; })
+        .catch(() => { _molLibCache = []; return _molLibCache!; });
+    }
+    _molLibPromise.then(setCats);
+  }, []);
+  return cats;
+}
+
+const prettyCategory = (name: string) =>
+  name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 type StructureNodeData = {
   source?: "preset" | "upload" | "organic";
@@ -46,6 +72,10 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
   const smiles = data.smiles || "";
   const conformers = data.conformers || 1;
   const inputMode = data.inputMode || "smiles";
+
+  const moleculeLibrary = useMoleculeLibrary();
+  const [libCategory, setLibCategory] = useState<string>(() => (data.libraryMolecule || "").split("/")[0] || "");
+  const libMolsForCat = moleculeLibrary.find((c) => c.name === libCategory)?.molecules ?? [];
 
   const source = data.source || "upload";
   const [activeTab, setActiveTab] = useState<"inorganic" | "organic">(source === "organic" ? "organic" : "inorganic");
@@ -138,7 +168,8 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
   };
 
   const handleParametrize = async () => {
-    const target = inputMode === "file" ? data.uploadedFilePath : smiles;
+    const target = inputMode === "library" ? data.libraryMolecule
+      : inputMode === "file" ? data.uploadedFilePath : smiles;
     if (!target) return;
     setIsParametrizing(true);
     setPreviewError(null);
@@ -146,7 +177,11 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
       const response = await fetch("/api/organic/parametrize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ smiles, forcefield: "gaff-2.11", inputMode, uploadedFilePath: data.uploadedFilePath }),
+        body: JSON.stringify({
+          smiles, forcefield: "gaff-2.11", inputMode,
+          uploadedFilePath: data.uploadedFilePath,
+          libraryMolecule: data.libraryMolecule,
+        }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Validation failed");
@@ -160,7 +195,9 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
     }
   };
 
-  const canParametrize = inputMode === "smiles" ? smiles.length > 0 : !!data.uploadedFilePath;
+  const canParametrize = inputMode === "smiles" ? smiles.length > 0
+    : inputMode === "library" ? !!data.libraryMolecule
+    : !!data.uploadedFilePath;
 
   return (
     <div className="bg-card w-[260px] shadow-lg rounded-xl border border-primary/50 overflow-hidden font-sans select-none">
@@ -283,7 +320,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
           <div className="space-y-3">
             {/* Sub-pill toggle for Organic */}
             <div className="flex rounded-md overflow-hidden border border-border text-[10px] font-semibold">
-              {(["smiles", "file"] as const).map((mode) => (
+              {(["smiles", "file", "library"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -295,10 +332,48 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
                   onClick={() => updateNodeData(id, { ...data, inputMode: mode })}
                   onPointerDown={(e) => e.stopPropagation()}
                 >
-                  {mode === "smiles" ? "SMILES String" : "Upload File"}
+                  {mode === "smiles" ? "SMILES" : mode === "file" ? "File" : "Library"}
                 </button>
               ))}
             </div>
+
+            {/* Bundled organic molecule library picker */}
+            {inputMode === "library" && (
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Category</label>
+                  <select
+                    className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary h-7"
+                    value={libCategory}
+                    onChange={(e) => { setLibCategory(e.target.value); updateNodeData(id, { ...data, libraryMolecule: "", previewJobId: undefined }); }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <option value="">-- Choose category --</option>
+                    {moleculeLibrary.map((c) => (
+                      <option key={c.name} value={c.name}>{prettyCategory(c.name)} ({c.molecules.length})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Molecule</label>
+                  <select
+                    className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary h-7 disabled:opacity-50"
+                    value={data.libraryMolecule || ""}
+                    disabled={!libCategory}
+                    onChange={(e) => updateNodeData(id, { ...data, libraryMolecule: e.target.value, previewJobId: undefined })}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <option value="">{libCategory ? "-- Choose molecule --" : "Select a category first"}</option>
+                    {libMolsForCat.map((m) => (
+                      <option key={m.file} value={m.file}>{m.name}{m.formula ? ` · ${m.formula}` : ""}</option>
+                    ))}
+                  </select>
+                </div>
+                {moleculeLibrary.length === 0 && (
+                  <p className="text-[9px] text-muted-foreground/70">Loading library…</p>
+                )}
+              </div>
+            )}
 
             {/* SMILES input */}
             {inputMode === "smiles" && (
