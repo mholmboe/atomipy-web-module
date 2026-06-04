@@ -379,10 +379,36 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
       if (!molIndex.has(a)) molIndex.set(a, molIndex.size + 1);
     }
   });
+  // The user-set molecule name belongs to the whole organic chain, not a single
+  // node. It may be set on the structure node OR on a downstream forcefield
+  // node — and when an intermediate node (transform, box, …) forces the
+  // structure node to parametrize early, that early call must use the same name.
+  // Resolve one name per anchor: a forcefield-organic name is inherited, but the
+  // structure node's own name (if any) takes precedence.
+  const _anchorUserName = new Map<string, string>();
+  nodes.forEach((nn) => {
+    if (_isFFOrganic(nn)) {
+      const name = sanitizeMolName(getString(nn.data, "moleculeName", "").trim());
+      if (name) { const a = _anchorOf(nn); if (!_anchorUserName.has(a)) _anchorUserName.set(a, name); }
+    }
+  });
+  nodes.forEach((nn) => {
+    if (_isStructOrganic(nn)) {
+      const name = sanitizeMolName(getString(nn.data, "moleculeName", "").trim());
+      if (name) _anchorUserName.set(nn.id, name);  // structure node wins
+    }
+  });
   const organicBasename = (nn: Node): string => {
-    const user = sanitizeMolName(getString(nn.data, "moleculeName", "").trim());
-    if (user) return user;
-    const idx = molIndex.get(_anchorOf(nn)) ?? 1;
+    // 1. This node's own name wins (e.g. a standalone organic node).
+    const own = sanitizeMolName(getString(nn.data, "moleculeName", "").trim());
+    if (own) return own;
+    // 2. Otherwise inherit the name resolved for this molecule's chain (covers a
+    //    structure node parametrizing early while the name is on the forcefield node).
+    const a = _anchorOf(nn);
+    const inherited = _anchorUserName.get(a);
+    if (inherited) return inherited;
+    // 3. Auto.
+    const idx = molIndex.get(a) ?? 1;
     return molIndex.size <= 1 ? "organic" : `organic_${idx}`;
   };
 

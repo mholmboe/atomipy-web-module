@@ -70,6 +70,25 @@ describe('graphExecution Python Generator', () => {
     expect(code).toMatch(/structure_atoms_\d+ = "organic\.sdf"/);
   });
 
+  it('propagates a molecule name set on the forcefield node to the early-parametrizing structure node', () => {
+    // Structure(organic) -> Transform -> Forcefield(gaff, moleculeName="LIG").
+    // The transform forces the structure node to parametrize early; the name set
+    // on the forcefield node must still reach that early call (basename='LIG').
+    const nodes: Node[] = [
+      { id: 'struct-1', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'organic', smiles: 'CCO' } },
+      { id: 'tf-1', type: 'transform', position: { x: 100, y: 0 }, data: {} },
+      { id: 'ff-1', type: 'forcefield', position: { x: 200, y: 0 }, data: { forcefield: 'gaff', moleculeName: 'LIG' } },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'struct-1', target: 'tf-1', targetHandle: 'in' },
+      { id: 'e2', source: 'tf-1', target: 'ff-1', targetHandle: 'in' },
+    ];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    // The early (structure-node) parametrization must use LIG, not 'organic'.
+    expect(code).toContain("basename='LIG'");
+    expect(code).not.toContain("basename='organic'");
+  });
+
   it('generates mixed system logic for merge node when organic node is upstream', () => {
     const nodes: Node[] = [
       {
