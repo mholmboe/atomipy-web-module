@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp, FlaskConical } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
-type ForcefieldType = "minff" | "clayff" | "openff_sage" | "openff_parsley" | "gaff";
+type ForcefieldType = "minff" | "clayff" | "dummy" | "openff_sage" | "openff_parsley" | "gaff";
 
 type ForcefieldNodeData = {
   forcefield?: ForcefieldType;
@@ -18,6 +18,9 @@ type ForcefieldNodeData = {
   minffVariant?: "0" | "250" | "500" | "1500" | "none";
   clayffAngles?: "none" | "0" | "250" | "500" | "1500";
   moleculeName?: string;
+  // Frozen "dummy" model for non-MINFF inorganics
+  dummyMetalSite?: "Alo" | "Sit" | "Mgo";
+  dummyChargeScale?: number;
 };
 
 export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldNodeData>) {
@@ -84,6 +87,7 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
             >
               <option value="minff">MINFF</option>
               <option value="clayff">CLAYFF</option>
+              <option value="dummy">Dummy (non-MINFF)</option>
             </select>
 
             {forcefield === "minff" && (
@@ -119,6 +123,39 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
                   <option value="500">Ka = 500 (Standard)</option>
                   <option value="1500">Ka = 1500 (Rigid framework)</option>
                 </select>
+              </div>
+            )}
+
+            {forcefield === "dummy" && (
+              <div className="mt-2.5 space-y-2">
+                <div className="text-[10px] leading-relaxed text-amber-700 bg-amber-500/10 border border-amber-500/30 rounded-md p-2">
+                  ⚠️ <b>Not MINFF-compatible.</b> Builds a <b>frozen dummy</b>: charges =
+                  ½ × oxidation state, O LJ = OPC3, metal LJ = a small site, framework
+                  frozen. Qualitative only — <b>EM / NVT only</b> (no NPT).
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">Metal LJ site</label>
+                  <select
+                    className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+                    value={data.dummyMetalSite ?? "Alo"}
+                    onChange={(e) => updateNodeData(id, { ...data, dummyMetalSite: e.target.value as any })}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <option value="Alo">Alo — Al octahedral (σ=0.144 nm, recommended)</option>
+                    <option value="Sit">Sit — Si tetrahedral (σ=0.082 nm, smallest)</option>
+                    <option value="Mgo">Mgo — Mg octahedral (σ=0.196 nm, roomier)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">Charge scale (× oxidation state)</label>
+                  <input
+                    type="number" step="0.05" min="0" max="1"
+                    className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 h-7"
+                    value={data.dummyChargeScale ?? 0.5}
+                    onChange={(e) => updateNodeData(id, { ...data, dummyChargeScale: parseFloat(e.target.value) || 0.5 })}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  />
+                </div>
               </div>
             )}
 

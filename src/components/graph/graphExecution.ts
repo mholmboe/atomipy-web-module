@@ -1399,6 +1399,20 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    # Legacy compat: pass-through pre-parameterized structure\n`;
           pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `    ${blockOutBox} = ${inBox}\n`;
+        } else if (ff === "dummy") {
+          // Frozen "dummy mineral" for non-MINFF inorganics: charges = scale ×
+          // guessed oxidation state, LJ borrowed from MINFF (O→OPC3, metal→small
+          // site), framework frozen. The atoms carry _dummy_type/frozen markers
+          // that the Simulate node detects to build a bond-free frozen topology.
+          const metalSite = pyEscape(getString(data, "dummyMetalSite", "Alo"));
+          const chargeScale = getNumber(data, "dummyChargeScale", 0.5);
+          const dumName = sanitizeMolName(getString(data, "moleculeName", "").trim()) || "DUM";
+          pythonCode += `\n# Frozen DUMMY mineral (non-MINFF) — qualitative; EM/NVT only\n`;
+          pythonCode += `if ${inBox} is None:\n`;
+          pythonCode += `    raise ValueError("Dummy forcefield requires a mineral structure with a simulation box.")\n`;
+          pythonCode += `ap.assign_dummy_mineral_params(${inAtoms}, charge_scale=${chargeScale}, metal_site='${metalSite}', resname='${dumName}')\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+          pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else {
           // Global options (mineral typing only): bond-detection cutoffs, typing
           // log, and resetMolid (separate water so its O don't perturb Al/Mg
@@ -1598,6 +1612,13 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `    print("Setting up simulation system...")\n`;
         pythonCode += `    # _SimList: list subclass that carries topology metadata across chained nodes\n`;
         pythonCode += `    class _SimList(list): pass\n`;
+        pythonCode += `    # Frozen DUMMY mineral? (atoms carry _dummy_type set by the dummy forcefield)\n`;
+        pythonCode += `    _dummy_frame = [a for a in ${inAtoms} if a.get('_dummy_type')]\n`;
+        pythonCode += `    _frozen_idx = [i for i, a in enumerate(${inAtoms}) if a.get('frozen')]\n`;
+        if (isNPT) {
+          pythonCode += `    if _dummy_frame:\n`;
+          pythonCode += `        raise RuntimeError("Dummy (non-MINFF) frozen minerals support EM/NVT only — a frozen framework is incompatible with an NPT barostat. Use NVT or Energy Minimization.")\n`;
+        }
         pythonCode += `    # Priority 1: topology already built by an upstream simulation — reuse it\n`;
         pythonCode += `    _chain_top = getattr(${inAtoms}, '_top_path', None)\n`;
         pythonCode += `    if _chain_top and _os.path.exists(_chain_top):\n`;
@@ -1607,6 +1628,18 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `        ap.write_gro(list(${inAtoms}), ${inBox}, _gro_path)\n`;
         pythonCode += `        _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
         pythonCode += `        topology, system, positions = ap.load_minff_into_openmm(_top_path, _gro_path, _defines, include_dir=_minff_dir, rigid_water=True)\n`;
+        pythonCode += `        _sim_atoms = list(${inAtoms})\n`;
+        pythonCode += `        _is_parmed = False\n`;
+        pythonCode += `    elif _dummy_frame:\n`;
+        pythonCode += `        # Frozen dummy mineral + water/ions: self-contained bond-free topology\n`;
+        pythonCode += `        print(f"⚠️  Frozen DUMMY (non-MINFF) model: {len(_dummy_frame)} framework atoms frozen, charges = scaled oxidation states, borrowed LJ. Qualitative only.")\n`;
+        pythonCode += `        _top_path = "sim_input.top"\n`;
+        pythonCode += `        _gro_path = "sim_input.gro"\n`;
+        pythonCode += `        ap.write_dummy_system_top(list(${inAtoms}), ${inBox}, _top_path, _gro_path, water_model='${waterModel}')\n`;
+        pythonCode += `        _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
+        pythonCode += `        topology, system, positions = ap.load_minff_into_openmm(_top_path, _gro_path, [], include_dir=_minff_dir, rigid_water=True)\n`;
+        pythonCode += `        for _fi in _frozen_idx:\n`;
+        pythonCode += `            system.setParticleMass(_fi, 0.0)  # freeze framework (mass 0)\n`;
         pythonCode += `        _sim_atoms = list(${inAtoms})\n`;
         pythonCode += `        _is_parmed = False\n`;
         pythonCode += `    else:\n`;

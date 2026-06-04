@@ -89,6 +89,42 @@ describe('graphExecution Python Generator', () => {
     expect(code).not.toContain("basename='organic'");
   });
 
+  it('generates a frozen dummy-mineral path for the non-MINFF forcefield', () => {
+    const nodes: Node[] = [
+      { id: 'struct-1', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'preset', value: 'MnO.cif' } },
+      { id: 'ff-1', type: 'forcefield', position: { x: 100, y: 0 },
+        data: { forcefield: 'dummy', dummyMetalSite: 'Alo', dummyChargeScale: 0.5 } },
+      { id: 'sim-1', type: 'simulate', position: { x: 200, y: 0 }, data: { simType: 'nvt' } },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'struct-1', target: 'ff-1', targetHandle: 'in' },
+      { id: 'e2', source: 'ff-1', target: 'sim-1', targetHandle: 'in' },
+    ];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    // Forcefield node assigns dummy params
+    expect(code).toContain("ap.assign_dummy_mineral_params(");
+    expect(code).toContain("metal_site='Alo'");
+    expect(code).toContain("charge_scale=0.5");
+    // Simulate node detects the dummy framework, builds the bond-free top, and freezes
+    expect(code).toContain("_dummy_frame = [a for a in");
+    expect(code).toContain("ap.write_dummy_system_top(");
+    expect(code).toContain("system.setParticleMass(_fi, 0.0)");
+  });
+
+  it('blocks NPT for a frozen dummy mineral', () => {
+    const nodes: Node[] = [
+      { id: 'struct-1', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'preset', value: 'MnO.cif' } },
+      { id: 'ff-1', type: 'forcefield', position: { x: 100, y: 0 }, data: { forcefield: 'dummy' } },
+      { id: 'sim-1', type: 'simulate', position: { x: 200, y: 0 }, data: { simType: 'npt' } },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'struct-1', target: 'ff-1', targetHandle: 'in' },
+      { id: 'e2', source: 'ff-1', target: 'sim-1', targetHandle: 'in' },
+    ];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    expect(code).toContain("support EM/NVT only");
+  });
+
   it('generates mixed system logic for merge node when organic node is upstream', () => {
     const nodes: Node[] = [
       {
