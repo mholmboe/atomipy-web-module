@@ -144,6 +144,22 @@
     min-width: var(--builder-node-width) !important;
   }
 
+  /* Make node selection clearly visible — React Flow's default selected style is
+     invisible on these custom card nodes, which made it easy to run a partial
+     workflow (or use "Run selected subgraph") without realising a node was
+     selected. A primary-colored ring leaves no doubt. */
+  .react-flow__node:not(.react-flow__node-viewer).selected > * {
+    outline: 2px solid hsl(var(--primary)) !important;
+    outline-offset: 2px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 0 0 4px hsl(var(--primary) / 0.18) !important;
+  }
+  .react-flow__node-viewer.selected {
+    outline: 2px solid hsl(var(--primary)) !important;
+    outline-offset: 2px !important;
+    border-radius: 12px !important;
+  }
+
   /* Prevent React Flow handles from being clipped into half-circles */
   .react-flow__node,
   .react-flow__node > div,
