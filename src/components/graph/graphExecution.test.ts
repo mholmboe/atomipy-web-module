@@ -17,8 +17,24 @@ describe('graphExecution Python Generator', () => {
     
     const code = generatePythonCode(nodes, edges, 'minimal');
     
-    expect(code).toContain("ap.parametrize_organic_gaff('CCO', version='gaff-2.11')");
+    // basename names the GROMACS moleculetype; a single organic stays 'organic'.
+    expect(code).toContain("ap.parametrize_organic_gaff('CCO', version='gaff-2.11', basename='organic')");
     expect(code).toContain("organic_atoms_0, organic_box_0 = ap.parametrize_organic_gaff");
+  });
+
+  it('names multiple distinct organics organic_1 / organic_2', () => {
+    const nodes: Node[] = [
+      { id: 'orgA', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'organic', smiles: 'CO' } },
+      { id: 'orgB', type: 'structure', position: { x: 0, y: 100 }, data: { source: 'organic', smiles: 'CCO' } },
+      { id: 'add1', type: 'add', position: { x: 100, y: 50 }, data: {} },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'orgA', target: 'add1', targetHandle: 'in' },
+      { id: 'e2', source: 'orgB', target: 'add1', targetHandle: 'in' },
+    ];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    expect(code).toContain("ap.parametrize_organic_gaff('CO', version='gaff-2.11', basename='organic_1')");
+    expect(code).toContain("ap.parametrize_organic_gaff('CCO', version='gaff-2.11', basename='organic_2')");
   });
 
   it('generates mixed system logic for merge node when organic node is upstream', () => {

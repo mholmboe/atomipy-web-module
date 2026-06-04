@@ -347,10 +347,12 @@ async def build_stream(request: BuildRequest):
                                         local[key] = src
                             return local
 
-                        def parametrize_organic_gaff(smiles, version='gaff-2.11', charge_method='bcc'):
+                        def parametrize_organic_gaff(smiles, version='gaff-2.11', charge_method='bcc', basename='organic'):
                             """
                             Parametrize an organic molecule via ACPYPE on the OpenFF worker.
-                            Returns (SystemList, box_vectors).
+                            ``basename`` becomes the GROMACS moleculetype/residue name so
+                            distinct organics in one system don't collide. Returns
+                            (SystemList, box_vectors).
                             """
                             worker_url = os.environ.get("OPENFF_WORKER_URL", "http://127.0.0.1:8001")
                             v = version.lower()
@@ -369,7 +371,7 @@ async def build_stream(request: BuildRequest):
                             else:
                                 resp = _requests.post(
                                     f"{worker_url}/parametrize/gaff",
-                                    params={"smiles": smiles, "version": version, "charge_method": charge_method},
+                                    params={"smiles": smiles, "version": version, "charge_method": charge_method, "basename": basename},
                                     timeout=180,
                                 )
                             resp.raise_for_status()
@@ -381,9 +383,10 @@ async def build_stream(request: BuildRequest):
                             box = paths.get("box", [50.0, 50.0, 50.0])
                             return SystemList(atoms, itp=itp, box=box), box
 
-                        def parametrize_organic_file(filepath, version='gaff-2.11', charge_method='bcc'):
+                        def parametrize_organic_file(filepath, version='gaff-2.11', charge_method='bcc', basename='organic'):
                             """
                             Parametrize an uploaded structure file via the OpenFF worker.
+                            ``basename`` becomes the GROMACS moleculetype/residue name.
                             Returns (SystemList, box_vectors).
                             """
                             worker_url = os.environ.get("OPENFF_WORKER_URL", "http://127.0.0.1:8001")
@@ -391,7 +394,7 @@ async def build_stream(request: BuildRequest):
                                 resp = _requests.post(
                                     f"{worker_url}/parametrize/gaff-file",
                                     files={"file": (os.path.basename(filepath), fh)},
-                                    params={"version": version, "charge_method": charge_method},
+                                    params={"version": version, "charge_method": charge_method, "basename": basename},
                                     timeout=180,
                                 )
                             resp.raise_for_status()

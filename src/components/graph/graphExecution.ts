@@ -347,6 +347,45 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
 
   const stateVars = new Map<string, { atoms: string; box: string; traj?: string }>();
 
+  // Unique GROMACS moleculetype/residue name per organic MOLECULE so distinct
+  // organics never collide. A molecule may span a structure(SMILES/file) node AND
+  // a downstream organic forcefield node — both anchor to the same upstream
+  // structure node so they share one name. Single molecule keeps 'organic'
+  // (back-compat); multiple become organic_1, organic_2, …; "moleculeName" overrides.
+  const sanitizeMolName = (s: string): string => s.replace(/[^A-Za-z0-9_]/g, "_").replace(/^_+|_+$/g, "");
+  const _isStructOrganic = (nn: Node): boolean => nn.type === "structure" && getString(nn.data, "source", "") === "organic";
+  const _isFFOrganic = (nn: Node): boolean => nn.type === "forcefield" && ["gaff", "openff_sage", "openff_parsley"].includes(getString(nn.data, "forcefield", ""));
+  const _upstreamStructOrganic = (startId: string): string | null => {
+    const seen = new Set<string>([startId]);
+    let frontier = [startId];
+    while (frontier.length) {
+      const next: string[] = [];
+      for (const cur of frontier) for (const e of edges) if (e.target === cur && !seen.has(e.source)) {
+        seen.add(e.source);
+        const sn = nodeMap.get(e.source);
+        if (sn && _isStructOrganic(sn)) return e.source;
+        next.push(e.source);
+      }
+      frontier = next;
+    }
+    return null;
+  };
+  // Each organic node's molecule "anchor": its upstream structure node, else itself.
+  const _anchorOf = (nn: Node): string => (_isFFOrganic(nn) ? (_upstreamStructOrganic(nn.id) ?? nn.id) : nn.id);
+  const molIndex = new Map<string, number>();
+  nodes.forEach((nn) => {
+    if (_isStructOrganic(nn) || _isFFOrganic(nn)) {
+      const a = _anchorOf(nn);
+      if (!molIndex.has(a)) molIndex.set(a, molIndex.size + 1);
+    }
+  });
+  const organicBasename = (nn: Node): string => {
+    const user = sanitizeMolName(getString(nn.data, "moleculeName", "").trim());
+    if (user) return user;
+    const idx = molIndex.get(_anchorOf(nn)) ?? 1;
+    return molIndex.size <= 1 ? "organic" : `organic_${idx}`;
+  };
+
   sorted.forEach((id, index) => {
     const n = nodeMap.get(id);
     if (!n) return;
@@ -434,9 +473,9 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             pythonCode += `\n# Parametrize Organic Molecule (Fallback / Standalone)\n`;
             pythonCode += `try:\n`;
             if (inputMode === "file" && uploadPath) {
-              pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${uploadPath}', version='gaff-2.11')\n`;
+              pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${uploadPath}', version='gaff-2.11', basename='${organicBasename(n)}')\n`;
             } else {
-              pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff('${smiles}', version='gaff-2.11')\n`;
+              pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff('${smiles}', version='gaff-2.11', basename='${organicBasename(n)}')\n`;
             }
             pythonCode += `except Exception as e:\n`;
             pythonCode += `    print(f"Failed to parametrize organic molecule: {e}")\n`;
@@ -1308,9 +1347,9 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `if isinstance(${inAtoms}, str):\n`;
           pythonCode += `    try:\n`;
           pythonCode += `        if '/' in ${inAtoms} or ${inAtoms}.endswith(('.pdb', '.mol2', '.sdf', '.mol')):\n`;
-          pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file(${inAtoms}, version='${versionArg}', charge_method='${chargeArg}')\n`;
+          pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file(${inAtoms}, version='${versionArg}', charge_method='${chargeArg}', basename='${organicBasename(n)}')\n`;
           pythonCode += `        else:\n`;
-          pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff(${inAtoms}, version='${versionArg}', charge_method='${chargeArg}')\n`;
+          pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff(${inAtoms}, version='${versionArg}', charge_method='${chargeArg}', basename='${organicBasename(n)}')\n`;
           pythonCode += `    except Exception as e:\n`;
           pythonCode += `        print(f"Failed to parametrize organic molecule: {e}")\n`;
           pythonCode += `        ${blockOutAtoms}, ${blockOutBox} = [], None\n`;
@@ -1344,6 +1383,15 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             pythonCode += `${blockOutAtoms} = ap.minff(_ff_in, ${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArgs})\n`;
           } else {
             pythonCode += `${blockOutAtoms} = ap.clayff(_ff_in, ${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArgs})\n`;
+          }
+          // Optional user mineral name -> the built moleculetype follows the resname
+          // (merge_top no longer hard-codes 'MIN'), so mixed/different minerals can
+          // be named (PYRO, KAOL, ...). Blank = keep 'MIN' (auto-deduped on merge).
+          const mineralName = sanitizeMolName(getString(data, "moleculeName", "").trim());
+          if (mineralName) {
+            pythonCode += `for _a in ${blockOutAtoms}:\n`;
+            pythonCode += `    if str(_a.get('type','')).startswith(('Ow','Hw')) or _a.get('resname') == 'SOL': continue\n`;
+            pythonCode += `    _a['resname'] = '${mineralName}'\n`;
           }
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         }
@@ -2085,9 +2133,9 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `\n# Parametrize Organic Molecule\n`;
         pythonCode += `try:\n`;
         if (inputMode === "file" && uploadPath) {
-          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${uploadPath}', version='${ff}')\n`;
+          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${uploadPath}', version='${ff}', basename='${organicBasename(n)}')\n`;
         } else {
-          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff('${smiles}', version='${ff}')\n`;
+          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff('${smiles}', version='${ff}', basename='${organicBasename(n)}')\n`;
         }
         pythonCode += `except Exception as e:\n`;
         pythonCode += `    print(f"Failed to parametrize organic molecule: {e}")\n`;

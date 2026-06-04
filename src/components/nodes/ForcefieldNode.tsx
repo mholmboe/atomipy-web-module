@@ -17,6 +17,7 @@ type ForcefieldNodeData = {
   chargeMethod?: "am1bcc" | "gasteiger" | "none";
   minffVariant?: "0" | "250" | "500" | "1500" | "none";
   clayffAngles?: "none" | "0" | "250" | "500" | "1500";
+  moleculeName?: string;
 };
 
 export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldNodeData>) {
@@ -121,6 +122,19 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
               </div>
             )}
 
+            <div className="border-t border-border/50 pt-2">
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Molecule name (optional)</label>
+              <input
+                type="text"
+                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+                placeholder="auto (MIN, MIN_1, …)"
+                value={(data.moleculeName as string) ?? ""}
+                onChange={(e) => updateNodeData(id, { ...data, moleculeName: e.target.value })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+              <div className="text-[10px] text-muted-foreground mt-0.5">Name this mineral (e.g. PYRO, KAOL) so different minerals don't merge as MIN.</div>
+            </div>
+
             <p className="text-[10px] text-muted-foreground mt-2.5 leading-snug">
               Water model is set on the <strong>Solvent</strong> node and ion parameters on the <strong>Ions</strong> node.
             </p>
@@ -153,6 +167,19 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
                 <option value="gasteiger">Gasteiger (Fast)</option>
                 <option value="none">None (Neutral / Preassigned)</option>
               </select>
+            </div>
+
+            <div className="border-t border-border/50 pt-2">
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Molecule name (optional)</label>
+              <input
+                type="text"
+                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+                placeholder="auto (organic, organic_2, …)"
+                value={(data.moleculeName as string) ?? ""}
+                onChange={(e) => updateNodeData(id, { ...data, moleculeName: e.target.value })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+              <div className="text-[10px] text-muted-foreground mt-0.5">GROMACS moleculetype/residue name. Leave blank for auto-unique.</div>
             </div>
           </div>
         )}

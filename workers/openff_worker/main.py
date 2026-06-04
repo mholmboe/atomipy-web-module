@@ -47,6 +47,14 @@ def _mol_id(smiles: str) -> str:
     return hashlib.md5(smiles.encode()).hexdigest()[:8]
 
 
+def _sanitize_basename(name: str) -> str:
+    """Make a safe ACPYPE basename / GROMACS moleculetype name (alnum + _)."""
+    import re as _re
+    cleaned = _re.sub(r"[^A-Za-z0-9_]", "_", (name or "").strip())
+    cleaned = cleaned.strip("_")
+    return cleaned or "organic"
+
+
 def _probe_gromacs_reader() -> bool:
     try:
         from openff.interchange import Interchange
@@ -200,12 +208,18 @@ def parametrize_sage(smiles: str,
 @app.post("/parametrize/gaff")
 def parametrize_gaff(smiles: str,
                      version: str = "gaff2",
-                     charge_method: str = "bcc") -> dict:
+                     charge_method: str = "bcc",
+                     basename: str = "organic") -> dict:
     """
     Parametrize a small organic molecule with GAFF or GAFF2 via ACPYPE.
     ACPYPE bundles antechamber binaries — no separate AmberTools install needed.
     Returns paths to native GROMACS .top, .itp, and .gro files.
+
+    ``basename`` sets the ACPYPE output basename, which becomes the GROMACS
+    [ moleculetype ] / residue name and the .itp filename — so distinct organic
+    molecules in one system can get distinct, non-colliding names (organic_1, …).
     """
+    bn = _sanitize_basename(basename)
     # Map user-facing version strings to ACPYPE atom_type flag
     at = version.lower()
     if "gaff2" in at or "gaff-2" in at:
@@ -213,10 +227,12 @@ def parametrize_gaff(smiles: str,
     else:
         atom_type = "gaff"
 
-    workdir = f"/tmp/{_mol_id(smiles)}_gaff_{atom_type}"
+    # Include basename in the cache dir so two molecules that hash the same but
+    # want different names don't clobber each other.
+    workdir = f"/tmp/{_mol_id(smiles)}_gaff_{atom_type}_{bn}"
     os.makedirs(workdir, exist_ok=True)
 
-    sdf_path = os.path.join(workdir, "organic.sdf")
+    sdf_path = os.path.join(workdir, f"{bn}.sdf")
     _smiles_to_sdf(smiles, sdf_path)
 
     result = subprocess.run(
@@ -227,7 +243,7 @@ def parametrize_gaff(smiles: str,
             "-a", atom_type,       # gaff or gaff2
             "-o", "gmx",
             "-n", "0",             # net charge 0 (neutral)
-            "-b", "organic",       # output basename
+            "-b", bn,              # output basename -> moleculetype/residue name
         ],
         cwd=workdir,
         capture_output=True,
@@ -241,10 +257,10 @@ def parametrize_gaff(smiles: str,
             detail=f"ACPYPE failed:\n{result.stderr or result.stdout}",
         )
 
-    acpype_dir = os.path.join(workdir, "organic.acpype")
-    top_path = os.path.join(acpype_dir, "organic_GMX.top")
-    itp_path = os.path.join(acpype_dir, "organic_GMX.itp")
-    gro_path = os.path.join(acpype_dir, "organic_GMX.gro")
+    acpype_dir = os.path.join(workdir, f"{bn}.acpype")
+    top_path = os.path.join(acpype_dir, f"{bn}_GMX.top")
+    itp_path = os.path.join(acpype_dir, f"{bn}_GMX.itp")
+    gro_path = os.path.join(acpype_dir, f"{bn}_GMX.gro")
 
     for p in (top_path, gro_path):
         if not os.path.exists(p):
@@ -278,21 +294,25 @@ async def parametrize_gaff_file(
     file: UploadFile = File(...),
     version: str = "gaff2",
     charge_method: str = "bcc",
+    basename: str = "organic",
 ) -> dict:
     """
     Parametrize an uploaded structure file (.mol2, .sdf, .mol, .pdb) with
     GAFF/GAFF2 via ACPYPE, preserving any existing 3D geometry in the file.
     Returns paths to native GROMACS .top, .itp, and .gro files.
+
+    ``basename`` sets the GROMACS moleculetype/residue name and .itp filename.
     """
     from pathlib import Path
 
+    bn = _sanitize_basename(basename)
     original_name = file.filename or "organic.mol2"
     suffix = Path(original_name).suffix or ".mol2"
     mol_id = hashlib.md5(original_name.encode()).hexdigest()[:8]
-    workdir = f"/tmp/{mol_id}_gaff_file"
+    workdir = f"/tmp/{mol_id}_gaff_file_{bn}"
     os.makedirs(workdir, exist_ok=True)
 
-    mol_path = os.path.join(workdir, f"organic{suffix}")
+    mol_path = os.path.join(workdir, f"{bn}{suffix}")
     content = await file.read()
     with open(mol_path, "wb") as f:
         f.write(content)
@@ -308,7 +328,7 @@ async def parametrize_gaff_file(
             "-a", atom_type,
             "-o", "gmx",
             "-n", "0",
-            "-b", "organic",
+            "-b", bn,
         ],
         cwd=workdir,
         capture_output=True,
@@ -322,10 +342,10 @@ async def parametrize_gaff_file(
             detail=f"ACPYPE failed:\n{result.stderr or result.stdout}",
         )
 
-    acpype_dir = os.path.join(workdir, "organic.acpype")
-    top_path = os.path.join(acpype_dir, "organic_GMX.top")
-    itp_path = os.path.join(acpype_dir, "organic_GMX.itp")
-    gro_path = os.path.join(acpype_dir, "organic_GMX.gro")
+    acpype_dir = os.path.join(workdir, f"{bn}.acpype")
+    top_path = os.path.join(acpype_dir, f"{bn}_GMX.top")
+    itp_path = os.path.join(acpype_dir, f"{bn}_GMX.itp")
+    gro_path = os.path.join(acpype_dir, f"{bn}_GMX.gro")
 
     for p in (top_path, gro_path):
         if not os.path.exists(p):
