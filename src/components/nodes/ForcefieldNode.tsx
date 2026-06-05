@@ -131,8 +131,9 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
               <div className="mt-2.5 space-y-2">
                 <div className="text-[10px] leading-relaxed text-amber-700 bg-amber-500/10 border border-amber-500/30 rounded-md p-2">
                   ⚠️ <b>Dummy FF.</b> For materials not covered by the built-in force
-                  fields. Builds a <b>frozen dummy</b>: borrowed LJ (O→OPC3,
-                  metals→small site, F→F⁻), framework frozen. Qualitative only —
+                  fields. Builds a <b>frozen dummy</b>: borrowed LJ (O→OPC3, F→F⁻; metals→small
+                  buried site in oxides, element-appropriate for pure metals),
+                  framework frozen. Qualitative only —
                   <b>EM / NVT only</b> (no NPT).
                 </div>
                 <div>

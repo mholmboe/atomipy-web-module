@@ -112,8 +112,10 @@ still interact with water and solutes:
   oxidation × [1 − exp(−¼(χ_O − χ_M)²)]` (its bond's ionic character), H = +0.4,
   and oxygens take a coordination-resolved charge so each framework is neutral.
   A simpler `Half oxidation state` mode is also available.
-- **Lennard-Jones** — borrowed: oxygen → OPC3 water-O, fluorine → F⁻, metals → a
-  small buried site (default `Alo`; selectable). Hydrogens carry no LJ.
+- **Lennard-Jones** — borrowed: oxygen → OPC3 water-O, fluorine → F⁻, hydrogens
+  none. Metals use a small buried site (default `Alo`) inside oxides/halides;
+  for a **pure metal/alloy** each metal gets **element-appropriate LJ** (Heinz
+  2008 for fcc Cu/Ag/Au/Ni/Pd/Pt/Al/Pb; UFF for others).
 - **Frozen framework** — the lattice atoms are frozen (mass 0), so **no bonded
   parameters are needed**. They hold their positions while water, ions and
   organics move and interact with them electrostatically.
