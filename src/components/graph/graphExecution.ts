@@ -1415,7 +1415,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           const dRmaxLong = getNumber(data, "rmaxLong", 2.45);
           const dRmaxH = getNumber(data, "rmaxH", 1.2);
           const dumName = sanitizeMolName(getString(data, "moleculeName", "").trim()) || "DUM";
-          pythonCode += `\n# Frozen DUMMY mineral (non-MINFF) — qualitative; EM/NVT only\n`;
+          pythonCode += `\n# Frozen DUMMY mineral (non-MINFF) -- qualitative; EM/NVT only\n`;
           pythonCode += `if ${inBox} is None:\n`;
           pythonCode += `    raise ValueError("Dummy forcefield requires a mineral structure with a simulation box.")\n`;
           pythonCode += `ap.assign_dummy_mineral_params(${inAtoms}, Box=${inBox}, charge_mode='${chargeMode}', charge_scale=${chargeScale}, metal_site='${metalSite}', rmaxlong=${dRmaxLong}, rmaxH=${dRmaxH}, resname='${dumName}')\n`;
@@ -1625,7 +1625,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `    _frozen_idx = [i for i, a in enumerate(${inAtoms}) if a.get('frozen')]\n`;
         if (isNPT) {
           pythonCode += `    if _dummy_frame:\n`;
-          pythonCode += `        raise RuntimeError("Dummy (non-MINFF) frozen minerals support EM/NVT only — a frozen framework is incompatible with an NPT barostat. Use NVT or Energy Minimization.")\n`;
+          pythonCode += `        raise RuntimeError("Dummy (non-MINFF) frozen minerals support EM/NVT only -- a frozen framework is incompatible with an NPT barostat. Set the Simulate node to NVT or Energy Minimization (not NPT).")\n`;
         }
         pythonCode += `    # Priority 1: topology already built by an upstream simulation — reuse it\n`;
         pythonCode += `    _chain_top = getattr(${inAtoms}, '_top_path', None)\n`;
@@ -1644,7 +1644,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `        _is_parmed = False\n`;
         pythonCode += `    elif _dummy_frame:\n`;
         pythonCode += `        # Frozen dummy mineral (+ optional organics/water/ions): self-contained bond-free topology\n`;
-        pythonCode += `        print(f"⚠️  Frozen DUMMY (non-MINFF) model: {len(_dummy_frame)} framework atoms frozen, charges = scaled oxidation states, borrowed LJ. Qualitative only.")\n`;
+        pythonCode += `        print(f"[dummy] Frozen DUMMY (non-MINFF) model: {len(_dummy_frame)} framework atoms frozen, charges = scaled oxidation states, borrowed LJ. Qualitative only.")\n`;
         pythonCode += `        _top_path = "sim_input.top"\n`;
         pythonCode += `        _gro_path = "sim_input.gro"\n`;
         pythonCode += `        _defines = []  # the dummy .top is self-contained; no external #defines (also carried to downstream nodes)\n`;
@@ -1953,8 +1953,8 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
         pythonCode += `    ${blockOutBox} = ${inBox}\n`;
         if (!isMinimize) {
-          pythonCode += `    with open('${logFile}', 'w') as _logf: _logf.write(f"Simulation failed: {md_err}\\n" + _tb.format_exc())\n`;
-          pythonCode += `    with open('${trajFile}', 'w') as _trajf: _trajf.write("No trajectory generated.\\n")\n`;
+          pythonCode += `    with open('${logFile}', 'w', encoding='utf-8') as _logf: _logf.write(f"Simulation failed: {md_err}\\n" + _tb.format_exc())\n`;
+          pythonCode += `    with open('${trajFile}', 'w', encoding='utf-8') as _trajf: _trajf.write("No trajectory generated.\\n")\n`;
         }
         
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox, traj: `'${trajFile}'` });
