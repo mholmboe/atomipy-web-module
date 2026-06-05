@@ -1031,6 +1031,34 @@ export default function VisualBuilder() {
     localStorage.setItem("atomipy_status_window_minimized", String(isStatusWindowMinimized));
   }, [isStatusWindowMinimized]);
 
+  // Resizable Node Status window. Size is applied imperatively (not via a React
+  // style prop) so the frequent re-renders during a build never fight the user's
+  // drag; it's restored from / persisted to localStorage.
+  const statusWindowRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!showStatusWindow) return;
+    const el = statusWindowRef.current;
+    if (!el) return;
+    let w = 460, h = 520;
+    try {
+      const s = JSON.parse(localStorage.getItem("atomipy_status_window_size") || "null");
+      if (s && s.w) { w = s.w; h = s.h; }
+    } catch { /* ignore */ }
+    el.style.width = `${w}px`;
+    el.style.height = isStatusWindowMinimized ? "" : `${h}px`;   // header-only auto-height when minimized
+    if (isStatusWindowMinimized) return;
+    let t: ReturnType<typeof setTimeout>;
+    const ro = new ResizeObserver(() => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        localStorage.setItem("atomipy_status_window_size",
+          JSON.stringify({ w: el.offsetWidth, h: el.offsetHeight }));
+      }, 250);
+    });
+    ro.observe(el);
+    return () => { ro.disconnect(); clearTimeout(t); };
+  }, [showStatusWindow, isStatusWindowMinimized]);
+
   // Right-click context menu & inspectors
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [nodeLogsMap, setNodeLogsMap] = useState<Record<string, string[]>>({});
@@ -2683,7 +2711,20 @@ export default function VisualBuilder() {
         })()}
 
         {showStatusWindow && (
-          <div className="absolute right-3 top-3 z-20 w-[460px] rounded-xl border border-border bg-card/95 p-2.5 shadow-xl backdrop-blur-sm">
+          <div
+            ref={statusWindowRef}
+            className="absolute right-3 top-3 z-20 w-[460px] rounded-xl border border-border bg-card/95 p-2.5 shadow-xl backdrop-blur-sm flex flex-col"
+            // resize: both gives X+Y drag; direction:rtl puts the grab handle in
+            // the BOTTOM-LEFT so the panel grows into the canvas (its right edge
+            // stays pinned). Inner wrapper resets to ltr. Width/height are set
+            // imperatively (see effect), so they're omitted here.
+            style={{
+              minWidth: 300, minHeight: 140, maxWidth: "92vw", maxHeight: "88vh",
+              resize: isStatusWindowMinimized ? "none" : "both",
+              overflow: "hidden", direction: "rtl",
+            }}
+          >
+          <div style={{ direction: "ltr" }} className="flex flex-col min-h-0 flex-1">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Node Status</p>
@@ -2724,7 +2765,7 @@ export default function VisualBuilder() {
             )}
 
             {!isStatusWindowMinimized && (
-              <div className="max-h-[480px] overflow-y-auto space-y-1 pr-1 scrollbar-thin" ref={scrollRef}>
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-1 pr-1 scrollbar-thin" ref={scrollRef}>
                 {trackedNodeOrder.length === 0 && (
                   <p className="text-xs text-muted-foreground">No tracked compute nodes in current workflow.</p>
                 )}
@@ -2757,6 +2798,7 @@ export default function VisualBuilder() {
                 )}
               </div>
             )}
+          </div>
           </div>
         )}
         <ReactFlowProvider>
