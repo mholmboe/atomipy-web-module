@@ -856,7 +856,7 @@ async def inorganic_scan(request: Request):
 
     Loads the structure, collects its elements, and flags any that have no MINFF
     framework type (the same set the dummy-mineral path uses). When unsupported
-    elements are present, the UI steers the user to the 'Dummy (non-MINFF)'
+    elements are present, the UI steers the user to the 'Dummy FF'
     forcefield.
     """
     import atomipy as ap

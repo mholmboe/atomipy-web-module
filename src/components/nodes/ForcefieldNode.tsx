@@ -18,7 +18,7 @@ type ForcefieldNodeData = {
   minffVariant?: "0" | "250" | "500" | "1500" | "none";
   clayffAngles?: "none" | "0" | "250" | "500" | "1500";
   moleculeName?: string;
-  // Frozen "dummy" model for non-MINFF inorganics
+  // Frozen "dummy" model for materials not covered by the built-in force fields
   dummyMetalSite?: "Alo" | "Sit" | "Mgo";
   dummyChargeMode?: "pauling" | "half";
   dummyChargeScale?: number;
@@ -88,7 +88,7 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
             >
               <option value="minff">MINFF</option>
               <option value="clayff">CLAYFF</option>
-              <option value="dummy">Dummy (non-MINFF)</option>
+              <option value="dummy">Dummy FF</option>
             </select>
 
             {forcefield === "minff" && (
@@ -130,9 +130,10 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
             {forcefield === "dummy" && (
               <div className="mt-2.5 space-y-2">
                 <div className="text-[10px] leading-relaxed text-amber-700 bg-amber-500/10 border border-amber-500/30 rounded-md p-2">
-                  ⚠️ <b>Not MINFF-compatible.</b> Builds a <b>frozen dummy</b>: borrowed
-                  MINFF LJ (O→OPC3, metals→small site, F→F⁻), framework frozen.
-                  Qualitative only — <b>EM / NVT only</b> (no NPT).
+                  ⚠️ <b>Dummy FF.</b> For materials not covered by the built-in force
+                  fields. Builds a <b>frozen dummy</b>: borrowed LJ (O→OPC3,
+                  metals→small site, F→F⁻), framework frozen. Qualitative only —
+                  <b>EM / NVT only</b> (no NPT).
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground block mb-1">Charge model</label>

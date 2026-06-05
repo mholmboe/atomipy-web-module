@@ -108,7 +108,7 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain("ap.import_auto(f'uploads/legacy.pdb')");
   });
 
-  it('generates a frozen dummy-mineral path for the non-MINFF forcefield', () => {
+  it('generates a frozen dummy-mineral path for the Dummy FF', () => {
     const nodes: Node[] = [
       { id: 'struct-1', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'preset', value: 'MnO.cif' } },
       { id: 'ff-1', type: 'forcefield', position: { x: 100, y: 0 },

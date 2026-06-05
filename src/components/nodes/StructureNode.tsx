@@ -186,9 +186,9 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
       if (!response.ok) throw new Error(result.detail || "Scan failed");
       setInorgScan(result);
       if (result.minffCompatible) {
-        toast.success(`MINFF compatible — ${result.elements.join(", ")}`);
+        toast.success(`Force-field compatible -- ${result.elements.join(", ")}`);
       } else {
-        toast.warning(`Not MINFF-typeable: ${result.unsupported.join(", ")} — use the Dummy forcefield.`);
+        toast.warning(`Not force-field compatible: ${result.unsupported.join(", ")} -- use the Dummy FF.`);
       }
     } catch (err: any) {
       toast.error(err.message);
@@ -347,7 +347,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
               </div>
             )}
 
-            {/* Preview & Validate — scan elements for MINFF compatibility */}
+            {/* Preview & Validate -- scan elements for force-field compatibility */}
             <button
               type="button"
               className="nodrag w-full flex justify-center py-1.5 bg-primary/20 text-primary hover:bg-primary/30 rounded-md text-xs font-semibold transition-colors disabled:opacity-40"
@@ -361,13 +361,13 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
             {inorgScan && (
               inorgScan.minffCompatible ? (
                 <div className="text-[10px] text-green-600 bg-green-500/10 p-2 rounded border border-green-500/20 leading-relaxed">
-                  ✓ MINFF compatible — {inorgScan.nAtoms} atoms ({inorgScan.elements.join(", ")}).
+                  ✓ Force-field compatible — {inorgScan.nAtoms} atoms ({inorgScan.elements.join(", ")}).
                   Use the MINFF or CLAYFF forcefield.
                 </div>
               ) : (
                 <div className="text-[10px] text-amber-700 bg-amber-500/10 p-2 rounded border border-amber-500/30 leading-relaxed">
-                  ⚠️ <b>Not MINFF-typeable:</b> {inorgScan.unsupported.join(", ")} ha{inorgScan.unsupported.length > 1 ? "ve" : "s"} no
-                  MINFF framework type. Set the <b>Forcefield</b> node to <b>“Dummy (non-MINFF)”</b> to run a frozen
+                  ⚠️ <b>Not force-field compatible:</b> {inorgScan.unsupported.join(", ")} ha{inorgScan.unsupported.length > 1 ? "ve" : "s"} no
+                  built-in force-field type. Set the <b>Forcefield</b> node to <b>“Dummy FF”</b> to run a frozen
                   qualitative model (EM/NVT). Elements: {inorgScan.elements.join(", ")}.
                 </div>
               )

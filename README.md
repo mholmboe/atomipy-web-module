@@ -100,6 +100,40 @@ and Organic tabs). Set it to give a component a meaningful name — `PYRO`, `KAO
 
 ---
 
+## 🧊 Dummy FF — simulating inorganics not covered by the built-in force fields
+
+The built-in force fields (MINFF / CLAYFF) only type a specific element set
+(Si, Al, Mg, Fe, Ca, Ti, Li, F, O, H). For a material containing anything else —
+**Mn, Ni, Co, Cu, Zn, As, Ag, Pb, …** (e.g. MnO, NiO, Cr₂O₃) — pick
+**Forcefield → Dummy FF**. It builds a *qualitative* model so the material can
+still interact with water and solutes:
+
+- **Charges** — `Pauling effective` (default): each cation gets `q_eff =
+  oxidation × [1 − exp(−¼(χ_O − χ_M)²)]` (its bond's ionic character), H = +0.4,
+  and oxygens take a coordination-resolved charge so each framework is neutral.
+  A simpler `Half oxidation state` mode is also available.
+- **Lennard-Jones** — borrowed: oxygen → OPC3 water-O, fluorine → F⁻, metals → a
+  small buried site (default `Alo`; selectable). Hydrogens carry no LJ.
+- **Frozen framework** — the lattice atoms are frozen (mass 0), so **no bonded
+  parameters are needed**. They hold their positions while water, ions and
+  organics move and interact with them electrostatically.
+
+**How to use it**
+1. Load your structure (preset or upload). On the **inorganic** tab, click
+   *Preview & Validate* — it scans the elements and, if any aren't covered by the
+   built-in force fields, tells you to use the Dummy FF.
+2. Set the **Forcefield** node to **Dummy FF** (optionally choose the charge
+   model and metal LJ site).
+3. Add Solvent / ions as usual and run **Energy Minimization or NVT** (NPT is
+   blocked — a frozen rigid body can't be barostatted).
+
+Mixed systems work: **multiple dummy minerals**, **several different organics**,
+water and ions can all coexist in one frozen-framework run. This is for
+qualitative questions (wetting, ion adsorption, interfacial structuring) — not
+quantitative energetics.
+
+---
+
 ## 🛠️ Getting Started
 
 > 📖 For the full installation & deployment reference (local / online / Colab
