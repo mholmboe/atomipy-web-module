@@ -132,6 +132,34 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain("_defines = []");  // dummy branch must set _defines for chaining/output
   });
 
+  it('names consecutive simulation outputs by type: EM_1, NVT_1, NPT_1', () => {
+    const nodes: Node[] = [
+      { id: 's', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'preset', value: 'pyrophyllite.pdb' } },
+      { id: 'ff', type: 'forcefield', position: { x: 1, y: 0 }, data: { forcefield: 'minff' } },
+      { id: 'em', type: 'simulate', position: { x: 2, y: 0 }, data: { simType: 'minimize' } },
+      { id: 'nvt', type: 'simulate', position: { x: 3, y: 0 }, data: { simType: 'nvt' } },
+      { id: 'npt', type: 'simulate', position: { x: 4, y: 0 }, data: { simType: 'npt' } },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 's', target: 'ff', targetHandle: 'in' },
+      { id: 'e2', source: 'ff', target: 'em', targetHandle: 'in' },
+      { id: 'e3', source: 'em', target: 'nvt', targetHandle: 'in' },
+      { id: 'e4', source: 'nvt', target: 'npt', targetHandle: 'in' },
+    ];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    // type-based trajectory/coords/result names, in execution order
+    expect(code).toContain("'EM_1.pdb'");
+    expect(code).toContain("'NVT_1.pdb'");
+    expect(code).toContain("'NPT_1.pdb'");
+    expect(code).toContain('"EM_1.top"');     // first node builds the topology
+    expect(code).toContain('"NVT_1.gro"');    // chained nodes write their own coords
+    expect(code).toContain('"EM_1_final.pdb"');
+    // old index-based names are gone
+    expect(code).not.toContain('traj_2.pdb');
+    expect(code).not.toContain('sim_input.top');
+    expect(code).not.toContain('result_2.pdb');
+  });
+
   it('blocks NPT for a frozen dummy mineral', () => {
     const nodes: Node[] = [
       { id: 'struct-1', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'preset', value: 'MnO.cif' } },

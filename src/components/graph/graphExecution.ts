@@ -412,6 +412,10 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
     return molIndex.size <= 1 ? "organic" : `organic_${idx}`;
   };
 
+  // Per-type counter for simulation output basenames: consecutive runs of each
+  // type are numbered EM_1/EM_2, NVT_1/NVT_2, NPT_1/NPT_2 (in execution order).
+  const _simTypeCount: Record<string, number> = {};
+
   sorted.forEach((id, index) => {
     const n = nodeMap.get(id);
     if (!n) return;
@@ -1580,7 +1584,12 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const waterModel = findUpstreamWaterModel(id, upstreamFF);
         const ionSet = findUpstreamIonSet(id, upstreamFF);
         const logFile = pyEscape(getString(data, "logFile", "output.log"));
-        const trajFile = `traj_${index}.pdb`;
+        // Semantic, per-type output basename: EM_1, NVT_1, NPT_1, EM_2, … in
+        // execution order (so consecutive EM -> NVT chains get readable filenames).
+        const _simLabel = simType === "minimize" ? "EM" : simType === "npt" ? "NPT" : "NVT";
+        _simTypeCount[_simLabel] = (_simTypeCount[_simLabel] || 0) + 1;
+        const simBase = `${_simLabel}_${_simTypeCount[_simLabel]}`;
+        const trajFile = `${simBase}.pdb`;
         const excludeWater = getBoolean(data, "excludeWater", true);
         const pdbFreq = getNumber(data, "pdbFreq", getNumber(data, "dcdFreq", 1000));
         const logFreq = getNumber(data, "logFreq", 1000);
@@ -1632,7 +1641,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `    if _chain_top and _os.path.exists(_chain_top):\n`;
         pythonCode += `        _top_path = _chain_top\n`;
         pythonCode += `        _defines  = getattr(${inAtoms}, '_defines', ${definesExpr})\n`;
-        pythonCode += `        _gro_path = "chained_sim.gro"\n`;
+        pythonCode += `        _gro_path = "${simBase}.gro"\n`;
         pythonCode += `        ap.write_gro(list(${inAtoms}), ${inBox}, _gro_path)\n`;
         pythonCode += `        _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
         pythonCode += `        topology, system, positions = ap.load_minff_into_openmm(_top_path, _gro_path, _defines, include_dir=_minff_dir, rigid_water=True)\n`;
@@ -1645,8 +1654,8 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `    elif _dummy_frame:\n`;
         pythonCode += `        # Frozen dummy mineral (+ optional organics/water/ions): self-contained bond-free topology\n`;
         pythonCode += `        print(f"[dummy] Frozen DUMMY (non-MINFF) model: {len(_dummy_frame)} framework atoms frozen, charges = scaled oxidation states, borrowed LJ. Qualitative only.")\n`;
-        pythonCode += `        _top_path = "sim_input.top"\n`;
-        pythonCode += `        _gro_path = "sim_input.gro"\n`;
+        pythonCode += `        _top_path = "${simBase}.top"\n`;
+        pythonCode += `        _gro_path = "${simBase}.gro"\n`;
         pythonCode += `        _defines = []  # the dummy .top is self-contained; no external #defines (also carried to downstream nodes)\n`;
         pythonCode += `        # Collect any organic GAFF/OpenFF .itp files that reached here so they\n`;
         pythonCode += `        # are #included (otherwise OpenMM: "Unknown molecule type: organic").\n`;
@@ -1675,8 +1684,8 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `        _has_itp = hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None\n`;
         pythonCode += `        if _has_itp or _has_solvent_or_ions:\n`;
         pythonCode += `            # Priority 2: merged topology (organic/mineral/water SystemList)\n`;
-        pythonCode += `            _top_path = "sim_input.top"\n`;
-        pythonCode += `            _gro_path = "sim_input.gro"\n`;
+        pythonCode += `            _top_path = "${simBase}.top"\n`;
+        pythonCode += `            _gro_path = "${simBase}.gro"\n`;
         pythonCode += `            _defines = ${definesExpr}\n`;
         pythonCode += `            _ff_variant = "GMINFF_k500"\n`;
         pythonCode += `            _water_model = "spce"\n`;
@@ -1731,8 +1740,8 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `            _is_parmed = False\n`;
         pythonCode += `        else:\n`;
         pythonCode += `            # Priority 3: mineral-only — build topology from scratch\n`;
-        pythonCode += `            _top_path = "min_system.top"\n`;
-        pythonCode += `            _gro_path = "min_system.gro"\n`;
+        pythonCode += `            _top_path = "${simBase}.top"\n`;
+        pythonCode += `            _gro_path = "${simBase}.gro"\n`;
         pythonCode += `            _sim_atoms = list(${inAtoms})\n`;
         pythonCode += `            ap.write_gmx_top(_sim_atoms, Box=${inBox}, file_path=_top_path, explicit_angles=${writeAngles ? 1 : 0}, KANGLE=${mineralKangle}, max_angle=${writeAngles ? "None" : "0.0"})\n`;
         pythonCode += `            ap.write_gro(_sim_atoms, ${inBox}, _gro_path)\n`;
@@ -1932,7 +1941,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `            _a.xz = float(_final_positions[_i][2])\n`;
         pythonCode += `        ${blockOutAtoms} = _sim_atoms\n`;
         pythonCode += `        ${blockOutBox} = _new_box\n`;
-        pythonCode += `        _sim_atoms.save("result_${index}.pdb", overwrite=True)\n`;
+        pythonCode += `        _sim_atoms.save("${simBase}_final.pdb", overwrite=True)\n`;
         pythonCode += `    else:\n`;
         pythonCode += `        for _i, _pos in enumerate(_final_positions):\n`;
         pythonCode += `            _sim_atoms[_i]['x'] = float(_pos[0])\n`;
@@ -1944,7 +1953,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `        ${blockOutAtoms}._defines  = _defines\n`;
         pythonCode += `        if hasattr(${inAtoms}, 'itp'): ${blockOutAtoms}.itp = ${inAtoms}.itp\n`;
         pythonCode += `        ${blockOutBox} = _new_box\n`;
-        pythonCode += `        ap.write_pdb(list(_sim_atoms), _new_box, "result_${index}.pdb")\n`;
+        pythonCode += `        ap.write_pdb(list(_sim_atoms), _new_box, "${simBase}_final.pdb")\n`;
 
         pythonCode += `except Exception as md_err:\n`;
         pythonCode += `    import traceback as _tb\n`;
