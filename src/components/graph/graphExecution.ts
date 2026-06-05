@@ -1637,12 +1637,17 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `        _minff_dir = _os.path.join(_os.path.dirname(ap.__file__), 'ffparams')\n`;
         pythonCode += `        topology, system, positions = ap.load_minff_into_openmm(_top_path, _gro_path, _defines, include_dir=_minff_dir, rigid_water=True)\n`;
         pythonCode += `        _sim_atoms = list(${inAtoms})\n`;
+        pythonCode += `        # Re-freeze a chained frozen-dummy framework (e.g. EM -> NVT): the reused\n`;
+        pythonCode += `        # topology keeps real masses, so zero them again for the flagged atoms.\n`;
+        pythonCode += `        for _ci, _ca in enumerate(_sim_atoms):\n`;
+        pythonCode += `            if _ca.get('frozen'): system.setParticleMass(_ci, 0.0)\n`;
         pythonCode += `        _is_parmed = False\n`;
         pythonCode += `    elif _dummy_frame:\n`;
         pythonCode += `        # Frozen dummy mineral (+ optional organics/water/ions): self-contained bond-free topology\n`;
         pythonCode += `        print(f"⚠️  Frozen DUMMY (non-MINFF) model: {len(_dummy_frame)} framework atoms frozen, charges = scaled oxidation states, borrowed LJ. Qualitative only.")\n`;
         pythonCode += `        _top_path = "sim_input.top"\n`;
         pythonCode += `        _gro_path = "sim_input.gro"\n`;
+        pythonCode += `        _defines = []  # the dummy .top is self-contained; no external #defines (also carried to downstream nodes)\n`;
         pythonCode += `        # Collect any organic GAFF/OpenFF .itp files that reached here so they\n`;
         pythonCode += `        # are #included (otherwise OpenMM: "Unknown molecule type: organic").\n`;
         pythonCode += `        _dummy_org_itps = []\n`;

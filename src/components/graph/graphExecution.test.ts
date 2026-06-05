@@ -129,6 +129,7 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain("_dummy_frame = [a for a in");
     expect(code).toContain("ap.write_dummy_system_top(");
     expect(code).toContain("system.setParticleMass(_fi, 0.0)");
+    expect(code).toContain("_defines = []");  // dummy branch must set _defines for chaining/output
   });
 
   it('blocks NPT for a frozen dummy mineral', () => {
