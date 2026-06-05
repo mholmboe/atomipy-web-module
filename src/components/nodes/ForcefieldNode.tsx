@@ -22,6 +22,7 @@ type ForcefieldNodeData = {
   dummyMetalSite?: "Alo" | "Sit" | "Mgo";
   dummyChargeMode?: "pauling" | "half";
   dummyChargeScale?: number;
+  dummyLjMode?: "element" | "minff";
 };
 
 export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldNodeData>) {
@@ -131,10 +132,9 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
               <div className="mt-2.5 space-y-2">
                 <div className="text-[10px] leading-relaxed text-amber-700 bg-amber-500/10 border border-amber-500/30 rounded-md p-2">
                   ⚠️ <b>Dummy FF.</b> For materials not covered by the built-in force
-                  fields. Builds a <b>frozen dummy</b>: borrowed LJ (O→OPC3, F→F⁻; metals→small
-                  buried site in oxides, element-appropriate for pure metals),
-                  framework frozen. Qualitative only —
-                  <b>EM / NVT only</b> (no NPT).
+                  fields. Builds a <b>frozen dummy</b>: per-element LJ calculated from
+                  vdW data (UFF / Heinz metals) by default, framework frozen.
+                  Qualitative only — <b>EM / NVT only</b> (no NPT).
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground block mb-1">Charge model</label>
@@ -161,18 +161,32 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
                   </div>
                 )}
                 <div>
-                  <label className="text-xs font-semibold text-muted-foreground block mb-1">Metal LJ site</label>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">LJ parameters</label>
                   <select
                     className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
-                    value={data.dummyMetalSite ?? "Alo"}
-                    onChange={(e) => updateNodeData(id, { ...data, dummyMetalSite: e.target.value as any })}
+                    value={data.dummyLjMode ?? "element"}
+                    onChange={(e) => updateNodeData(id, { ...data, dummyLjMode: e.target.value as any })}
                     onPointerDown={(e) => e.stopPropagation()}
                   >
-                    <option value="Alo">Alo — Al octahedral (σ=0.144 nm, recommended)</option>
-                    <option value="Sit">Sit — Si tetrahedral (σ=0.082 nm, smallest)</option>
-                    <option value="Mgo">Mgo — Mg octahedral (σ=0.196 nm, roomier)</option>
+                    <option value="element">Per-element (UFF/Heinz, calculated from vdW)</option>
+                    <option value="minff">MINFF-borrowed (O=OPC3, F=F⁻, metals=site)</option>
                   </select>
                 </div>
+                {(data.dummyLjMode ?? "element") === "minff" && (
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Metal LJ site</label>
+                    <select
+                      className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+                      value={data.dummyMetalSite ?? "Alo"}
+                      onChange={(e) => updateNodeData(id, { ...data, dummyMetalSite: e.target.value as any })}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <option value="Alo">Alo — Al octahedral (σ=0.144 nm, recommended)</option>
+                      <option value="Sit">Sit — Si tetrahedral (σ=0.082 nm, smallest)</option>
+                      <option value="Mgo">Mgo — Mg octahedral (σ=0.196 nm, roomier)</option>
+                    </select>
+                  </div>
+                )}
               </div>
             )}
 

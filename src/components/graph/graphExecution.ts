@@ -1423,6 +1423,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           // that the Simulate node detects to build a bond-free frozen topology.
           const metalSite = pyEscape(getString(data, "dummyMetalSite", "Alo"));
           const chargeMode = pyEscape(getString(data, "dummyChargeMode", "pauling"));
+          const ljMode = pyEscape(getString(data, "dummyLjMode", "element"));
           const chargeScale = getNumber(data, "dummyChargeScale", 0.5);
           // Same global bond-detection cutoffs as MINFF/CLAYFF — they set the
           // coordination used by the MINFF oxygen-charge formula.
@@ -1432,7 +1433,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `\n# Frozen DUMMY mineral (Dummy FF) -- qualitative; EM/NVT only\n`;
           pythonCode += `if ${inBox} is None:\n`;
           pythonCode += `    raise ValueError("Dummy forcefield requires a mineral structure with a simulation box.")\n`;
-          pythonCode += `ap.assign_dummy_mineral_params(${inAtoms}, Box=${inBox}, charge_mode='${chargeMode}', charge_scale=${chargeScale}, metal_site='${metalSite}', rmaxlong=${dRmaxLong}, rmaxH=${dRmaxH}, resname='${dumName}')\n`;
+          pythonCode += `ap.assign_dummy_mineral_params(${inAtoms}, Box=${inBox}, charge_mode='${chargeMode}', charge_scale=${chargeScale}, lj_mode='${ljMode}', metal_site='${metalSite}', rmaxlong=${dRmaxLong}, rmaxH=${dRmaxH}, resname='${dumName}')\n`;
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else {
