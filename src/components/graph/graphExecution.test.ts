@@ -161,6 +161,22 @@ describe('graphExecution Python Generator', () => {
     expect(code).not.toContain('result_2.pdb');
   });
 
+  it('loads inorganic-library materials: crystal via load_crystal, preset via UC_conf', () => {
+    const crystal: Node[] = [
+      { id: 's', type: 'structure', position: { x: 0, y: 0 },
+        data: { source: 'library', librarySource: 'crystal', value: 'oxides/MnO-Manganosite.cif' } },
+    ];
+    let code = generatePythonCode(crystal, [], 'minimal');
+    expect(code).toContain("ap.load_crystal('oxides/MnO-Manganosite.cif')");
+
+    const preset: Node[] = [
+      { id: 's', type: 'structure', position: { x: 0, y: 0 },
+        data: { source: 'library', librarySource: 'preset', value: 'Pyrophyllite_GII_0.0.pdb' } },
+    ];
+    code = generatePythonCode(preset, [], 'minimal');
+    expect(code).toContain("ap.import_auto(f'UC_conf/Pyrophyllite_GII_0.0.pdb')");
+  });
+
   it('blocks NPT for a frozen dummy mineral', () => {
     const nodes: Node[] = [
       { id: 'struct-1', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'preset', value: 'MnO.cif' } },

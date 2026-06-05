@@ -870,6 +870,9 @@ async def inorganic_scan(request: Request):
     # Resolve the structure path.
     if source == "upload" and upload_path:
         path = os.path.join(OUTPUTS_DIR, upload_path)
+    elif source == "crystal":
+        crystals = os.path.join(os.path.dirname(ap.__file__), "structures", "crystals")
+        path = os.path.join(crystals, file_name)
     else:
         uc_conf = os.path.join(os.path.dirname(ap.__file__), "structures", "minerals", "UC_conf")
         path = os.path.join(uc_conf, file_name)
@@ -916,3 +919,54 @@ async def list_molecules():
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"molecule library unavailable: {exc}")
+
+
+@router.get("/inorganic-library")
+async def inorganic_library():
+    """Inorganic material library, grouped by category.
+
+    The first category, 'MINFF presets', is atomipy's curated, force-field-ready
+    UC_conf set (loaded via UC_conf/<file>). The remaining categories are the
+    bundled crystal library (~517 CIFs: oxides, halides, sulfides, elements,
+    zeolites, …) — many need the Dummy FF. Each material carries a ``source``
+    ('preset' or 'crystal') telling the build how to load it.
+    """
+    import atomipy as ap
+
+    categories = []
+
+    # 1) MINFF presets (curated UC_conf) — force-field-ready, on top.
+    try:
+        presets_resp = await list_presets()
+        preset_mats = [
+            {"name": p["name"], "file": p["fileName"], "source": "preset"}
+            for p in presets_resp.get("presets", [])
+        ]
+        if preset_mats:
+            categories.append({"name": "MINFF presets", "source": "preset", "materials": preset_mats})
+    except Exception:
+        pass
+
+    # 2) Bundled crystal library (Avogadro), one entry per category.
+    try:
+        for c in ap.crystal_categories():
+            mats = [
+                {
+                    "name": e["name"], "file": e["file"], "source": "crystal",
+                    "formula": e.get("formula", ""), "mineral": e.get("mineral", ""),
+                    "elements": e.get("elements", []),
+                }
+                for e in ap.list_crystals(c)
+            ]
+            if mats:
+                categories.append({"name": c, "source": "crystal", "materials": mats})
+    except Exception as exc:
+        if not categories:
+            raise HTTPException(status_code=500, detail=f"crystal library unavailable: {exc}")
+
+    return {
+        "categories": categories,
+        "count": sum(len(c["materials"]) for c in categories),
+        "attribution": "Avogadro2 crystals library (public domain; IZA zeolites + "
+                       "Crystallography Open Database)",
+    }

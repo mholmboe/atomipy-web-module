@@ -35,13 +35,40 @@ function useMoleculeLibrary(): LibCategory[] {
 const prettyCategory = (name: string) =>
   name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+// ---- Bundled inorganic material library (GET /api/inorganic-library) --------
+// 'MINFF presets' (curated UC_conf, force-field-ready) on top, then the Avogadro
+// crystal categories (oxides, halides, sulfides, elements, ...). Fetched once.
+type InorgMaterial = { name: string; file: string; source: "preset" | "crystal"; formula?: string; mineral?: string; elements?: string[] };
+type InorgCategory = { name: string; source: string; materials: InorgMaterial[] };
+let _inorgLibCache: InorgCategory[] | null = null;
+let _inorgLibPromise: Promise<InorgCategory[]> | null = null;
+
+function useInorganicLibrary(): InorgCategory[] {
+  const [cats, setCats] = useState<InorgCategory[]>(_inorgLibCache ?? []);
+  useEffect(() => {
+    if (_inorgLibCache) { setCats(_inorgLibCache); return; }
+    if (!_inorgLibPromise) {
+      _inorgLibPromise = fetch("/api/inorganic-library")
+        .then((r) => r.json())
+        .then((d) => { _inorgLibCache = Array.isArray(d?.categories) ? d.categories : []; return _inorgLibCache!; })
+        .catch(() => { _inorgLibCache = []; return _inorgLibCache!; });
+    }
+    _inorgLibPromise.then(setCats);
+  }, []);
+  return cats;
+}
+
 type StructureNodeData = {
-  source?: "preset" | "upload" | "organic";
+  source?: "preset" | "upload" | "organic" | "library";
   value?: string;
   presets?: PresetOption[];
   filename?: string;
   originalName?: string;
   path?: string;
+  // Inorganic library selection: librarySource 'preset' -> UC_conf/<value>,
+  // 'crystal' -> ap.load_crystal(<value>). value holds the file path.
+  librarySource?: "preset" | "crystal";
+  materialName?: string;
 
   // Organic/SMILES properties
   smiles?: string;
@@ -78,6 +105,10 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
   const moleculeLibrary = useMoleculeLibrary();
   const [libCategory, setLibCategory] = useState<string>(() => (data.libraryMolecule || "").split("/")[0] || "");
   const libMolsForCat = moleculeLibrary.find((c) => c.name === libCategory)?.molecules ?? [];
+
+  const inorgLibrary = useInorganicLibrary();
+  const [inorgCategory, setInorgCategory] = useState<string>(() => (data.source === "library" && data.value ? (data.value.includes("/") ? data.value.split("/")[0] : "MINFF presets") : ""));
+  const inorgMatsForCat = inorgLibrary.find((c) => c.name === inorgCategory)?.materials ?? [];
 
   const source = data.source || "upload";
   const [activeTab, setActiveTab] = useState<"inorganic" | "organic">(source === "organic" ? "organic" : "inorganic");
@@ -173,12 +204,14 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
     setIsScanning(true);
     setInorgScan(null);
     try {
+      // A library material is either a UC_conf preset or a bundled crystal.
+      const scanSource = source === "library" ? (data.librarySource === "crystal" ? "crystal" : "preset") : source;
       const response = await fetch("/api/inorganic/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          source,
-          fileName: source === "preset" ? data.value : data.filename,
+          source: scanSource,
+          fileName: source === "library" ? data.value : (source === "preset" ? data.value : data.filename),
           uploadedFilePath: data.uploadedFilePath || data.path || data.filename,
         }),
       });
@@ -196,7 +229,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
       setIsScanning(false);
     }
   };
-  const canScan = (source === "preset" && !!data.value) || (source === "upload" && !!data.filename);
+  const canScan = ((source === "preset" || source === "library") && !!data.value) || (source === "upload" && !!data.filename);
 
   const handleParametrize = async () => {
     const target = inputMode === "library" ? data.libraryMolecule
@@ -265,7 +298,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
           <div className="space-y-3">
             {/* Sub-pill toggle for Inorganic */}
             <div className="flex rounded-md overflow-hidden border border-border text-[10px] font-semibold">
-              {(["upload", "preset"] as const).map((mode) => (
+              {(["upload", "preset", "library"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -277,10 +310,52 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
                   onClick={() => updateNodeData(id, { ...data, source: mode })}
                   onPointerDown={(e) => e.stopPropagation()}
                 >
-                  {mode === "upload" ? "Custom File" : "Preset Mineral"}
+                  {mode === "upload" ? "Custom File" : mode === "preset" ? "Preset" : "Library"}
                 </button>
               ))}
             </div>
+
+            {/* Inorganic material library: MINFF presets + crystal categories */}
+            {source === "library" && (
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Category</label>
+                  <select
+                    className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 h-7"
+                    value={inorgCategory}
+                    onChange={(e) => { setInorgCategory(e.target.value); updateNodeData(id, { ...data, value: "", materialName: "", previewJobId: undefined }); }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <option value="">-- Choose category --</option>
+                    {inorgLibrary.map((c) => (
+                      <option key={c.name} value={c.name}>{prettyCategory(c.name)} ({c.materials.length})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Material</label>
+                  <select
+                    className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 h-7 disabled:opacity-50"
+                    value={data.value || ""}
+                    disabled={!inorgCategory}
+                    onChange={(e) => {
+                      const m = inorgMatsForCat.find((x) => x.file === e.target.value);
+                      updateNodeData(id, { ...data, source: "library", value: e.target.value, librarySource: m?.source, materialName: m?.name, previewJobId: undefined });
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <option value="">{inorgCategory ? "-- Choose material --" : "Select a category first"}</option>
+                    {inorgMatsForCat.map((m) => (
+                      <option key={m.file} value={m.file}>{m.name}{m.formula && !m.name.includes(m.formula) ? ` · ${m.formula}` : ""}</option>
+                    ))}
+                  </select>
+                </div>
+                {inorgLibrary.length === 0 && <p className="text-[9px] text-muted-foreground/70">Loading library…</p>}
+                <p className="text-[9px] text-muted-foreground/70 leading-relaxed">
+                  MINFF presets are force-field-ready; other categories often need the Dummy FF — use Preview &amp; Validate.
+                </p>
+              </div>
+            )}
 
             {source === "preset" && (
               <div>

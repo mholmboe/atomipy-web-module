@@ -480,6 +480,16 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         } else if (source === "preset") {
           const file = pyEscape(getString(data, "value", "unknown.pdb"));
           pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'UC_conf/${file}')\n`;
+        } else if (source === "library") {
+          // Inorganic library: a curated MINFF preset (UC_conf) or a bundled
+          // crystal (loaded from the package by ap.load_crystal, cwd-independent).
+          const file = pyEscape(getString(data, "value", "unknown.cif"));
+          const librarySource = getString(data, "librarySource", "crystal");
+          if (librarySource === "preset") {
+            pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'UC_conf/${file}')\n`;
+          } else {
+            pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.load_crystal('${file}')\n`;
+          }
         } else {
           // source === "organic" (SMILES, uploaded file, or bundled library molecule)
           const smiles = pyEscape(getString(data, "smiles", ""));
