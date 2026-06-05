@@ -153,6 +153,7 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain("'NPT_1.pdb'");
     expect(code).toContain('"EM_1.top"');     // first node builds the topology
     expect(code).toContain('"NVT_1.gro"');    // chained nodes write their own coords
+    expect(code).toContain('"NVT_1.top"');    // ...and a self-contained copy of the topology
     expect(code).toContain('"EM_1_final.pdb"');
     // old index-based names are gone
     expect(code).not.toContain('traj_2.pdb');

@@ -1639,7 +1639,13 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `    # Priority 1: topology already built by an upstream simulation — reuse it\n`;
         pythonCode += `    _chain_top = getattr(${inAtoms}, '_top_path', None)\n`;
         pythonCode += `    if _chain_top and _os.path.exists(_chain_top):\n`;
-        pythonCode += `        _top_path = _chain_top\n`;
+        pythonCode += `        # The topology is unchanged from the upstream run (only coordinates\n`;
+        pythonCode += `        # differ), so copy it to this run's own name -> each simulation is a\n`;
+        pythonCode += `        # self-contained ${simBase}.top + ${simBase}.gro pair.\n`;
+        pythonCode += `        import shutil as _shutil\n`;
+        pythonCode += `        _top_path = "${simBase}.top"\n`;
+        pythonCode += `        if _os.path.abspath(_chain_top) != _os.path.abspath(_top_path):\n`;
+        pythonCode += `            _shutil.copyfile(_chain_top, _top_path)\n`;
         pythonCode += `        _defines  = getattr(${inAtoms}, '_defines', ${definesExpr})\n`;
         pythonCode += `        _gro_path = "${simBase}.gro"\n`;
         pythonCode += `        ap.write_gro(list(${inAtoms}), ${inBox}, _gro_path)\n`;
