@@ -94,7 +94,7 @@ instance with explicit settings).
 | Simulation policy (`SIMULATION_MODE`) | `full` | **`em_only`** — EM allowed, NVT/NPT → Colab/local | `full` |
 | OpenFF worker | auto-started on :8001 by `restart_dev.sh` | separate Cloud Run service | **optional** Step 1b (micromamba) |
 | Celery + Redis | started by `restart_dev.sh` | not deployed (optional) | not installed |
-| Public URL | `http://localhost:8080` | `https://www.atomipy.io` | a `*.loca.lt` Localtunnel URL |
+| Public URL | `http://localhost:8080` | `https://www.atomipy.io` | a `*.trycloudflare.com` Cloudflare Quick Tunnel URL |
 | Best for | development (hot reload) | sharing, light EM / short MD | heavy/long **GPU** MD |
 
 ### 3a. Local
@@ -138,7 +138,7 @@ Local simulations use whatever OpenMM platform your machine offers (CUDA / Metal
 
 `ColabLaunchGuide.ipynb` clones the repo, `pip install -r requirements.txt`,
 builds the frontend, and launches the **same FastAPI server** via `uvicorn` with
-simulations enabled on the **GPU**, exposed through a Localtunnel URL.
+simulations enabled on the **GPU**, exposed through a free **Cloudflare Quick Tunnel** (`*.trycloudflare.com` — no account/login/password).
 
 - **Step 0** — set Runtime → GPU.
 - **Step 1** — clone + install + build.
@@ -146,9 +146,10 @@ simulations enabled on the **GPU**, exposed through a Localtunnel URL.
   **micromamba** (no kernel restart) and starts the worker on :8001, enabling the
   **Organic Molecule** node. Skip it and that one node is unavailable; everything
   else works.
-- **Step 2** — launch the server + Localtunnel (uses the printed IP as the tunnel
-  password). The main server's `OPENFF_WORKER_URL` defaults to
-  `http://127.0.0.1:8001`, so Step 1b needs no extra wiring.
+- **Step 2** — launch the server + Cloudflare Quick Tunnel; just click the
+  printed `*.trycloudflare.com` link (no password). The main server's
+  `OPENFF_WORKER_URL` defaults to `http://127.0.0.1:8001`, so Step 1b needs no
+  extra wiring.
 
 ---
 

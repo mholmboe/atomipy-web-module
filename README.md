@@ -171,7 +171,7 @@ If you plan to run large molecular dynamics simulations, you can launch the Visu
 
 The notebook clones the repo, installs the Python deps + builds the frontend,
 and launches the **FastAPI server** (which serves both the UI and the API) with
-**simulations enabled on the GPU**, exposed through a Localtunnel URL.
+**simulations enabled on the GPU**, exposed through a free **Cloudflare Quick Tunnel** (a `*.trycloudflare.com` link — no account, login, or password).
 
 > **Note:** the **Organic Molecule (GAFF/OpenFF)** node needs the separate
 > OpenFF worker. It's **off by default** on Colab; run the optional **Step 1b**
