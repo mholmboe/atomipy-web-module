@@ -16,7 +16,7 @@ A powerful, node-based visual programming environment for designing, manipulatin
     - **Live Trajectory Plotting**: Real-time graphing of potential energy and temperature progress directly in the web UI.
     - **Auto-Unzipping & Download**: Download the completed trajectory, topology, and state files in an automatically unzipped structural bundle.
 - **Visual Workflow**: Build systems by connecting nodes: Import → Replicate → Solvate → Add Ions → Run Simulation → Export.
-- **Topology & Structure Uploads**: Drag-and-drop structural coordinate files (`.xyz`, `.gro`, `.pdb`, `.cif`) as well as GROMACS topology files (`.itp`) cleanly into both the Import and Insert nodes.
+- **Structure Uploads**: Drag-and-drop structural coordinate files (`.pdb`, `.gro`, `.xyz`, `.cif`/`.mmcif`, `.pqr`, `.poscar`, `.cjson`) cleanly into both the Import and Insert nodes.
 - **Fluctuating Bounding Box Rendering**: Enabled dynamic unit cell/box animation in the 3Dmol viewer. Supports NPT simulation box expansion and contraction playbacks up to **1000 frames**.
 - **Top-Left Warnings Position**: Floating Workflow Warning banners are positioned in the top-left corner of the editor canvas to prevent bottom dock overlapping.
 - **Undo & Redo Capabilities**: Unlimited layout timeline history (up to 50 snapshots) with full `Cmd+Z` / `Cmd+Y` (or `Ctrl+Z` / `Ctrl+Y`) keyboard shortcut integration.
@@ -154,6 +154,11 @@ local install).
 > *before* an **NVT / NPT** node. Running NVT/NPT directly on a freshly built or
 > solvated structure can diverge (`Particle coordinate is NaN`) on the CPU
 > platform — EM relaxes the starting structure first.
+
+> **Results & data retention:** results can only be downloaded right after they
+> are generated. Nothing is stored on the server — there is no database or
+> persistent storage — so results cannot be retrieved later. Always download and
+> keep your own local copy.
 
 ---
 

@@ -660,7 +660,12 @@ async def upload_file(file: UploadFile = File(...)):
     
     stem, ext = os.path.splitext(file.filename)
     ext = ext.lower().lstrip(".")
-    allowed_exts = {"pdb", "xyz", "gro", "cif", "mol", "mol2", "sdf", "json", "jsonl"}
+    # Structure formats (pdb/xyz/gro/cif/mmcif/mcif/poscar/contcar/pqr/json/jsonl)
+    # are read by ap.import_auto(); mol/mol2/sdf are routed to the organic/GAFF path.
+    allowed_exts = {
+        "pdb", "xyz", "gro", "cif", "mmcif", "mcif", "poscar", "contcar", "pqr",
+        "mol", "mol2", "sdf", "json", "jsonl",
+    }
     if ext not in allowed_exts:
         raise HTTPException(status_code=400, detail=f"Unsupported extension '.{ext}'")
 

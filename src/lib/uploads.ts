@@ -14,8 +14,6 @@ export const ALLOWED_STRUCTURE_EXTENSIONS = [
   "pqr",
   "poscar",
   "contcar",
-  "sdf",
-  "itp",
 ] as const;
 
 export const STRUCTURE_FILE_ACCEPT = ALLOWED_STRUCTURE_EXTENSIONS.map((ext) => `.${ext}`).join(",");

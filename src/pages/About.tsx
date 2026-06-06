@@ -22,7 +22,7 @@ const nodeCategories = [
       {
         name: "Import Structure",
         type: "structure",
-        desc: "Load a structure on the Inorganic tab (Custom File, or the Library = MINFF presets + a 517-crystal Avogadro library) or the Organic tab (SMILES, an uploaded file, or the bundled 428-molecule library). Upload formats: .pdb, .gro, .xyz, .cif, .sdf, .poscar.",
+        desc: "Load a structure on the Inorganic tab (Custom File, or the Library = MINFF presets + a 517-crystal Avogadro library) or the Organic tab (SMILES, an uploaded file, or the bundled 428-molecule library). Upload formats: .pdb, .gro, .xyz, .cif/.mmcif, .pqr, .poscar, .cjson (organic molecules: .mol, .mol2, .sdf via the GAFF/Sage parametrizer).",
         features: ["Inorganic: Custom File + Library (MINFF presets + crystals)", "Organic: SMILES / File / Library (428 molecules)", "Preview & Validate (inorganic scan flags non-MINFF elements → Dummy FF)", "Outputs atoms + box"],
       },
       {
@@ -508,6 +508,17 @@ Organic B → Forcefield (GAFF/OpenFF)  ┘`}</pre>
             </div>
           </section>
 
+          {/* ── Results & data retention ── */}
+          <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-8 space-y-3">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-6 w-6 text-amber-500" />
+              <h2 className="text-2xl font-bold">Results &amp; data retention</h2>
+            </div>
+            <p className="text-muted-foreground leading-relaxed">
+              Results can only be downloaded right after they are generated. Nothing is stored on the server — there is no database or persistent storage — so results cannot be retrieved later, and no one else can access them. Always download and keep your own local copy.
+            </p>
+          </section>
+
           {/* ── File formats ── */}
           <section className="bg-muted/50 p-8 rounded-2xl space-y-5 border border-border/50">
             <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -518,10 +529,13 @@ Organic B → Forcefield (GAFF/OpenFF)  ┘`}</pre>
               <div className="space-y-3">
                 <h3 className="font-semibold">Input Formats</h3>
                 <div className="flex flex-wrap gap-2">
-                  {[".pdb", ".gro", ".xyz", ".cif", ".sdf", ".poscar", ".pqr"].map((fmt) => (
+                  {[".pdb", ".gro", ".xyz", ".cif", ".mmcif", ".pqr", ".poscar", ".cjson"].map((fmt) => (
                     <span key={fmt} className="text-xs px-2 py-1 rounded-md border bg-background text-muted-foreground font-mono">{fmt}</span>
                   ))}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Organic molecule uploads (GAFF/Sage parametrizer): <span className="font-mono">.mol</span>, <span className="font-mono">.mol2</span>, <span className="font-mono">.sdf</span>.
+                </p>
               </div>
               <div className="space-y-3">
                 <h3 className="font-semibold">Structure Output</h3>

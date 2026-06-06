@@ -2809,6 +2809,10 @@ export default function VisualBuilder() {
 
             {downloadToken && (
               <div className="mb-3">
+                <p className="flex items-start gap-1.5 mb-2 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] leading-snug text-amber-600">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />
+                  <span>Download now — results are not stored on the server and cannot be retrieved later.</span>
+                </p>
                 <a
                   href={`/api/download-result/${downloadToken}`}
                   download
