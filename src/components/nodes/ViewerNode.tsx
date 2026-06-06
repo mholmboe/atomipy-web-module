@@ -83,6 +83,7 @@ type ViewerNodeData = {
   width?: number;
   height?: number;
   computeBonds?: boolean;
+  hidePeriodicBonds?: boolean;   // JSmol: drop cross-cell (wrap-around) bonds
   showUnitCell?: boolean;
   background?: keyof typeof BACKGROUNDS;
   viewStyle?: "stick" | "sphere" | "both" | "line";
@@ -134,6 +135,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const renderer = data.renderer ?? "3dmol";
   const pdb = data.pdb || "";
   const computeBonds = data.computeBonds ?? true;
+  const hidePeriodicBonds = data.hidePeriodicBonds ?? false;
   const background = data.background ?? "light";
   const viewStyle = data.viewStyle ?? "both";
   const showOutline = data.showOutline ?? true;
@@ -421,6 +423,13 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       lines.push(`load inline "${escaped}"`);
     }
 
+    // Drop periodic (cross-cell, wrap-around) bonds that JSmol draws for a
+    // structure with a unit cell: delete every bond longer than 3 Å, keeping
+    // real covalent/ionic bonds. (3Dmol doesn't draw these, so it's JSmol-only.)
+    if (computeBonds && hidePeriodicBonds) {
+      lines.push("connect 3.0 1000 delete");
+    }
+
     // Representation
     if (viewStyle === "both") {
       lines.push("wireframe 0.15");
@@ -485,7 +494,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     }
 
     return lines.join("; ");
-  }, [background, computeBonds, viewStyle, showHydrogens, showUnitCell, showAtomLabels, labelIsCharge, spin, projection, isMulti]);
+  }, [background, computeBonds, hidePeriodicBonds, viewStyle, showHydrogens, showUnitCell, showAtomLabels, labelIsCharge, spin, projection, isMulti]);
 
   useEffect(() => {
     if (renderer !== "jsmol") return;
@@ -690,6 +699,15 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                   >
                     Compute Bonds (Requires Build)
                   </DropdownMenuCheckboxItem>
+                  {renderer === "jsmol" && (
+                    <DropdownMenuCheckboxItem
+                      className={compactItemClass}
+                      checked={hidePeriodicBonds}
+                      onCheckedChange={(checked) => setViewerOption({ hidePeriodicBonds: Boolean(checked) })}
+                    >
+                      Hide periodic bonds (JSmol)
+                    </DropdownMenuCheckboxItem>
+                  )}
                   <DropdownMenuCheckboxItem
                     className={compactItemClass}
                     checked={showUnitCell}
