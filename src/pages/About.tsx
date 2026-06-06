@@ -297,6 +297,52 @@ const COLOR_MAP: Record<string, { ring: string; dot: string }> = {
   teal:    { ring: "ring-teal-500/40",    dot: "bg-teal-400" },
 };
 
+// ─── Acknowledgements / third-party software & data ──────────────────────────
+
+const acknowledgements: { group: string; items: { name: string; note?: string; href?: string }[] }[] = [
+  {
+    group: "Simulation engines & cheminformatics",
+    items: [
+      { name: "OpenMM", note: "molecular-dynamics engine (EM / NVT / NPT)", href: "https://openmm.org" },
+      { name: "OpenFF Toolkit, Interchange & Sage force fields", note: "organic parametrization", href: "https://openforcefield.org" },
+      { name: "ACPYPE + AmberTools (antechamber)", note: "GAFF / GAFF2 atom typing & charges", href: "https://github.com/alanwilter/acpype" },
+      { name: "RDKit", note: "SMILES → 3D, cheminformatics", href: "https://www.rdkit.org" },
+      { name: "Open Babel", note: "molecular format conversion", href: "https://openbabel.org" },
+      { name: "GEMMI", note: "CIF reading & crystallographic symmetry expansion", href: "https://gemmi.readthedocs.io" },
+      { name: "NumPy · Numba · tqdm", note: "numerics & acceleration" },
+    ],
+  },
+  {
+    group: "Force fields, water models & parameters",
+    items: [
+      { name: "MINFF", note: "mineral force field", href: "https://github.com/mholmboe/minff" },
+      { name: "CLAYFF", note: "Cygan, Liang & Kalinichev (2004)" },
+      { name: "SPC/E · OPC3 · TIP3P/4P/5P", note: "water models" },
+      { name: "UFF — Rappé et al. (1992)", note: "Dummy-FF van der Waals parameters" },
+      { name: "Heinz et al. (2008)", note: "Dummy-FF metallic (fcc) LJ parameters" },
+    ],
+  },
+  {
+    group: "Bundled structure & molecule libraries",
+    items: [
+      { name: "Avogadro2 molecules library", note: "organic molecules — BSD-3-Clause, © 2016 Geoffrey Hutchison, University of Pittsburgh", href: "https://github.com/OpenChemistry/molecules" },
+      { name: "Avogadro2 crystals library", note: "inorganic crystals — public domain", href: "https://github.com/OpenChemistry/crystals" },
+      { name: "IZA Structure Commission", note: "zeolite frameworks (public domain)", href: "http://www.iza-structure.org/databases/" },
+      { name: "Crystallography Open Database (COD)", note: "crystal structures", href: "https://www.crystallography.net/cod/" },
+    ],
+  },
+  {
+    group: "Web interface",
+    items: [
+      { name: "React + Vite", note: "app framework & build" },
+      { name: "React Flow (@xyflow/react)", note: "node-graph builder", href: "https://reactflow.dev" },
+      { name: "3Dmol.js & JSmol / Jmol", note: "interactive molecular viewer", href: "https://3dmol.csb.pitt.edu" },
+      { name: "Tailwind CSS · Radix UI (shadcn/ui) · lucide · sonner", note: "UI components & icons" },
+      { name: "FastAPI · Uvicorn · Celery · Redis", note: "backend API & job queue" },
+    ],
+  },
+];
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const About = () => {
@@ -548,6 +594,45 @@ Organic B → Forcefield (GAFF/OpenFF)  ┘`}</pre>
             <p className="text-xs text-muted-foreground">
               You can also include your workflow JSON (File → Save / Download in the builder) and the error log from the Run output panel to help us reproduce the issue quickly.
             </p>
+          </section>
+
+          {/* ── Acknowledgements / dependencies ── */}
+          <section className="bg-muted/50 p-8 rounded-2xl space-y-5 border border-border/50">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <BookOpen className="h-6 w-6 text-primary" />
+              Acknowledgements &amp; Dependencies
+            </h2>
+            <p className="text-muted-foreground leading-relaxed text-sm">
+              atomipy and this web module are built on outstanding open-source scientific
+              software and publicly available data. We gratefully acknowledge the projects
+              below — their respective licenses apply to the components they provide.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-8">
+              {acknowledgements.map((g) => (
+                <div key={g.group} className="space-y-3">
+                  <h3 className="font-semibold">{g.group}</h3>
+                  <ul className="space-y-1.5">
+                    {g.items.map((it) => (
+                      <li key={it.name} className="text-sm text-muted-foreground leading-snug">
+                        {it.href ? (
+                          <a
+                            href={it.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-foreground hover:text-primary underline-offset-2 hover:underline"
+                          >
+                            {it.name}
+                          </a>
+                        ) : (
+                          <span className="font-medium text-foreground">{it.name}</span>
+                        )}
+                        {it.note ? <> — {it.note}</> : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           </section>
 
           {/* ── Links ── */}
