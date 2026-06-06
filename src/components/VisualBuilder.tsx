@@ -1184,6 +1184,41 @@ export default function VisualBuilder() {
     setMenu(null);
   }, [nodes, setNodes]);
 
+  // Duplicate the whole shift-selected set: copies the nodes AND the edges
+  // between them (preserving relative layout), offset and re-selected so the
+  // copy can be dragged away immediately.
+  const handleDuplicateSelection = useCallback(() => {
+    const selected = nodes.filter((n) => n.selected);
+    if (selected.length === 0) return;
+    const stamp = Date.now();
+    const idMap: Record<string, string> = {};
+    selected.forEach((n, i) => { idMap[n.id] = `node_${stamp}_${i}`; });
+    const selSet = new Set(selected.map((n) => n.id));
+
+    const newNodes = selected.map((n, i) => ({
+      ...deepClone(n),
+      id: idMap[n.id],
+      position: { x: n.position.x + 60, y: n.position.y + 60 },
+      selected: true,
+    }));
+    // Only edges fully inside the selection are duplicated (internal wiring).
+    const newEdges = edges
+      .filter((e) => selSet.has(e.source) && selSet.has(e.target))
+      .map((e, i) => ({
+        ...deepClone(e),
+        id: `e_${stamp}_${i}`,
+        source: idMap[e.source],
+        target: idMap[e.target],
+        selected: false,
+      }));
+
+    setNodes((nds) => [...nds.map((n) => (n.selected ? { ...n, selected: false } : n)), ...newNodes]);
+    setEdges((eds) => [...eds, ...newEdges]);
+    toast.success(`Duplicated ${newNodes.length} node${newNodes.length > 1 ? "s" : ""}` +
+      (newEdges.length ? ` + ${newEdges.length} connection${newEdges.length > 1 ? "s" : ""}` : ""));
+    setMenu(null);
+  }, [nodes, edges, setNodes, setEdges]);
+
   const handleToggleBypassNode = useCallback((nodeId: string) => {
     let wasDisabled = false;
     setNodes((nds) =>
@@ -2899,6 +2934,16 @@ export default function VisualBuilder() {
               <Copy className="w-3.5 h-3.5 text-slate-400" />
               <span>Duplicate Node</span>
             </button>
+
+            {nodes.filter((n) => n.selected).length > 1 && (
+              <button
+                onClick={handleDuplicateSelection}
+                className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-slate-100 text-slate-600 rounded-lg transition-all duration-150 text-left w-full"
+              >
+                <Copy className="w-3.5 h-3.5 text-slate-400" />
+                <span>Duplicate selection ({nodes.filter((n) => n.selected).length})</span>
+              </button>
+            )}
 
             <button
               onClick={() => handleToggleBypassNode(menu.id)}
