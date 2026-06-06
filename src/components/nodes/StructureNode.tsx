@@ -3,7 +3,6 @@ import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { FileInput, Upload, File, Loader2, X, ChevronDown, ChevronUp } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import { toast } from "sonner";
-import { formatPresetLabel } from "./types";
 import type { NodeComponentProps, PresetOption } from "./types";
 import { STRUCTURE_FILE_ACCEPT, isSupportedStructureFile, uploadStructureFile } from "@/lib/uploads";
 
@@ -97,7 +96,6 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
   const [isScanning, setIsScanning] = useState(false);
   const [inorgScan, setInorgScan] = useState<{ minffCompatible: boolean; unsupported: string[]; elements: string[]; nAtoms: number } | null>(null);
 
-  const presets = data.presets || [];
   const smiles = data.smiles || "";
   const conformers = data.conformers || 1;
   const inputMode = data.inputMode || "smiles";
@@ -107,11 +105,26 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
   const libMolsForCat = moleculeLibrary.find((c) => c.name === libCategory)?.molecules ?? [];
 
   const inorgLibrary = useInorganicLibrary();
-  const [inorgCategory, setInorgCategory] = useState<string>(() => (data.source === "library" && data.value ? (data.value.includes("/") ? data.value.split("/")[0] : "MINFF presets") : ""));
+  const [inorgCategory, setInorgCategory] = useState<string>(() => {
+    // Resolve the category for both library and legacy preset nodes: a value
+    // with a "/" is a crystal (category/file); a bare filename is a UC_conf preset.
+    const v = (data.source === "library" || data.source === "preset") ? (data.value || "") : "";
+    if (!v) return "";
+    return v.includes("/") ? v.split("/")[0] : "MINFF presets";
+  });
   const inorgMatsForCat = inorgLibrary.find((c) => c.name === inorgCategory)?.materials ?? [];
 
   const source = data.source || "upload";
   const [activeTab, setActiveTab] = useState<"inorganic" | "organic">(source === "organic" ? "organic" : "inorganic");
+
+  // Migrate legacy 'preset' nodes to the unified Library (librarySource 'preset',
+  // same UC_conf value) — the standalone Preset mode was folded into the Library.
+  useEffect(() => {
+    if (data.source === "preset") {
+      updateNodeData(id, { ...data, source: "library", librarySource: "preset" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const uploadFile = async (file: File) => {
     if (!isSupportedStructureFile(file.name)) {
@@ -298,25 +311,27 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
           <div className="space-y-3">
             {/* Sub-pill toggle for Inorganic */}
             <div className="flex rounded-md overflow-hidden border border-border text-[10px] font-semibold">
-              {(["upload", "preset", "library"] as const).map((mode) => (
+              {(["upload", "library"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   className={`nodrag flex-1 py-1 transition-colors ${
-                    source === mode
+                    (source === mode || (mode === "library" && source === "preset"))
                       ? "bg-primary/20 text-primary"
                       : "bg-background text-muted-foreground hover:bg-muted/50"
                   }`}
                   onClick={() => updateNodeData(id, { ...data, source: mode })}
                   onPointerDown={(e) => e.stopPropagation()}
                 >
-                  {mode === "upload" ? "Custom File" : mode === "preset" ? "Preset" : "Library"}
+                  {mode === "upload" ? "Custom File" : "Library (presets + crystals)"}
                 </button>
               ))}
             </div>
 
-            {/* Inorganic material library: MINFF presets + crystal categories */}
-            {source === "library" && (
+            {/* Inorganic material library: MINFF presets + crystal categories.
+                (Also renders for legacy source==='preset' nodes, which are
+                migrated to the library on mount.) */}
+            {(source === "library" || source === "preset") && (
               <div className="space-y-2">
                 <div>
                   <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Category</label>
@@ -354,27 +369,6 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
                 <p className="text-[9px] text-muted-foreground/70 leading-relaxed">
                   MINFF presets are force-field-ready; other categories often need the Dummy FF — use Preview &amp; Validate.
                 </p>
-              </div>
-            )}
-
-            {source === "preset" && (
-              <div>
-                <label className="text-[10px] font-semibold text-muted-foreground block mb-1">
-                  Preset Mineral
-                </label>
-                <select
-                  className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary h-7"
-                  value={data.value || ""}
-                  onChange={(e) => updateNodeData(id, { ...data, source: "preset", value: e.target.value })}
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <option value="">-- Choose --</option>
-                  {presets.map((p) => (
-                    <option key={p.id} value={p.fileName}>
-                      {formatPresetLabel(p)}
-                    </option>
-                  ))}
-                </select>
               </div>
             )}
 
