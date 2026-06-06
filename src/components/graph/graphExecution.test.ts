@@ -108,6 +108,23 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain("ap.import_auto(f'uploads/legacy.pdb')");
   });
 
+  it('insert node loads library templates: preset via UC_conf, crystal via load_crystal', () => {
+    const presetNodes: Node[] = [
+      { id: 's', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'library', librarySource: 'preset', value: 'Pyrophyllite.pdb' } },
+      { id: 'ins', type: 'insert', position: { x: 100, y: 0 }, data: { source: 'library', librarySource: 'preset', value: 'Pyrophyllite.pdb', numMolecules: 3 } },
+    ];
+    const presetEdges: Edge[] = [{ id: 'e', source: 's', target: 'ins', targetHandle: 'in' }];
+    const presetCode = generatePythonCode(presetNodes, presetEdges, 'minimal');
+    expect(presetCode).toContain("ap.import_auto(f'UC_conf/Pyrophyllite.pdb')");
+
+    const crystalNodes: Node[] = [
+      { id: 's', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'library', librarySource: 'preset', value: 'Pyrophyllite.pdb' } },
+      { id: 'ins', type: 'insert', position: { x: 100, y: 0 }, data: { source: 'library', librarySource: 'crystal', value: 'oxides/MnO.cif', numMolecules: 5 } },
+    ];
+    const crystalCode = generatePythonCode(crystalNodes, presetEdges, 'minimal');
+    expect(crystalCode).toContain("ap.load_crystal('oxides/MnO.cif')");
+  });
+
   it('box node fit-to-molecule mode emits ap.fit_box with padding', () => {
     const nodes: Node[] = [
       { id: 'org', type: 'organic', position: { x: 0, y: 0 }, data: { smiles: 'CCO', forcefield: 'gaff-2.11' } },

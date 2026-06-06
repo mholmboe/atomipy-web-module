@@ -1,16 +1,20 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { PackagePlus, Upload, File, Loader2, Copy, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
-import { formatPresetLabel } from "./types";
 import type { NodeComponentProps, PresetOption } from "./types";
 import { NodeHeader } from "./NodeHeader";
 import { STRUCTURE_FILE_ACCEPT, isSupportedStructureFile, uploadStructureFile } from "@/lib/uploads";
+import { useInorganicLibrary, prettyCategory } from "@/lib/inorganicLibrary";
 
 type InsertNodeData = {
-  source?: "preset" | "upload";
+  source?: "preset" | "upload" | "library";
   value?: string;
   presets?: PresetOption[];
+  // Inorganic library selection: librarySource 'preset' -> UC_conf/<value>,
+  // 'crystal' -> ap.load_crystal(<value>). value holds the file path.
+  librarySource?: "preset" | "crystal";
+  materialName?: string;
   filename?: string;
   originalName?: string;
   path?: string;
@@ -35,18 +39,29 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
   const { updateNodeData } = useReactFlow();
   const [uploading, setUploading] = useState(false);
   const [showMore, setShowMore] = useState(false);
-  const presets = data.presets || [];
+
+  const inorgLibrary = useInorganicLibrary();
+  const [inorgCategory, setInorgCategory] = useState<string>(() => {
+    const v = (data.source === "library" || data.source === "preset") ? (data.value || "") : "";
+    if (!v) return "";
+    return v.includes("/") ? v.split("/")[0] : "MINFF presets";
+  });
+  const inorgMatsForCat = inorgLibrary.find((c) => c.name === inorgCategory)?.materials ?? [];
+
+  // Legacy 'preset' nodes → unified Library (librarySource 'preset', same value).
+  useEffect(() => {
+    if (data.source === "preset") {
+      updateNodeData(id, { ...data, source: "library", librarySource: "preset" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const source =
-    data.source === "preset" || data.source === "upload"
-      ? data.source
-      : data.filename
-        ? "upload"
-        : "upload";
+    data.source === "library" || data.source === "preset" ? "library" : "upload";
 
   const rotateMode = data.rotateMode || "random";
 
-  const handleSetSource = (next: "preset" | "upload") => {
+  const handleSetSource = (next: "upload" | "library") => {
     updateNodeData(id, { ...data, source: next });
   };
 
@@ -114,33 +129,52 @@ export function InsertNode({ id, data }: NodeComponentProps<InsertNodeData>) {
           <button
             type="button"
             className={`nodrag rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
-              source === "preset"
+              source === "library"
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-border bg-background text-muted-foreground hover:text-foreground"
             }`}
-            onClick={() => handleSetSource("preset")}
+            onClick={() => handleSetSource("library")}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <Copy className="inline w-3 h-3 mr-1" /> Preset Structure
+            <Copy className="inline w-3 h-3 mr-1" /> Library
           </button>
         </div>
 
-        {source === "preset" ? (
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground block mb-1">Preset Structure</label>
-            <select
-              className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
-              value={data.value || ""}
-              onChange={(e) => handleChange("value", e.target.value)}
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <option value="">-- Choose --</option>
-              {presets.map((p) => (
-                <option key={p.id} value={p.fileName}>
-                  {formatPresetLabel(p)}
-                </option>
-              ))}
-            </select>
+        {source === "library" ? (
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Category</label>
+              <select
+                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1"
+                value={inorgCategory}
+                onChange={(e) => { setInorgCategory(e.target.value); updateNodeData(id, { ...data, value: "", materialName: "" }); }}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <option value="">-- Choose category --</option>
+                {inorgLibrary.map((c) => (
+                  <option key={c.name} value={c.name}>{prettyCategory(c.name)} ({c.materials.length})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Structure</label>
+              <select
+                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1 disabled:opacity-50"
+                value={data.value || ""}
+                disabled={!inorgCategory}
+                onChange={(e) => {
+                  const m = inorgMatsForCat.find((x) => x.file === e.target.value);
+                  updateNodeData(id, { ...data, source: "library", value: e.target.value, librarySource: m?.source, materialName: m?.name });
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <option value="">{inorgCategory ? "-- Choose structure --" : "Select a category first"}</option>
+                {inorgMatsForCat.map((m) => (
+                  <option key={m.file} value={m.file}>{m.name}{m.formula && !m.name.includes(m.formula) ? ` · ${m.formula}` : ""}</option>
+                ))}
+              </select>
+            </div>
+            {inorgLibrary.length === 0 && <p className="text-[9px] text-muted-foreground/70">Loading library…</p>}
           </div>
         ) : (
           <div className="relative">

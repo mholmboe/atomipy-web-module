@@ -5,6 +5,7 @@ import { NodeHeader } from "./NodeHeader";
 import { toast } from "sonner";
 import type { NodeComponentProps, PresetOption } from "./types";
 import { STRUCTURE_FILE_ACCEPT, isSupportedStructureFile, uploadStructureFile } from "@/lib/uploads";
+import { useInorganicLibrary, prettyCategory } from "@/lib/inorganicLibrary";
 
 const ORGANIC_FILE_ACCEPT = ".mol2,.sdf,.mol,.pdb";
 
@@ -31,31 +32,7 @@ function useMoleculeLibrary(): LibCategory[] {
   return cats;
 }
 
-const prettyCategory = (name: string) =>
-  name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-
-// ---- Bundled inorganic material library (GET /api/inorganic-library) --------
-// 'MINFF presets' (curated UC_conf, force-field-ready) on top, then the Avogadro
-// crystal categories (oxides, halides, sulfides, elements, ...). Fetched once.
-type InorgMaterial = { name: string; file: string; source: "preset" | "crystal"; formula?: string; mineral?: string; elements?: string[] };
-type InorgCategory = { name: string; source: string; materials: InorgMaterial[] };
-let _inorgLibCache: InorgCategory[] | null = null;
-let _inorgLibPromise: Promise<InorgCategory[]> | null = null;
-
-function useInorganicLibrary(): InorgCategory[] {
-  const [cats, setCats] = useState<InorgCategory[]>(_inorgLibCache ?? []);
-  useEffect(() => {
-    if (_inorgLibCache) { setCats(_inorgLibCache); return; }
-    if (!_inorgLibPromise) {
-      _inorgLibPromise = fetch("/api/inorganic-library")
-        .then((r) => r.json())
-        .then((d) => { _inorgLibCache = Array.isArray(d?.categories) ? d.categories : []; return _inorgLibCache!; })
-        .catch(() => { _inorgLibCache = []; return _inorgLibCache!; });
-    }
-    _inorgLibPromise.then(setCats);
-  }, []);
-  return cats;
-}
+// Inorganic material library (presets + crystals) is shared with the Insert node.
 
 type StructureNodeData = {
   source?: "preset" | "upload" | "organic" | "library";

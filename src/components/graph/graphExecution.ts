@@ -1094,8 +1094,15 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           const upPath = pyEscape(getString(data, "path", "")) || `uploads/${pyEscape(getString(data, "filename", "uploaded.pdb"))}`;
           pythonCode += `${templateAtoms}, _ = ap.import_auto(f'${upPath}')\n`;
         } else {
+          // Library insert template: a UC_conf preset (librarySource 'preset',
+          // also the legacy source==='preset' path) or a bundled crystal.
           const file = pyEscape(getString(data, "value", "unknown.pdb"));
-          pythonCode += `${templateAtoms}, _ = ap.import_auto(f'UC_conf/${file}')\n`;
+          const librarySource = getString(data, "librarySource", "preset");
+          if (source === "library" && librarySource === "crystal") {
+            pythonCode += `${templateAtoms}, _ = ap.load_crystal('${file}')\n`;
+          } else {
+            pythonCode += `${templateAtoms}, _ = ap.import_auto(f'UC_conf/${file}')\n`;
+          }
         }
 
         const numMolecules = getNumber(data, "numMolecules", 1);
