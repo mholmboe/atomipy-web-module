@@ -2,6 +2,8 @@
 
 A powerful, node-based visual programming environment for designing, manipulating, and analyzing molecular systems. Built on top of the **[atomipy](https://github.com/mholmboe/atomipy)** Python library, this web application allows researchers to create complex mineral-water systems through an intuitive graph interface.
 
+> ⚡ **Run it free in your browser — with a GPU.** Launch the full app on **Google Colab** with free NVIDIA GPU acceleration for molecular dynamics — no install and no account needed: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mholmboe/atomipy-web-module/blob/main/ColabLaunchGuide.ipynb) &nbsp;(see [GPU-Accelerated Google Colab Access](#-gpu-accelerated-google-colab-access-recommended-for-simulations) below).
+
 ![atomipy web module](screenshot.png)
 
 ## 🚀 Key Features
