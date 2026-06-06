@@ -11,6 +11,7 @@ type BoxNodeData = {
   // Fit-to-molecule fields
   padding?: number;
   cubic?: boolean;
+  centerMol?: boolean;
   // Cell fields
   a?: number;
   b?: number;
@@ -395,8 +396,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
           <div className="space-y-2">
             <p className="text-[10px] text-muted-foreground leading-snug">
               Box is fitted to the structure at run time: bounding box + margin on every
-              side (like <span className="font-mono">gmx editconf -d</span>), and the
-              molecule is centered.
+              side (like <span className="font-mono">gmx editconf -d</span>).
             </p>
             <div>
               <label className="text-[10px] font-bold text-muted-foreground block mb-1">Margin / padding (Å per side)</label>
@@ -417,6 +417,21 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </label>
+            <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
+              Center molecule in box
+              <input
+                type="checkbox" className="nodrag"
+                checked={data.centerMol ?? true}
+                onChange={(e) => updateNodeData(id, { ...data, centerMol: e.target.checked })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </label>
+            {data.centerMol === false && (
+              <p className="text-[9px] text-muted-foreground/70 leading-snug">
+                Original coordinates kept; box size is still the snug fit. Make sure the
+                structure already sits inside the box (else it wraps under PBC).
+              </p>
+            )}
           </div>
         ) : mode === "cell" ? (
           <>

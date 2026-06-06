@@ -716,9 +716,12 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           // `padding` Å on every side. Centers the atoms in the new box.
           const pad = getNumber(data, "padding", 10.0);
           const cubic = getBoolean(data, "cubic", false) ? "True" : "False";
+          // center=True translates the structure to the box centre; False keeps
+          // the original coordinates and only sets the (same) box size.
+          const centerMol = getBoolean(data, "centerMol", true) ? "True" : "False";
           pythonCode += `# Fit box to the structure (+${pad} Å margin per side)\n`;
           pythonCode += `if isinstance(${inAtoms}, list) and ${inAtoms}:\n`;
-          pythonCode += `    ${blockOutBox} = ap.Cell2Box_dim(ap.fit_box(${inAtoms}, padding=${pad}, cubic=${cubic}, center=True))\n`;
+          pythonCode += `    ${blockOutBox} = ap.Cell2Box_dim(ap.fit_box(${inAtoms}, padding=${pad}, cubic=${cubic}, center=${centerMol}))\n`;
           pythonCode += `else:\n`;
           pythonCode += `    ${blockOutBox} = ap.Cell2Box_dim([${2 * pad}, ${2 * pad}, ${2 * pad}, 90.0, 90.0, 90.0])\n`;
         } else if (inputMode === "box_dim") {

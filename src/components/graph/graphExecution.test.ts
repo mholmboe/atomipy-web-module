@@ -118,7 +118,18 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain('ap.fit_box(');
     expect(code).toContain('padding=12');
     expect(code).toContain('cubic=True');
+    expect(code).toContain('center=True');                 // default centers the molecule
     expect(code).toContain('ap.Cell2Box_dim(ap.fit_box(');
+  });
+
+  it('box fit mode can keep original positions (center=False)', () => {
+    const nodes: Node[] = [
+      { id: 'org', type: 'organic', position: { x: 0, y: 0 }, data: { smiles: 'CCO', forcefield: 'gaff-2.11' } },
+      { id: 'box', type: 'box', position: { x: 100, y: 0 }, data: { inputMode: 'fit', padding: 10, centerMol: false } },
+    ];
+    const edges: Edge[] = [{ id: 'e1', source: 'org', target: 'box', targetHandle: 'in' }];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    expect(code).toContain('center=False');                // keep original coords, same box size
   });
 
   it('generates a frozen dummy-mineral path for the Dummy FF', () => {
