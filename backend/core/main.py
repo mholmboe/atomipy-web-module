@@ -2,7 +2,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from routers import forcefield, execution
 
@@ -23,6 +23,21 @@ app.include_router(execution.router, prefix="/api", tags=["execution"])
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# /topology -> the standalone Atomipy Topology Generator (separate Cloud Run
+# service, served at topology.atomipy.io). Registered before the SPA catch-all
+# so atomipy.io/topology redirects out instead of loading the React app.
+# ---------------------------------------------------------------------------
+TOPOLOGY_URL = os.environ.get("TOPOLOGY_URL", "https://topology.atomipy.io")
+
+
+@app.get("/topology")
+@app.get("/topology/{rest:path}")
+def topology_redirect(rest: str = ""):
+    target = TOPOLOGY_URL + (("/" + rest) if rest else "")
+    return RedirectResponse(target, status_code=301)
 
 
 # ---------------------------------------------------------------------------
