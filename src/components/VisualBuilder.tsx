@@ -2230,6 +2230,10 @@ export default function VisualBuilder() {
                 !logLine.includes("__NODE_START_") &&
                 !logLine.includes("__CHARGES_")) {
                 setBuildLogs((prev) => [...prev.slice(-48), logLine]);
+                // Surface each EM/NVT/NPT completion as a prominent toast.
+                if (logLine.includes("simulation finished OK!")) {
+                  toast.success(logLine.replace(/^[^A-Za-z]+/, ""), { duration: 4000 });
+                }
                 const runningId = currentRunningNodeRef.current;
                 if (runningId) {
                   setNodeLogsMap((prev) => ({
@@ -2271,17 +2275,31 @@ export default function VisualBuilder() {
               }
             } else if (data.type === "visualize") {
               const { nodeId, data: pdbData } = data;
-              setNodes((nds) =>
-                nds.map((node) => {
-                  if (node.id === nodeId) {
-                    return {
-                      ...node,
-                      data: { ...node.data, pdb: pdbData },
-                    };
-                  }
-                  return node;
-                })
+              // A large multi-frame trajectory is parsed synchronously by the
+              // 3Dmol viewer, which briefly blocks the main thread. Show a
+              // "Loading…" status and defer the node update one tick so that
+              // status actually paints before the parse blocks.
+              const frameCount = typeof pdbData === "string"
+                ? (pdbData.match(/ENDMDL/g)?.length || 0)
+                : 0;
+              setBuildStatus(
+                frameCount > 1
+                  ? `Loading trajectory into the viewer (${frameCount} frames)…`
+                  : "Loading structure into the viewer…",
               );
+              setTimeout(() => {
+                setNodes((nds) =>
+                  nds.map((node) => {
+                    if (node.id === nodeId) {
+                      return {
+                        ...node,
+                        data: { ...node.data, pdb: pdbData },
+                      };
+                    }
+                    return node;
+                  })
+                );
+              }, 0);
             } else if (data.type === "plot") {
               const { nodeId, data: plotData } = data;
               setNodes((nds) =>

@@ -1949,6 +1949,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `        _em_pe1 = _em_state1.getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)\n`;
         pythonCode += `        print(f"  Final potential energy:   {_em_pe1:,.1f} kJ/mol ({_em_pe1/4.184:,.1f} kcal/mol)")\n`;
         pythonCode += `        print(f"  Energy change: {_em_pe1 - _em_pe0:,.1f} kJ/mol  |  EM complete.")\n`;
+        pythonCode += `        print("\\u2705 Energy Minimization (EM) simulation finished OK!")\n`;
         pythonCode += `    else:\n`;
         pythonCode += `        import math as _math\n`;
         pythonCode += `        _md_init_state = simulation.context.getState(getEnergy=True)\n`;
@@ -1978,6 +1979,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `        simulation.reporters.append(app.StateDataReporter(CleanHeaderStream(open('${logFile}', 'w', encoding='utf-8')), max(1, ${logFreq}), step=True, potentialEnergy=True, temperature=True))\n`;
         pythonCode += `        simulation.reporters.append(app.StateDataReporter(CleanHeaderStream(_sys.stdout), max(1, ${logFreq}), step=True, potentialEnergy=True, temperature=True))\n`;
         pythonCode += `        simulation.step(${mdSteps})\n`;
+        pythonCode += `        print("\\u2705 ${simType.toUpperCase()} simulation finished OK!")\n`;
         pythonCode += `    \n`;
         pythonCode += `    _state = simulation.context.getState(getPositions=True, enforcePeriodicBox=${wrapTrajectory ? "True" : "False"})\n`;
         pythonCode += `    _final_positions = _state.getPositions(asNumpy=True).value_in_unit(unit.angstrom)\n`;
@@ -2359,6 +2361,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `                _keep_indices = sorted(list(set(_keep_indices)))\n`;
           pythonCode += `                _models = [_models[_idx] for _idx in _keep_indices]\n`;
           pythonCode += `            \n`;
+          pythonCode += `            print(f"Preparing trajectory for the viewer ({len(_models)} frames)...", flush=True)\n`;
           pythonCode += `            _vis_pdb_str = '\\\\\\\\n'.join('\\\\\\\\n'.join(_m) for _m in _models)\n`;
           pythonCode += `        else:\n`;
           pythonCode += `            _vis_pdb_str = _vis_pdb_content.replace('\\n', '\\\\n')\n`;
