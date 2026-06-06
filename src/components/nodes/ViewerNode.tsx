@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Handle, NodeResizer, Position, useReactFlow } from "@xyflow/react";
-import { Eye, RotateCw, Settings2, Palette, Box as BoxIcon, X, Play, Pause, SkipBack, SkipForward } from "lucide-react";
+import { Eye, RotateCw, Settings2, Palette, Box as BoxIcon, X, Play, Pause, SkipBack, SkipForward, Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -72,6 +72,7 @@ type ViewerApi = {
   zoomTo: () => void;
   render: () => void;
   resize: () => void;
+  pngURI?: () => string;   // 3Dmol: current view as a PNG data URI
 };
 
 type ViewerNodeData = {
@@ -563,6 +564,54 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     }
   };
 
+  // Save the current view as a PNG. 3Dmol → pngURI() (optionally re-rendered at
+  // `scale`× by briefly resizing the canvas — synchronous, so no visible flash);
+  // JSmol → `write IMAGE w h PNG` at scale× the container size.
+  const handleSaveImage = useCallback((scale = 1) => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const base = (data.title || "atomipy_view").replace(/[^A-Za-z0-9_-]/g, "_") || "atomipy_view";
+    const fname = `${base}_${stamp}.png`;
+
+    if (renderer === "jsmol") {
+      const applet = jsmolAppletRef.current;
+      if (!applet || !window.Jmol) return;
+      const el = jsmolContainerRef.current;
+      const w = Math.max(1, Math.round((el?.clientWidth || 640) * scale));
+      const h = Math.max(1, Math.round((el?.clientHeight || 480) * scale));
+      window.Jmol.script(applet, `write IMAGE ${w} ${h} PNG "${fname}"`);
+      return;
+    }
+
+    const v = viewerInstance.current;
+    const el = viewerRef.current;
+    if (!v || !v.pngURI) return;
+    const prevW = el?.style.width ?? "";
+    const prevH = el?.style.height ?? "";
+    const upscaled = scale !== 1 && !!el;
+    try {
+      if (upscaled && el) {
+        el.style.width = `${el.clientWidth * scale}px`;
+        el.style.height = `${el.clientHeight * scale}px`;
+        v.resize(); v.render();
+      }
+      const uri = v.pngURI();
+      const a = document.createElement("a");
+      a.href = uri;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      console.error("Save image failed", err);
+    } finally {
+      if (upscaled && el) {
+        el.style.width = prevW;
+        el.style.height = prevH;
+        v.resize(); v.render();
+      }
+    }
+  }, [renderer, data.title]);
+
   const compactItemClass = "text-xs py-1";
   const compactLabelClass = "text-[11px] py-1 text-muted-foreground uppercase tracking-wide";
 
@@ -696,7 +745,31 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <button 
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="p-1 hover:bg-indigo-500/20 rounded-md transition-colors text-indigo-600"
+                    title="Save view as PNG image"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[150px]">
+                  <DropdownMenuLabel className={compactLabelClass}>Save PNG image</DropdownMenuLabel>
+                  <DropdownMenuItem className={compactItemClass} onClick={() => handleSaveImage(1)}>
+                    Current resolution (1×)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className={compactItemClass} onClick={() => handleSaveImage(2)}>
+                    High (2×)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className={compactItemClass} onClick={() => handleSaveImage(4)}>
+                    Ultra (4×)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <button
                 onClick={handleResetCamera}
                 className="p-1 hover:bg-indigo-500/20 rounded-md transition-colors text-indigo-600"
                 title="Reset View"
