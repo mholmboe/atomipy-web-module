@@ -28,9 +28,9 @@ A powerful, node-based visual programming environment for designing, manipulatin
     - **Spacing Safeguards**: Early errors for non-positive or abnormal solvate/ion minimum distances.
     - **Ion Thresholds**: Capped maximum ionization count at $10,000$ to prevent out-of-memory overheads.
     - **Path Traversal Shields**: Basename-scoped path parsing blocking folder traversal attempts (`..` or absolute prefixes).
-- **Structure Library**: Built-in 100+ mineral preset structures (Pyrophyllite, Kaolinite, Montmorillonite, etc.).
-- **3D Visualization**: Real-time 3D structure previewing with integrated NGL/3Dmol viewers.
-- **Forcefield Generation**: Streamlined assignment of **MINFF** and **CLAYFF** parameters.
+- **Structure Libraries**: Built-in MINFF mineral presets, a ~517-CIF inorganic crystal library (Avogadro), and a ~428-molecule organic library (amino acids, nucleobases, sugars, …).
+- **3D Visualization**: Real-time 3D previewing with integrated **3Dmol.js / JSmol** viewers (PNG export, JSmol measurements).
+- **Forcefield Generation**: Inorganic **MINFF / CLAYFF** and a frozen **Dummy FF** for non-MINFF materials; organic **GAFF** and **OpenFF (Sage/Parsley)**.
 - **Advanced Analysis**:
     - **XRD Patterns**: Simulate high-performance X-ray diffraction patterns.
     - **BVS/GII Analysis**: Calculate Bond Valence Sums and Global Instability Index.

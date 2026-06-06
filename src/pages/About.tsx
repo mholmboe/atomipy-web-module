@@ -22,17 +22,17 @@ const nodeCategories = [
       {
         name: "Import Structure",
         type: "structure",
-        desc: "Load a molecular structure from a built-in preset library (.cif) or upload your own file (.pdb, .gro, .xyz, .cif, .sdf, .poscar).",
-        features: ["Preset library (minerals, water models, molecules)", "Custom file upload", "Outputs atoms + box"],
+        desc: "Load a structure on the Inorganic tab (Custom File, or the Library = MINFF presets + a 517-crystal Avogadro library) or the Organic tab (SMILES, an uploaded file, or the bundled 428-molecule library). Upload formats: .pdb, .gro, .xyz, .cif, .sdf, .poscar.",
+        features: ["Inorganic: Custom File + Library (MINFF presets + crystals)", "Organic: SMILES / File / Library (428 molecules)", "Preview & Validate (inorganic scan flags non-MINFF elements → Dummy FF)", "Outputs atoms + box"],
       },
       {
-        name: "Organic Molecule",
+        name: "Organic Molecule (Import → Organic tab)",
         type: "organic",
-        desc: "Parametrize an organic molecule for simulation. Accepts a SMILES string or an uploaded structure file (.mol2, .sdf, .mol, .pdb).",
+        desc: "Define an organic molecule on the Import Structure node's Organic tab — by SMILES, an uploaded file (.mol2, .sdf, .mol, .pdb), or the bundled 428-molecule library. Force-field parametrization (GAFF/OpenFF) happens on the Forcefield node downstream.",
         features: [
-          "Input: SMILES string or uploaded file",
+          "Input: SMILES / uploaded file / bundled library (amino acids, sugars, …)",
           "GAFF 2.11 / GAFF 1 via ACPYPE (bundles antechamber — no separate AmberTools install)",
-          "OpenFF Sage 2.3 via pure-Python OpenFF Interchange",
+          "OpenFF Sage / Parsley via pure-Python OpenFF Interchange",
           "Outputs native atomipy dictionaries + ITP data for downstream MD or mixing with minerals",
         ],
       },
@@ -55,8 +55,8 @@ const nodeCategories = [
       {
         name: "Set System Box",
         type: "box",
-        desc: "Explicitly set or override the simulation box. Supports both Cell (a, b, c, α, β, γ) and Box_dim (lx, ly, lz, xy, xz, yz) parameterizations with live bidirectional conversion.",
-        features: ["Cell ↔ Box_dim live conversion", "Auto-seeded from upstream structure", "Inherits through all passthrough nodes"],
+        desc: "Set or override the simulation box. Modes: Cell (a, b, c, α, β, γ), Box_dim (lx, ly, lz, xy, xz, yz) with live conversion, or Fit to mol — size the box to the structure + a margin per side (like gmx editconf -d), with optional cubic and center-molecule options.",
+        features: ["Cell ↔ Box_dim live conversion", "Fit to mol (extent + padding, cubic, center)", "Auto-seeded from upstream structure", "Inherits through all passthrough nodes"],
       },
       {
         name: "Spatial Ops",
@@ -130,7 +130,7 @@ const nodeCategories = [
         name: "Insert Molecule",
         type: "insert",
         desc: "Insert a small molecule (solvent, ligand) at random positions within the box, avoiding overlaps.",
-        features: ["Insert from preset or upload", "Configurable insertion count", "Minimum distance filter"],
+        features: ["Insert from the Library (presets + crystals) or upload", "Configurable insertion count", "Minimum distance filter"],
       },
     ],
   },
@@ -167,8 +167,8 @@ const nodeCategories = [
       {
         name: "Assign Forcefield (Inorganic)",
         type: "forcefield",
-        desc: "Assign atom types, partial charges, and bonded parameters for mineral systems using MINFF or CLAYFF. Requires a mineral structure with a simulation box — cannot be connected directly to an Organic Molecule node.",
-        features: ["MINFF / CLAYFF atom typing", "Per-atom charge assignment", "Configurable k_angle for bonded terms", "Outputs atoms with FF types for downstream MD or export"],
+        desc: "Assign force-field parameters. Inorganic tab: MINFF or CLAYFF (with Ka angle variants), or the Dummy FF for materials MINFF can't type — a frozen, qualitative model (EM/NVT only). Organic tab: OpenFF Sage / Parsley or GAFF (AM1-BCC / Gasteiger / none charges).",
+        features: ["Inorganic: MINFF / CLAYFF (Ka variants) + Dummy FF (frozen, non-MINFF)", "Organic: OpenFF Sage / Parsley / GAFF + charge method", "Per-atom charges & bonded terms (or frozen for Dummy)", "Optional molecule name; outputs atoms + topology for MD/export"],
       },
     ],
   },
@@ -240,8 +240,8 @@ const nodeCategories = [
       {
         name: "Structure Viewer",
         type: "viewer",
-        desc: "Interactive 3D preview of the current atom structure using 3Dmol.js (WebGL) or JSmol (Canvas). Toggle between renderers in the node header.",
-        features: ["3Dmol: fast WebGL rendering with Ball-and-Stick/Spheres/Lines", "JSmol: Jmol scripting, symmetry & spacegroup support", "Color by element (Jmol scheme)", "Passthrough: does not alter atoms or box"],
+        desc: "Interactive 3D preview using 3Dmol.js (WebGL) or JSmol (Canvas) — toggle renderers in the node header. Save the view as a PNG (1×/2×/4×); JSmol adds measurements (right-click) and a 'Hide periodic bonds' option.",
+        features: ["3Dmol: fast WebGL (Ball-and-Stick / Spheres / Lines)", "JSmol: scripting, symmetry, measurements, hide periodic bonds", "Save image as PNG (1×/2×/4×)", "Passthrough: does not alter atoms or box"],
       },
       {
         name: "Export",
@@ -276,7 +276,7 @@ const outputBundleEntries = [
 ];
 
 const quickSteps = [
-  { step: "1", title: "Add Input Nodes", desc: "Start with one or more Import Structure nodes (upload or preset)." },
+  { step: "1", title: "Add Input Nodes", desc: "Start with one or more Import Structure nodes (upload or the Library)." },
   { step: "2", title: "Build the Workflow", desc: "Wire nodes left-to-right — atoms and box data flow through each operation." },
   { step: "3", title: "Configure Parameters", desc: "Set replication factors, ion count, forcefield, export format, etc." },
   { step: "4", title: "Validate & Run", desc: "Click Run to execute the generated Python script on the backend server." },

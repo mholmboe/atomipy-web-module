@@ -582,7 +582,7 @@ type ScriptSection = { nodeType: string; nodeId: string; code: string };
 type RunNodeStatus = "queued" | "running" | "done" | "error" | "skipped";
 
 const NODE_PURPOSE_DOCS: Record<string, string> = {
-  structure: "Imports a starting structure from upload or preset files.",
+  structure: "Imports a starting structure: inorganic (upload or the Library = presets + crystals) or organic (SMILES, file, or molecule library).",
   preset: "Imports a preset structure file.",
   upload: "Imports an uploaded structure file.",
   merge: "Merges two structures while applying a distance filter.",
@@ -622,8 +622,8 @@ const NODE_PURPOSE_DOCS: Record<string, string> = {
   bvs: "Runs bond-valence analysis and summaries.",
   xrd: "Calculates and exports simulated XRD profiles.",
   export: "Writes final coordinate/topology files.",
-  simulate: "Runs OpenMM energy minimization or MD (NVT/NPT) on the full system using CPU.",
-  organic: "Parametrizes an organic molecule from a SMILES string.",
+  simulate: "Runs OpenMM energy minimization or MD (NVT/NPT) on the full system (CPU online; GPU on Colab/local).",
+  organic: "Defines an organic molecule (SMILES, file, or library); GAFF/OpenFF parametrization is applied by the Forcefield node.",
 };
 
 const compactBlankLines = (text: string): string => text.replace(/\n{3,}/g, "\n\n");
