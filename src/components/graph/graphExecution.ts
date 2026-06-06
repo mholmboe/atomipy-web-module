@@ -416,6 +416,20 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
   // type are numbered EM_1/EM_2, NVT_1/NVT_2, NPT_1/NPT_2 (in execution order).
   const _simTypeCount: Record<string, number> = {};
 
+  // Re-attach the topology carriers (.itp/_defines/_top_path/_mol_counts_override)
+  // from `inVar` onto a freshly-returned plain list `outVar`, so an organic
+  // (GAFF/Sage) topology survives a coordinate-only transform. ONLY use this on
+  // nodes that preserve the atom set AND order (wrap/pbc, translate, rotate,
+  // scale, bend, coordinate-frame) — never on slice/remove/insert/reorder, where
+  // the carried itp would be stale. (Dummy per-atom markers ride the dicts and
+  // need no re-attach.) Emits module-level Python.
+  const carryTopo = (outVar: string, inVar: string): string =>
+    `_carry = [a for a in ('itp', '_defines', '_top_path', '_mol_counts_override') if hasattr(${inVar}, a)]\n` +
+    `if _carry:\n` +
+    `    class _SL_carry(list): pass\n` +
+    `    ${outVar} = _SL_carry(${outVar})\n` +
+    `    for _a in _carry: setattr(${outVar}, _a, getattr(${inVar}, _a))\n`;
+
   sorted.forEach((id, index) => {
     const n = nodeMap.get(id);
     if (!n) return;
@@ -926,6 +940,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
       case "bend": {
         const radius = getNumber(data, "radius", 50);
         pythonCode += `${blockOutAtoms} = ap.bend(${inAtoms}, ${radius})\n`;
+        pythonCode += carryTopo(blockOutAtoms, inAtoms);
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
@@ -944,6 +959,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             pythonCode += `${blockOutAtoms} = ap.translate(${inAtoms}, [${tx}, ${ty}, ${tz}])\n`;
           }
         }
+        pythonCode += carryTopo(blockOutAtoms, inAtoms);
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
@@ -957,6 +973,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         } else {
           pythonCode += `${blockOutAtoms} = ap.rotate(${inAtoms}, Box=${inBox}, angles='random')\n`;
         }
+        pythonCode += carryTopo(blockOutAtoms, inAtoms);
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
@@ -970,6 +987,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         } else {
           pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.scale(${inAtoms}, ${inBox}, [${sx}, ${sy}, ${sz}])\n`;
         }
+        pythonCode += carryTopo(blockOutAtoms, inAtoms);
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
@@ -1399,17 +1417,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
       }
       case "PBC":
       case "pbc": {
-        const wrapMode = getString(data, "wrapMode", "atoms");
-        if (wrapMode === "molecule" || wrapMode === "molecules") {
-          pythonCode += `${blockOutAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
-        } else {
-          pythonCode += `${blockOutAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
-        }
+        pythonCode += `${blockOutAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
+        pythonCode += carryTopo(blockOutAtoms, inAtoms);   // wrap preserves atoms → keep topology
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
       case "wrap": {
         pythonCode += `${blockOutAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
+        pythonCode += carryTopo(blockOutAtoms, inAtoms);
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
@@ -2015,6 +2030,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const axis = pyEscape(getString(data, "axis", "z"));
 
         pythonCode += `${blockOutAtoms} = ap.coordinate_frame(${inAtoms}, Box=${inBox}, origin_type='${originType}', origin_value='${originVal}', align_type='${alignType}', align_value='${alignVal}', axis='${axis}')\n`;
+        pythonCode += carryTopo(blockOutAtoms, inAtoms);
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
       }
@@ -2527,24 +2543,31 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           // is built from mineral atoms ONLY (water/ions handled via includes) —
           // mirrors the Simulate reconstruct path.
           pythonCode += `_solvent_ion_res = {'SOL','WAT','HOH','TIP3','OPC','OPC3','SPC','SPCE','TIP4','TIP5','ION','NA','CL','K','LI','CS','RB','F','BR','I','CA','MG','ZN','NA+','CL-','K+','CA2+','MG2+','ZN2+'}\n`;
+          pythonCode += `_exp_dummy = bool([a for a in ${inAtoms} if a.get('_dummy_type')])\n`;
+          pythonCode += `_org_itps = []\n`;
           pythonCode += `if hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None:\n`;
           pythonCode += `    _exp_itp = ${inAtoms}.itp\n`;
-          pythonCode += `    _org_itps = []\n`;
           pythonCode += `    for _k, _v in _exp_itp.items():\n`;
           pythonCode += `        if _k.startswith('_source_itp') and _v:\n`;
           pythonCode += `            _bn = str(_v).replace('\\\\', '/').split('/')[-1]\n`;
           pythonCode += `            if _bn not in _org_itps: _org_itps.append(_bn)\n`;
+          pythonCode += `elif _exp_dummy:\n`;
+          pythonCode += `    _exp_itp = None\n`;
           pythonCode += `else:\n`;
           pythonCode += `    _mineral_atoms = [a for a in ${inAtoms} if str(a.get('resname','')).upper() not in _solvent_ion_res]\n`;
           pythonCode += `    if _mineral_atoms:\n`;
           pythonCode += `        _, _exp_itp, _ = ap.merge_top({'atoms': _mineral_atoms, 'itp': None, 'box': ${inBox}})\n`;
           pythonCode += `    else:\n`;
           pythonCode += `        _exp_itp = {'_original_itps': [], 'atomtypes': {}, '_component_labels': ['Solvent/Ions']}\n`;
-          pythonCode += `    _org_itps = []\n`;
-          pythonCode += `ap.write_merged_top(list(${inAtoms}), _exp_itp, ${inBox}, '${outName}.top', '${outName}.gro', minff_variant='${exportFfVariant}', water_model='${waterLower}', ion_model='${ionCombine}', organic_itps=_org_itps or None, angle_ka=${exportAngleKaPy}, mol_counts_override=getattr(${inAtoms}, '_mol_counts_override', None))\n`;
-          pythonCode += `_inorg = [a for a in list(${inAtoms}) if _classify(a) != 'organic']\n`;
-          pythonCode += `if _inorg:\n`;
-          pythonCode += `    ap.write_itp(_inorg, ${inBox}, '${outName}.itp', explicit_angles=${exportExplicit}, KANGLE=${exportKangle}, max_angle=${exportMaxAngle})\n`;
+          pythonCode += `if _exp_dummy:\n`;
+          pythonCode += `    # Frozen Dummy FF: self-contained bond-free .top (matches the Simulate path).\n`;
+          pythonCode += `    ap.write_dummy_system_top(list(${inAtoms}), ${inBox}, '${outName}.top', '${outName}.gro', water_model='${waterLower}', organic_itps=_org_itps or None)\n`;
+          pythonCode += `    print("Export: frozen Dummy-FF topology written (qualitative; EM/NVT only).")\n`;
+          pythonCode += `else:\n`;
+          pythonCode += `    ap.write_merged_top(list(${inAtoms}), _exp_itp, ${inBox}, '${outName}.top', '${outName}.gro', minff_variant='${exportFfVariant}', water_model='${waterLower}', ion_model='${ionCombine}', organic_itps=_org_itps or None, angle_ka=${exportAngleKaPy}, mol_counts_override=getattr(${inAtoms}, '_mol_counts_override', None))\n`;
+          pythonCode += `    _inorg = [a for a in list(${inAtoms}) if _classify(a) != 'organic']\n`;
+          pythonCode += `    if _inorg:\n`;
+          pythonCode += `        ap.write_itp(_inorg, ${inBox}, '${outName}.itp', explicit_angles=${exportExplicit}, KANGLE=${exportKangle}, max_angle=${exportMaxAngle})\n`;
         } else if (topFmt === "lmp") {
           // LAMMPS .data: inorganic-only (mineral + ions + water).
           pythonCode += `_inorg = [a for a in list(${inAtoms}) if _classify(a) != 'organic']\n`;

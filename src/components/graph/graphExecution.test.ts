@@ -125,6 +125,36 @@ describe('graphExecution Python Generator', () => {
     expect(crystalCode).toContain("ap.load_crystal('oxides/MnO.cif')");
   });
 
+  it('coordinate-only nodes (wrap) re-attach the organic topology carriers', () => {
+    const nodes: Node[] = [
+      { id: 'org', type: 'organic', position: { x: 0, y: 0 }, data: { smiles: 'CCO', forcefield: 'gaff-2.11' } },
+      { id: 'w', type: 'pbc', position: { x: 100, y: 0 }, data: {} },
+      { id: 'sim', type: 'simulate', position: { x: 200, y: 0 }, data: { simType: 'nvt' } },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'org', target: 'w', targetHandle: 'in' },
+      { id: 'e2', source: 'w', target: 'sim', targetHandle: 'in' },
+    ];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    // the wrap output re-attaches .itp/_defines/_top_path so the organic topology survives
+    expect(code).toMatch(/_carry = \[a for a in \('itp', '_defines', '_top_path', '_mol_counts_override'\)/);
+  });
+
+  it('export writes the dummy topology for a Dummy-FF system', () => {
+    const nodes: Node[] = [
+      { id: 's', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'library', librarySource: 'crystal', value: 'oxides/MnO.cif' } },
+      { id: 'ff', type: 'forcefield', position: { x: 100, y: 0 }, data: { forcefield: 'dummy' } },
+      { id: 'exp', type: 'export', position: { x: 200, y: 0 }, data: { outputName: 'sys', topologyFormat: 'itp' } },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 's', target: 'ff', targetHandle: 'in' },
+      { id: 'e2', source: 'ff', target: 'exp', targetHandle: 'in' },
+    ];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    expect(code).toContain("_exp_dummy = bool([a for a in");
+    expect(code).toContain("ap.write_dummy_system_top(");
+  });
+
   it('box node fit-to-molecule mode emits ap.fit_box with padding', () => {
     const nodes: Node[] = [
       { id: 'org', type: 'organic', position: { x: 0, y: 0 }, data: { smiles: 'CCO', forcefield: 'gaff-2.11' } },
