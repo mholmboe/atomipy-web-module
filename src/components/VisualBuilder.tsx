@@ -1667,6 +1667,12 @@ export default function VisualBuilder() {
       if (outgoing[e.source]) outgoing[e.source].push(e.target);
     });
 
+    // Isolated nodes (no edges at all) are laid out in a horizontal ROW instead
+    // of being stacked vertically in the depth-0 column.
+    const isolatedIds = new Set(
+      nodes.filter((n) => incoming[n.id].length === 0 && outgoing[n.id].length === 0).map((n) => n.id),
+    );
+
     // 2. Find starting nodes (nodes with 0 incoming edges)
     let queue = nodes.filter((n) => incoming[n.id].length === 0).map((n) => n.id);
     const depths: Record<string, number> = {};
@@ -1698,9 +1704,10 @@ export default function VisualBuilder() {
       }
     });
 
-    // Group nodes by depth
+    // Group nodes by depth (isolated nodes handled separately as a row)
     const columns: Record<number, string[]> = {};
     Object.entries(depths).forEach(([id, depth]) => {
+      if (isolatedIds.has(id)) return;
       if (!columns[depth]) columns[depth] = [];
       columns[depth].push(id);
     });
@@ -1790,22 +1797,36 @@ export default function VisualBuilder() {
       currentX += columnWidths[depth] + spacingXGap;
     });
 
-    const nextNodes = nodes.map((node) => {
+    // Position connected nodes by depth/column, tracking the lowest Y so the
+    // isolated row can sit below the graph.
+    const positions: Record<string, { x: number; y: number }> = {};
+    let maxConnectedY = startY + 150;
+    nodes.forEach((node) => {
+      if (isolatedIds.has(node.id)) return;
       const depth = depths[node.id];
-      const idx = columns[depth].indexOf(node.id);
-
-      // Centered Y offset
-      const totalInCol = columns[depth].length;
-      const yOffset = ((idx - (totalInCol - 1) / 2) * spacingY);
-
-      return {
-        ...node,
-        position: {
-          x: depthXPositions[depth],
-          y: startY + yOffset + 150,
-        },
-      };
+      const col = columns[depth] || [node.id];
+      const idx = col.indexOf(node.id);
+      const totalInCol = col.length;
+      const yOffset = (idx - (totalInCol - 1) / 2) * spacingY;
+      const y = startY + yOffset + 150;
+      positions[node.id] = { x: depthXPositions[depth] ?? startX, y };
+      if (y > maxConnectedY) maxConnectedY = y;
     });
+
+    // Lay isolated (edge-less) nodes out in a single horizontal row.
+    const hasConnected = Object.keys(columns).length > 0;
+    const isoY = hasConnected ? maxConnectedY + spacingY : startY + 150;
+    let isoX = startX;
+    nodes.forEach((node) => {
+      if (!isolatedIds.has(node.id)) return;
+      positions[node.id] = { x: isoX, y: isoY };
+      isoX += getNodeWidth(node) + spacingXGap;
+    });
+
+    const nextNodes = nodes.map((node) => ({
+      ...node,
+      position: positions[node.id] ?? node.position,
+    }));
 
     setNodes(nextNodes);
   }, [nodes, edges, setNodes]);
