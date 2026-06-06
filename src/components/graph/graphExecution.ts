@@ -711,7 +711,17 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
       case "box": {
         const inputMode = getString(data, "inputMode", "cell");
 
-        if (inputMode === "box_dim") {
+        if (inputMode === "fit") {
+          // Fit the box snugly to the molecule (like `gmx editconf -d`): extent +
+          // `padding` Å on every side. Centers the atoms in the new box.
+          const pad = getNumber(data, "padding", 10.0);
+          const cubic = getBoolean(data, "cubic", false) ? "True" : "False";
+          pythonCode += `# Fit box to the structure (+${pad} Å margin per side)\n`;
+          pythonCode += `if isinstance(${inAtoms}, list) and ${inAtoms}:\n`;
+          pythonCode += `    ${blockOutBox} = ap.Cell2Box_dim(ap.fit_box(${inAtoms}, padding=${pad}, cubic=${cubic}, center=True))\n`;
+          pythonCode += `else:\n`;
+          pythonCode += `    ${blockOutBox} = ap.Cell2Box_dim([${2 * pad}, ${2 * pad}, ${2 * pad}, 90.0, 90.0, 90.0])\n`;
+        } else if (inputMode === "box_dim") {
           const lx = getOptionalNumber(data, "lx");
           const ly = getOptionalNumber(data, "ly");
           const lz = getOptionalNumber(data, "lz");

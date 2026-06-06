@@ -4,10 +4,13 @@ import { Box, X } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps, PresetOption } from "./types";
 
-type BoxMode = "cell" | "box_dim";
+type BoxMode = "cell" | "box_dim" | "fit";
 
 type BoxNodeData = {
   inputMode?: BoxMode;
+  // Fit-to-molecule fields
+  padding?: number;
+  cubic?: boolean;
   // Cell fields
   a?: number;
   b?: number;
@@ -248,9 +251,11 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
       return null;
     };
 
+    if (mode === "fit") return;   // fit mode computes the box from atoms at build time
+
     const edge = edges.find((e) => e.target === id);
     if (!edge) return;
-    
+
     // First prioritize dynamic run-time box coordinates from upstream simulation PDB, falling back to static trace
     const seed = findDynamicBoxFromPdb(edge.source) || inferSeed(edge.source);
     if (!seed) return;
@@ -375,11 +380,45 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
             onClick={() => switchMode("box_dim")}
             className={`flex-1 py-1.5 transition-all ${mode === "box_dim" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
           >
-            Box Dim (lx/xy…)
+            Box Dim
+          </button>
+          <button
+            onClick={() => switchMode("fit")}
+            className={`flex-1 py-1.5 transition-all ${mode === "fit" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
+            title="Fit the box snugly to the structure (extent + margin), like gmx editconf -d"
+          >
+            Fit to mol
           </button>
         </div>
 
-        {mode === "cell" ? (
+        {mode === "fit" ? (
+          <div className="space-y-2">
+            <p className="text-[10px] text-muted-foreground leading-snug">
+              Box is fitted to the structure at run time: bounding box + margin on every
+              side (like <span className="font-mono">gmx editconf -d</span>), and the
+              molecule is centered.
+            </p>
+            <div>
+              <label className="text-[10px] font-bold text-muted-foreground block mb-1">Margin / padding (Å per side)</label>
+              <input
+                type="number" step="0.5" min="0"
+                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 h-7"
+                value={data.padding ?? 10}
+                onChange={(e) => updateNodeData(id, { ...data, padding: parseFloat(e.target.value) || 0 })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </div>
+            <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
+              Cubic box (all edges equal)
+              <input
+                type="checkbox" className="nodrag"
+                checked={data.cubic ?? false}
+                onChange={(e) => updateNodeData(id, { ...data, cubic: e.target.checked })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </label>
+          </div>
+        ) : mode === "cell" ? (
           <>
             <div className="grid grid-cols-3 gap-2">
               {numInput("a", "a (Å)", "50.0")}
@@ -410,7 +449,8 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
           </>
         )}
 
-        {/* Equivalent Preview & Duplicate Button Row */}
+        {/* Equivalent Preview & Duplicate Button Row (cell/box_dim only) */}
+        {mode !== "fit" && (
         <div className="flex gap-2 items-stretch">
           <div className="flex-1 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-lg p-2 border border-indigo-500/20 flex flex-col justify-center">
             <label className="text-[8px] font-bold text-indigo-500/70 uppercase block mb-1 text-center">
@@ -454,6 +494,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
             <span>Box</span>
           </button>
         </div>
+        )}
 
       </div>
 

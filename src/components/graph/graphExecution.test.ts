@@ -108,6 +108,19 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain("ap.import_auto(f'uploads/legacy.pdb')");
   });
 
+  it('box node fit-to-molecule mode emits ap.fit_box with padding', () => {
+    const nodes: Node[] = [
+      { id: 'org', type: 'organic', position: { x: 0, y: 0 }, data: { smiles: 'CCO', forcefield: 'gaff-2.11' } },
+      { id: 'box', type: 'box', position: { x: 100, y: 0 }, data: { inputMode: 'fit', padding: 12, cubic: true } },
+    ];
+    const edges: Edge[] = [{ id: 'e1', source: 'org', target: 'box', targetHandle: 'in' }];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    expect(code).toContain('ap.fit_box(');
+    expect(code).toContain('padding=12');
+    expect(code).toContain('cubic=True');
+    expect(code).toContain('ap.Cell2Box_dim(ap.fit_box(');
+  });
+
   it('generates a frozen dummy-mineral path for the Dummy FF', () => {
     const nodes: Node[] = [
       { id: 'struct-1', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'preset', value: 'MnO.cif' } },
