@@ -25,6 +25,7 @@ type SimulateNodeData = {
   dcdFreq?: number;
   writePdb?: boolean;
   pdbFreq?: number;
+  logFreq?: number;
   posres?: boolean;
   posresFC?: number;
   wrapTrajectory?: boolean;
