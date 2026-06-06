@@ -2453,7 +2453,7 @@ export default function VisualBuilder() {
                 <Play className="w-4 h-4 mr-2" />
                 {(() => {
                   const nSel = nodes.filter((n) => n.selected).length;
-                  return nSel > 0 ? `Run Selected (${nSel})` : "Run";
+                  return nSel > 0 ? "Run Selected" : "Run";
                 })()}
               </Button>
             )}
