@@ -852,6 +852,10 @@ async def list_presets():
         "presets": sorted(presets, key=lambda x: ("/" in x["fileName"], x["name"])),
         "disableSimulation": _mode == "disabled",   # legacy flag
         "simulationMode": _mode,                     # 'full' | 'em_only' | 'disabled'
+        # True only on Cloud Run (which injects K_SERVICE) — i.e. the
+        # scale-to-zero online site, NOT Colab or local. Used to show a
+        # one-time cold-start notice.
+        "coldStart": bool(os.environ.get("K_SERVICE")),
     }
 
 
