@@ -200,9 +200,14 @@ output streams. Therefore:
 - **`--concurrency=1` is required** on both services. Do **not** raise it.
 - Serve more users by **scaling out** (`--max-instances`), not up. With online
   being EM-only (short runs) instances cycle quickly.
-- Current sizing: main app `concurrency=1, max-instances=20, min-instances=1`
-  (≈16 simultaneous users + page-load headroom, 40 vCPU); OpenFF worker
-  `concurrency=1, max-instances=8`.
+- Current sizing (cost-optimized for low traffic): main app
+  `concurrency=1, min-instances=0, max-instances=6`; topology generator
+  `min-instances=0, max-instances=4`; OpenFF worker
+  `concurrency=1, min-instances=0, max-instances=3`. `min-instances=0` means
+  the services scale to zero when idle (no 24/7 cost) at the price of a cold
+  start on the first request after idle. Raise `min-instances` to 1 to keep a
+  service warm (continuous cost); raise `max-instances` for more simultaneous
+  users.
 - To support **N concurrent users**, set `max-instances ≈ N + 25%`. Raise
   `min-instances` to reduce cold-start latency during bursts (costs more, since
   those instances are always on); the ~4 GiB image takes ~10–20 s to cold-start.

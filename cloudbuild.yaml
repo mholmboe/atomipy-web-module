@@ -70,11 +70,12 @@ steps:
       # scales out to more instances instead.
       - --concurrency=1
       # Scale OUT (not up) for concurrent users — each build needs its own
-      # instance (global cwd/stdout). max-instances=20 supports ~16 simultaneous
-      # users + page-load headroom (40 vCPU). Raise min-instances to cut cold
-      # starts during bursts (costs more); raise max-instances for >16 users.
-      - --min-instances=1
-      - --max-instances=20
+      # instance (global cwd/stdout). min-instances=0 means the service scales
+      # to zero when idle (no 24/7 cost) at the price of a cold start on the
+      # first request after idle. Raise min-instances back to 1 to keep it warm
+      # (costs continuously); raise max-instances for more simultaneous users.
+      - --min-instances=0
+      - --max-instances=6
       # SIMULATION_MODE controls policy (em_only on the public instance).
       # The image ships no OpenCL driver, so OpenMM uses the native CPU
       # platform. Tighten BUILD_TIMEOUT_SECONDS / step caps later to bound cost.

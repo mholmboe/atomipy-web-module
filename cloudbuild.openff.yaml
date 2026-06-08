@@ -63,7 +63,7 @@ steps:
       # concurrency=1 + scale out keeps parametrizations fast under load.
       - --concurrency=1
       - --min-instances=0
-      - --max-instances=8
+      - --max-instances=3
       - --update-env-vars=INTERCHANGE_EXPERIMENTAL=1
 
 timeout: 2400s
