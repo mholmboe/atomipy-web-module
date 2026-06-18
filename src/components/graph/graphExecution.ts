@@ -1417,9 +1417,28 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
       }
       case "PBC":
       case "pbc": {
-        pythonCode += `${blockOutAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
-        pythonCode += carryTopo(blockOutAtoms, inAtoms);   // wrap preserves atoms → keep topology
-        stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        const pbcMode = getString(data, "mode", "wrap");
+        if (pbcMode === "unwrap") {
+          const molidRaw = getString(data, "unwrapMolid", "").trim();
+          const molids = molidRaw
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+          const molidArg = molids.length > 0 ? `, molid=[${molids.join(", ")}]` : "";
+          pythonCode += `${blockOutAtoms} = ap.unwrap_coordinates(${inAtoms}, ${inBox}${molidArg})\n`;
+          pythonCode += carryTopo(blockOutAtoms, inAtoms);
+          stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        } else if (pbcMode === "condense") {
+          // Tighten the box to the atomic extent (no padding), centering atoms in it.
+          pythonCode += `${blockOutBox} = ap.Cell2Box_dim(ap.fit_box(${inAtoms}, padding=0.0, cubic=False, center=True))\n`;
+          pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+          pythonCode += carryTopo(blockOutAtoms, inAtoms);
+          stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+        } else {
+          pythonCode += `${blockOutAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
+          pythonCode += carryTopo(blockOutAtoms, inAtoms);   // wrap preserves atoms → keep topology
+          stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        }
         break;
       }
       case "wrap": {
@@ -1516,6 +1535,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const simType = getString(data, "simType", "nvt");
         const temp = getNumber(data, "temperature", 298.15);
         const timestepFs = getNumber(data, "timestep", 1.0);
+        const frictionPs = getNumber(data, "frictionCoeff", 1.0);
         const miniSteps = getNumber(data, "miniSteps", 500);
         const mdSteps = getNumber(data, "mdSteps", 5000);
         const cutoffNm = getNumber(data, "cutoff", 12.0) / 10.0;
@@ -1839,7 +1859,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    \n`;
         }
 
-        pythonCode += `    integrator = mm.LangevinMiddleIntegrator(${temp}*unit.kelvin, 1/unit.picosecond, ${(timestepFs / 1000).toFixed(4)}*unit.picoseconds)\n`;
+        pythonCode += `    integrator = mm.LangevinMiddleIntegrator(${temp}*unit.kelvin, ${frictionPs}/unit.picosecond, ${(timestepFs / 1000).toFixed(4)}*unit.picoseconds)\n`;
 
         pythonCode += `    simulation = app.Simulation(topology, system, integrator)\n`;
         pythonCode += `    simulation.context.setPositions(positions)\n`;
@@ -2025,15 +2045,26 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
       }
       case "coordinateFrame":
       case "coordFrame": {
-        const originType = pyEscape(getString(data, "originType", "index"));
-        const originVal = pyEscape(getString(data, "originValue", "1"));
-        const alignType = pyEscape(getString(data, "alignType", "index"));
-        const alignVal = pyEscape(getString(data, "alignValue", "2"));
-        const axis = pyEscape(getString(data, "axis", "z"));
-
-        pythonCode += `${blockOutAtoms} = ap.coordinate_frame(${inAtoms}, Box=${inBox}, origin_type='${originType}', origin_value='${originVal}', align_type='${alignType}', align_value='${alignVal}', axis='${axis}')\n`;
+        const cfMode = getString(data, "mode", "cart_to_frac");
+        pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+        if (cfMode === "cart_to_frac") {
+          pythonCode += `ap.cartesian_to_fractional(${blockOutAtoms}, Box=${inBox}, add_to_atoms=True)\n`;
+        } else if (cfMode === "frac_to_cart") {
+          pythonCode += `ap.fractional_to_cartesian(${blockOutAtoms}, Box=${inBox}, add_to_atoms=True)\n`;
+        } else if (cfMode === "triclinic_to_ortho") {
+          pythonCode += `ap.triclinic_to_orthogonal(${blockOutAtoms}, Box=${inBox}, add_to_atoms=True)\n`;
+        } else if (cfMode === "ortho_to_triclinic") {
+          pythonCode += `ap.orthogonal_to_triclinic([[a['x'], a['y'], a['z']] for a in ${blockOutAtoms}], ap.Box_dim2Cell(${inBox}), atoms=${blockOutAtoms}, add_to_atoms=True)\n`;
+        } else if (cfMode === "cell_vectors") {
+          const vectorsFile = pyEscape(getString(data, "vectorsFile", "cell_vectors.json"));
+          pythonCode += `_cell = ap.Box_dim2Cell(${inBox})\n`;
+          pythonCode += `vectors_data = ap.get_cell_vectors(_cell)\n`;
+          pythonCode += `with open('${vectorsFile}', 'w') as _vf:\n`;
+          pythonCode += `    json.dump({'a': [float(v) for v in vectors_data[0]], 'b': [float(v) for v in vectors_data[1]], 'c': [float(v) for v in vectors_data[2]]}, _vf)\n`;
+        }
+        pythonCode += `${blockOutBox} = ${inBox}\n`;
         pythonCode += carryTopo(blockOutAtoms, inAtoms);
-        stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
       case "condense": {
@@ -2240,25 +2271,31 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
       }
       case "atomProps":
       case "atomProperties": {
-        const option = getString(data, "option", "com");
-
-        if (option === "com") {
-          const comLogFile = pyEscape(getString(data, "comLogFile", "com_report.json"));
-          pythonCode += `\n# Center of mass calculation\n`;
-          pythonCode += `com_data = ap.com(${inAtoms})\n`;
-          pythonCode += `with open('${comLogFile}', 'w') as _cf:\n`;
-          pythonCode += `    json.dump({'x': float(com_data[0]), 'y': float(com_data[1]), 'z': float(com_data[2])}, _cf)\n`;
-        } else if (option === "vectors") {
-          const vectorsFile = pyEscape(getString(data, "vectorsFile", "cell_vectors.json"));
-          pythonCode += `\n# Cell vectors calculation\n`;
-          pythonCode += `_cell = ap.Box_dim2Cell(${inBox})\n`;
-          pythonCode += `vectors_data = ap.get_cell_vectors(_cell)\n`;
-          pythonCode += `with open('${vectorsFile}', 'w') as _vf:\n`;
-          pythonCode += `    json.dump({'a': [float(v) for v in vectors_data[0]], 'b': [float(v) for v in vectors_data[1]], 'c': [float(v) for v in vectors_data[2]]}, _vf)\n`;
-        }
+        const applyElement = getBoolean(data, "applyElement", true);
+        const applyMass = getBoolean(data, "applyMass", false);
+        const applyFormalCharges = getBoolean(data, "applyFormalCharges", false);
+        const computeCom = getBoolean(data, "computeCom", false);
 
         pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+        if (applyElement) {
+          pythonCode += `${blockOutAtoms} = ap.element(${blockOutAtoms})\n`;
+        }
+        if (applyMass) {
+          pythonCode += `${blockOutAtoms} = ap.set_atomic_masses(${blockOutAtoms})\n`;
+        }
+        if (applyFormalCharges) {
+          pythonCode += `${blockOutAtoms} = ap.assign_formal_charges(${blockOutAtoms})\n`;
+        }
+        if (computeCom) {
+          const comLogFile = pyEscape(getString(data, "comLogFile", "com_report.json"));
+          pythonCode += `\n# Center of mass calculation\n`;
+          pythonCode += `com_data = ap.com(${blockOutAtoms})\n`;
+          pythonCode += `with open('${comLogFile}', 'w') as _cf:\n`;
+          pythonCode += `    json.dump({'x': float(com_data[0]), 'y': float(com_data[1]), 'z': float(com_data[2])}, _cf)\n`;
+        }
+
         pythonCode += `${blockOutBox} = ${inBox}\n`;
+        pythonCode += carryTopo(blockOutAtoms, inAtoms);   // annotations preserve atoms → keep topology
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
