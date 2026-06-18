@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { NodeComponentProps } from "./types";
+import { NodeHelpButton } from "./nodeHelp";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -794,7 +795,8 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
               >
                 <RotateCw className="w-3.5 h-3.5" />
               </button>
-              <button 
+              <NodeHelpButton helpKey="viewer" />
+              <button
                 onClick={(e) => {
                   e.stopPropagation();
                   deleteElements({ nodes: [{ id }] });

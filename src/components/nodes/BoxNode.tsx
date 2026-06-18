@@ -366,7 +366,7 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
     <div className="bg-card w-[270px] shadow-lg rounded-xl border border-indigo-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <NodeHeader id={id} title="System Box size" Icon={Box} colorClass="text-indigo-500" className="bg-indigo-500/10" />
+      <NodeHeader id={id} title="System Box size" Icon={Box} colorClass="text-indigo-500" className="bg-indigo-500/10" helpKey="box" />
 
       <div className="p-4 space-y-3 bg-background">
         {/* Mode Toggle */}
