@@ -32,7 +32,7 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
   const topologyFormat = data.topologyFormat || "none";
 
   return (
-    <div className="bg-card w-[300px] shadow-lg rounded-xl border border-destructive/50 overflow-visible font-sans select-none relative">
+    <div className="bg-card w-[300px] shadow-lg rounded-xl border border-destructive/50 overflow-hidden font-sans select-none relative">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
       <NodeHeader id={id} title="Export Settings" Icon={FileOutput} colorClass="text-indigo-500" className="bg-indigo-500/10" />
