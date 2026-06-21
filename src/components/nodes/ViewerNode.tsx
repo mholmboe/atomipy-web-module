@@ -200,8 +200,10 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const stickRadius = data.stickRadius ?? 0.15;
   const sphereScale = data.sphereScale ?? 0.25;
   const lineWidth = data.lineWidth ?? 1.2;
-  const nodeWidth = Math.max(360, Number.isFinite(data.width) ? Number(data.width) : 500);
-  const nodeHeight = Math.max(320, Number.isFinite(data.height) ? Number(data.height) : 500);
+  // Default a bit wider so the Miller-plane controls fit on one row; min width
+  // also raised so a resized-small node keeps them readable.
+  const nodeWidth = Math.max(440, Number.isFinite(data.width) ? Number(data.width) : 620);
+  const nodeHeight = Math.max(320, Number.isFinite(data.height) ? Number(data.height) : 560);
   const chargeValues = useMemo(() => (Array.isArray(data.charges) ? data.charges : []), [data.charges]);
 
   // Trajectory animation state
