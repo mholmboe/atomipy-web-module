@@ -202,7 +202,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const lineWidth = data.lineWidth ?? 1.2;
   // Default a bit wider so the Miller-plane controls fit on one row; min width
   // also raised so a resized-small node keeps them readable.
-  const nodeWidth = Math.max(440, Number.isFinite(data.width) ? Number(data.width) : 620);
+  const nodeWidth = Math.max(440, Number.isFinite(data.width) ? Number(data.width) : 700);
   const nodeHeight = Math.max(320, Number.isFinite(data.height) ? Number(data.height) : 560);
   const chargeValues = useMemo(() => (Array.isArray(data.charges) ? data.charges : []), [data.charges]);
 
@@ -949,7 +949,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
               onMouseDown={(e) => e.stopPropagation()}
             >
               {millerList.map((pl, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                <div key={idx} className="flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
                   <span className="font-semibold text-indigo-700 dark:text-indigo-300">(hkl)</span>
                   <input type="number" title="h" value={pl.h}
                     onChange={(e) => updateMillerPlane(idx, { h: parseInt(e.target.value) || 0 })}
