@@ -826,15 +826,6 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                   >
                     Miller plane (hkl)
                   </DropdownMenuCheckboxItem>
-                  {showMiller && (
-                    <DropdownMenuCheckboxItem
-                      className={compactItemClass}
-                      checked={millerFourIndex}
-                      onCheckedChange={(checked) => setViewerOption({ millerFourIndex: Boolean(checked) })}
-                    >
-                      4-index (hkil) — hexagonal
-                    </DropdownMenuCheckboxItem>
-                  )}
                   <DropdownMenuCheckboxItem
                     className={compactItemClass}
                     checked={showHydrogens}
@@ -1013,10 +1004,17 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                   </button>
                 </div>
               ))}
-              <button type="button" onClick={addMillerPlane}
-                className="nodrag self-start text-[10px] px-2 py-0.5 rounded border border-border bg-muted hover:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300">
-                + add plane
-              </button>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={addMillerPlane}
+                  className="nodrag self-start text-[10px] px-2 py-0.5 rounded border border-border bg-muted hover:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300">
+                  + add plane
+                </button>
+                <label className="flex items-center gap-1 text-[10px] text-muted-foreground" title="Hexagonal Miller–Bravais: i is auto-set to −(h+k)">
+                  <input type="checkbox" checked={millerFourIndex}
+                    onChange={(e) => setViewerOption({ millerFourIndex: e.target.checked })} />
+                  4-index (hkil)
+                </label>
+              </div>
             </div>
           )}
         </CardHeader>
