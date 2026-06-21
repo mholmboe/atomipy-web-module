@@ -90,7 +90,11 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
       source?: string; value?: string; presets?: PresetOption[];
     }): BoxSeed | null => {
       const { source: sourceKind, value, presets } = sourceData;
-      const canUsePreset = sourceKind === "preset" || sourceKind === undefined;
+      // Curated presets now live under the unified "library" source (librarySource
+      // 'preset'), so accept "library" too — the value still matches a preset's
+      // fileName, which carries the cell metrics. (Crystals use a "category/file"
+      // value that won't match, so they fall through — no static cell available.)
+      const canUsePreset = sourceKind === "preset" || sourceKind === "library" || sourceKind === undefined;
       if (!canUsePreset || !value || !Array.isArray(presets)) return null;
       const metrics = presets.find((p) => p.fileName === value)?.metrics;
       if (!metrics) return null;
@@ -436,9 +440,9 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
         ) : mode === "cell" ? (
           <>
             <div className="grid grid-cols-3 gap-2">
-              {numInput("a", "a (Å)", "50.0")}
-              {numInput("b", "b (Å)", "50.0")}
-              {numInput("c", "c (Å)", "50.0")}
+              {numInput("a", "a (Å)", "auto")}
+              {numInput("b", "b (Å)", "auto")}
+              {numInput("c", "c (Å)", "auto")}
             </div>
             <div className="grid grid-cols-3 gap-2">
               {numInput("alpha", "α°", "90")}
@@ -449,9 +453,9 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
         ) : (
           <>
             <div className="grid grid-cols-3 gap-2">
-              {numInput("lx", "lx (Å)", "50.0")}
-              {numInput("ly", "ly (Å)", "50.0")}
-              {numInput("lz", "lz (Å)", "50.0")}
+              {numInput("lx", "lx (Å)", "auto")}
+              {numInput("ly", "ly (Å)", "auto")}
+              {numInput("lz", "lz (Å)", "auto")}
             </div>
             <div className="space-y-1">
               <label className="text-[9px] font-bold text-muted-foreground block text-center">TILT FACTORS (xy / xz / yz)</label>

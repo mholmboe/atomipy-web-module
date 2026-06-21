@@ -65,6 +65,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Cubic uses the largest extent + padding for all three edges.",
       "Non-90° angles give a triclinic (tilted) box; very skewed boxes (which must satisfy e.g. lx ≥ 2|xy|) can be rejected by the simulation engine.",
       "Set a box before solvation, PBC or simulation — those steps need one.",
+      "Auto-seeding: library presets fill the cell fields from their known metrics; for crystals/uploads the fields stay empty (shown as “auto”) and inherit the structure's real box at build time — an empty field is NOT 50, it just isn't overridden.",
     ],
     before: [
       "Import Structure — provides the initial atoms (and often an initial box).",
