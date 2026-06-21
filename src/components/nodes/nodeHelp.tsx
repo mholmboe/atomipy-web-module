@@ -388,17 +388,27 @@ export const NODE_HELP: Record<string, NodeHelp> = {
   edit: {
     title: "Edit Atoms",
     summary:
-      "Structural editing of one input: slice to a region, remove atoms by type/index/molid and/or coordinate test, set a molecule ID, assign a residue name, reorder atoms, or center coordinates. Geometry only — no force-field changes.",
+      "Structural editing of one input: slice to a region, remove atoms by type/index/molid and/or coordinate test, set a molecule ID, assign a residue name, reorder atoms, center coordinates, or cut by a Miller plane. Geometry only — no force-field changes.",
     features: [
       "Remove: by atom type(s), index list, molid, and optional per-axis tests (x/y/z with <, ≤, >, ≥, ==, ≠); combine with AND/OR. Atoms are reindexed after removal.",
       "Slice: keep atoms inside xlo…zhi (hi defaults to box); optionally drop molecules only partially inside.",
       "Set Molecule ID (with optional resname); Assign Resname (default MIN).",
       "Reorder: by index list, residue name, or atom type; Center: to box center or origin.",
+      "Cut by Miller plane: keep only atoms on one side of an (hkl) plane — choose h/k/l, the kept side (inner/outer), an auto or explicit level, an offset (Å) along the normal, and whether to keep whole molecules.",
+    ],
+    theory: [
+      "The Miller cut is done in fractional coordinates, where the (hkl) plane is the linear threshold f = h·xf + k·yf + l·zf = s: 'inner' keeps f ≤ s, 'outer' keeps f ≥ s. 'auto' puts s at the midpoint of the structure; offset shifts s by offset / d_hkl. (Preview the plane in the Viewer node first.)",
+    ],
+    equations: [
+      { label: "Keep (inner)", expr: "h·xf + k·yf + l·zf ≤ s" },
+      { label: "auto level", expr: "s = ½(f_min + f_max)" },
+      { label: "offset", expr: "Δs = offset / d_hkl" },
     ],
     quirks: [
       "Remove with no valid criteria passes the system through unchanged.",
       "Slice 'Remove partial molecules' (default on) discards molecules straddling the boundary, keeping molecules intact.",
       "Center to box requires a box; otherwise it falls back to a plain center.",
+      "Cut by Miller plane needs a unit cell (box); bond/neighbour lists are invalidated by a cut, so re-detect them downstream (e.g. at Forcefield/Export).",
     ],
     before: [
       "Import Structure, or build/assemble the system (Join / Merge / Insert).",
@@ -835,7 +845,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Representations: ball & stick, sticks, spheres, lines; toggle unit cell, hydrogens, outline, spin, and element/charge labels.",
       "Perspective or orthographic projection; resizable node.",
       "Multi-frame trajectory playback with play/pause and a frame slider; PNG export at 1×/2×/4×.",
-      "Miller-plane overlay — enable “Miller plane (hkl)” in the gear menu, then set h, k, l, an offset (Å) along the normal, single plane vs. the full family, and the plane colour/opacity. Drawn as a translucent plane in both renderers.",
+      "Miller-plane overlay — enable “Miller plane (hkl)” in the gear menu, then add one or more planes; each has h, k, l, an offset (number + slider) along the normal, single plane vs. the full family, and its own colour/opacity. Drawn as translucent planes in both renderers. (To actually cut atoms by a plane, use the Edit node’s “Cut by Miller plane”.)",
     ],
     theory: [
       "A Miller (hkl) plane is the set of points satisfying h·x + k·y + l·z = n in fractional coordinates (n = integer plane level). The overlay clips that plane to the cell; the full family is every integer n that crosses the cell, spaced by the interplanar distance d_hkl.",

@@ -1409,6 +1409,16 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             pythonCode += `else:\n`;
             pythonCode += `    ${blockOutAtoms} = ap.center(${inAtoms})\n`;
           }
+        } else if (editMode === "millerCut") {
+          const cutH = getNumber(data, "cutH", 1);
+          const cutK = getNumber(data, "cutK", 1);
+          const cutL = getNumber(data, "cutL", 1);
+          const cutSide = getString(data, "cutSide", "below");
+          const cutOffset = getNumber(data, "cutOffset", 0);
+          const cutWhole = getBoolean(data, "cutWholeMolecules", false) ? "True" : "False";
+          const levelAuto = getBoolean(data, "cutLevelAuto", true);
+          const levelExpr = levelAuto ? `'auto'` : `${getNumber(data, "cutLevel", 0.5)}`;
+          pythonCode += `${blockOutAtoms} = ap.cut_miller(${inAtoms}, ${inBox}, ${cutH}, ${cutK}, ${cutL}, level=${levelExpr}, offset=${cutOffset}, side='${cutSide}', whole_molecules=${cutWhole})\n`;
         } else {
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
         }

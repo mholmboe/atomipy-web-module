@@ -194,16 +194,18 @@ function hexToRgb(hex: string): [number, number, number] {
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
 }
 
-/** Jmol `draw POLYGON` commands for the planes (translucent). */
-export function jmolMillerCommands(polys: Vec3[][], hexColor: string, opacity: number): string[] {
+/** Jmol `draw POLYGON` commands for one plane's polygons (translucent).
+ *  `idPrefix` namespaces the draw IDs so multiple planes don't collide.
+ *  (Caller is responsible for an initial `draw miller* delete` to clear.) */
+export function jmolMillerCommands(polys: Vec3[][], hexColor: string, opacity: number, idPrefix = "miller"): string[] {
   const [r, g, b] = hexToRgb(hexColor);
   const translucent = Math.min(1, Math.max(0, 1 - opacity)); // Jmol: 0 opaque .. 1 transparent
-  const cmds: string[] = ["draw miller* delete"];
+  const cmds: string[] = [];
   polys.forEach((poly, idx) => {
     const verts = poly.map((p) => `{${p[0].toFixed(4)} ${p[1].toFixed(4)} ${p[2].toFixed(4)}}`).join(" ");
     const tris: string[] = [];
     for (let i = 1; i < poly.length - 1; i++) tris.push(`[0 ${i} ${i + 1}]`);
-    const id = `miller${idx}`;
+    const id = `${idPrefix}${idx}`;
     cmds.push(`draw ${id} POLYGON ${poly.length} ${verts} ${tris.length} ${tris.join(" ")}`);
     cmds.push(`color $${id} translucent ${translucent.toFixed(2)} [${r} ${g} ${b}]`);
   });

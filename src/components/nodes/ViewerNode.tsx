@@ -3,6 +3,20 @@ import { Handle, NodeResizer, Position, useReactFlow } from "@xyflow/react";
 import { Eye, RotateCw, Settings2, Palette, Box as BoxIcon, X, Play, Pause, SkipBack, SkipForward, Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { parseCryst1, millerPlanes, polygonTo3Dmol, jmolMillerCommands } from "@/lib/miller";
+
+type MillerPlaneDef = {
+  h: number;
+  k: number;
+  l: number;
+  offset: number;
+  family: boolean;
+  color: string;
+  opacity: number;
+};
+
+const DEFAULT_MILLER_PLANE: MillerPlaneDef = {
+  h: 1, k: 1, l: 1, offset: 0, family: false, color: "#f59e0b", opacity: 0.5,
+};
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -88,13 +102,15 @@ type ViewerNodeData = {
   computeBonds?: boolean;
   hidePeriodicBonds?: boolean;   // JSmol: drop cross-cell (wrap-around) bonds
   showUnitCell?: boolean;
-  // Miller-plane overlay
+  // Miller-plane overlay — one or more planes
   showMiller?: boolean;
+  millerList?: MillerPlaneDef[];
+  // Legacy single-plane fields (migrated into millerList on first render)
   millerH?: number;
   millerK?: number;
   millerL?: number;
-  millerOffset?: number;   // shift along the plane normal, Å
-  millerFamily?: boolean;  // draw the full family of parallel planes
+  millerOffset?: number;
+  millerFamily?: boolean;
   millerColor?: string;
   millerOpacity?: number;
   background?: keyof typeof BACKGROUNDS;
@@ -153,13 +169,20 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const showOutline = data.showOutline ?? true;
   const showUnitCell = data.showUnitCell ?? true;
   const showMiller = data.showMiller ?? false;
-  const millerH = Number.isFinite(data.millerH) ? Number(data.millerH) : 1;
-  const millerK = Number.isFinite(data.millerK) ? Number(data.millerK) : 1;
-  const millerL = Number.isFinite(data.millerL) ? Number(data.millerL) : 1;
-  const millerOffset = Number.isFinite(data.millerOffset) ? Number(data.millerOffset) : 0;
-  const millerFamily = data.millerFamily ?? false;
-  const millerColor = data.millerColor ?? "#f59e0b";
-  const millerOpacity = Number.isFinite(data.millerOpacity) ? Number(data.millerOpacity) : 0.5;
+  // Normalize to a list of planes; migrate legacy single-plane fields if present.
+  const millerList = useMemo<MillerPlaneDef[]>(() => {
+    if (Array.isArray(data.millerList) && data.millerList.length > 0) return data.millerList;
+    return [{
+      h: Number.isFinite(data.millerH) ? Number(data.millerH) : 1,
+      k: Number.isFinite(data.millerK) ? Number(data.millerK) : 1,
+      l: Number.isFinite(data.millerL) ? Number(data.millerL) : 1,
+      offset: Number.isFinite(data.millerOffset) ? Number(data.millerOffset) : 0,
+      family: data.millerFamily ?? false,
+      color: data.millerColor ?? "#f59e0b",
+      opacity: Number.isFinite(data.millerOpacity) ? Number(data.millerOpacity) : 0.5,
+    }];
+  }, [data.millerList, data.millerH, data.millerK, data.millerL, data.millerOffset, data.millerFamily, data.millerColor, data.millerOpacity]);
+  const millerSig = useMemo(() => JSON.stringify(millerList), [millerList]);
   const showHydrogens = data.showHydrogens ?? true;
   const labelMode = data.labelMode ?? ((data.showAtomLabels ?? false) ? "element" : "none");
   const showAtomLabels = labelMode !== "none";
@@ -207,6 +230,15 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
 
   const setViewerOption = (patch: Partial<ViewerNodeData>) => {
     updateNodeData(id, { ...data, ...patch });
+  };
+
+  const updateMillerPlane = (idx: number, patch: Partial<MillerPlaneDef>) => {
+    setViewerOption({ millerList: millerList.map((p, i) => (i === idx ? { ...p, ...patch } : p)) });
+  };
+  const addMillerPlane = () => setViewerOption({ millerList: [...millerList, { ...DEFAULT_MILLER_PLANE }] });
+  const removeMillerPlane = (idx: number) => {
+    const next = millerList.filter((_, i) => i !== idx);
+    setViewerOption({ millerList: next, showMiller: next.length > 0 });
   };
 
   // ─── Handle renderer switching — destroy the INACTIVE renderer ──────────
@@ -329,22 +361,25 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
         });
       }
 
-      // Miller-plane overlay (translucent custom mesh)
-      if (showMiller && (millerH || millerK || millerL) && viewer.addCustom) {
+      // Miller-plane overlay(s) (translucent custom mesh, one per plane)
+      if (showMiller && viewer.addCustom) {
         const cell = parseCryst1(pdb);
         if (cell) {
-          try {
-            const polys = millerPlanes(millerH, millerK, millerL, cell, {
-              singlePlane: !millerFamily,
-              offset: millerOffset,
-            });
-            polys.forEach((poly) => {
-              const mesh = polygonTo3Dmol(poly);
-              viewer.addCustom!({ ...mesh, color: millerColor, opacity: millerOpacity });
-            });
-          } catch {
-            // bad geometry / no intersection — skip silently
-          }
+          millerList.forEach((pl) => {
+            if (!pl.h && !pl.k && !pl.l) return;
+            try {
+              const polys = millerPlanes(pl.h, pl.k, pl.l, cell, {
+                singlePlane: !pl.family,
+                offset: pl.offset,
+              });
+              polys.forEach((poly) => {
+                const mesh = polygonTo3Dmol(poly);
+                viewer.addCustom!({ ...mesh, color: pl.color, opacity: pl.opacity });
+              });
+            } catch {
+              // bad geometry / no intersection — skip silently
+            }
+          });
         }
       }
 
@@ -415,13 +450,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     lineWidth,
     isMulti,
     showMiller,
-    millerH,
-    millerK,
-    millerL,
-    millerOffset,
-    millerFamily,
-    millerColor,
-    millerOpacity,
+    millerSig,
     // Note: Do not include currentFrame here, or else it will re-render the whole model 10 times a second!
   ]);
 
@@ -506,18 +535,17 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       lines.push("unitcell off");
     }
 
-    // Miller-plane overlay
-    if (showMiller && (millerH || millerK || millerL)) {
+    // Miller-plane overlay(s)
+    lines.push("draw miller* delete");
+    if (showMiller) {
       const cell = parseCryst1(pdbString);
       if (cell) {
-        const polys = millerPlanes(millerH, millerK, millerL, cell, {
-          singlePlane: !millerFamily,
-          offset: millerOffset,
+        millerList.forEach((pl, idx) => {
+          if (!pl.h && !pl.k && !pl.l) return;
+          const polys = millerPlanes(pl.h, pl.k, pl.l, cell, { singlePlane: !pl.family, offset: pl.offset });
+          jmolMillerCommands(polys, pl.color, pl.opacity, `miller${idx}_`).forEach((c) => lines.push(c));
         });
-        jmolMillerCommands(polys, millerColor, millerOpacity).forEach((c) => lines.push(c));
       }
-    } else {
-      lines.push("draw miller* delete");
     }
 
     // Labels
@@ -555,7 +583,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     }
 
     return lines.join("; ");
-  }, [background, computeBonds, hidePeriodicBonds, viewStyle, showHydrogens, showUnitCell, showAtomLabels, labelIsCharge, spin, projection, isMulti, showMiller, millerH, millerK, millerL, millerOffset, millerFamily, millerColor, millerOpacity]);
+  }, [background, computeBonds, hidePeriodicBonds, viewStyle, showHydrogens, showUnitCell, showAtomLabels, labelIsCharge, spin, projection, isMulti, showMiller, millerSig]);
 
   useEffect(() => {
     if (renderer !== "jsmol") return;
@@ -903,38 +931,54 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
           {/* Miller-plane controls (shown when enabled via the gear menu) */}
           {showMiller && (
             <div
-              className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground nodrag"
+              className="flex flex-col gap-1 nodrag"
               onPointerDown={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
             >
-              <span className="font-semibold text-indigo-700 dark:text-indigo-300">Miller (hkl):</span>
-              <input type="number" title="h" value={millerH}
-                onChange={(e) => setViewerOption({ millerH: parseInt(e.target.value) || 0 })}
-                className="nodrag w-9 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
-              <input type="number" title="k" value={millerK}
-                onChange={(e) => setViewerOption({ millerK: parseInt(e.target.value) || 0 })}
-                className="nodrag w-9 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
-              <input type="number" title="l" value={millerL}
-                onChange={(e) => setViewerOption({ millerL: parseInt(e.target.value) || 0 })}
-                className="nodrag w-9 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
-              <label className="flex items-center gap-1">offset&nbsp;Å
-                <input type="number" step={0.5} value={millerOffset}
-                  onChange={(e) => setViewerOption({ millerOffset: parseFloat(e.target.value) || 0 })}
-                  className="nodrag w-12 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
-              </label>
-              <label className="flex items-center gap-1">
-                <input type="checkbox" checked={millerFamily}
-                  onChange={(e) => setViewerOption({ millerFamily: e.target.checked })} />
-                family
-              </label>
-              <input type="color" title="Plane color" value={millerColor}
-                onChange={(e) => setViewerOption({ millerColor: e.target.value })}
-                className="nodrag h-5 w-6 rounded border border-border bg-transparent p-0" />
-              <label className="flex items-center gap-1" title="Opacity">α
-                <input type="range" min={0.1} max={1} step={0.05} value={millerOpacity}
-                  onChange={(e) => setViewerOption({ millerOpacity: parseFloat(e.target.value) })}
-                  className="nodrag w-16" />
-              </label>
+              {millerList.map((pl, idx) => (
+                <div key={idx} className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                  <span className="font-semibold text-indigo-700 dark:text-indigo-300">(hkl)</span>
+                  <input type="number" title="h" value={pl.h}
+                    onChange={(e) => updateMillerPlane(idx, { h: parseInt(e.target.value) || 0 })}
+                    className="nodrag w-9 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
+                  <input type="number" title="k" value={pl.k}
+                    onChange={(e) => updateMillerPlane(idx, { k: parseInt(e.target.value) || 0 })}
+                    className="nodrag w-9 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
+                  <input type="number" title="l" value={pl.l}
+                    onChange={(e) => updateMillerPlane(idx, { l: parseInt(e.target.value) || 0 })}
+                    className="nodrag w-9 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
+                  <label className="flex items-center gap-1" title="Offset along the plane normal (Å)">off
+                    <input type="number" step={0.5} value={pl.offset}
+                      onChange={(e) => updateMillerPlane(idx, { offset: parseFloat(e.target.value) || 0 })}
+                      className="nodrag w-11 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
+                    <input type="range" min={-10} max={10} step={0.1} value={pl.offset}
+                      onChange={(e) => updateMillerPlane(idx, { offset: parseFloat(e.target.value) })}
+                      className="nodrag w-16" title="Offset slider (Å)" />
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={pl.family}
+                      onChange={(e) => updateMillerPlane(idx, { family: e.target.checked })} />
+                    family
+                  </label>
+                  <input type="color" title="Plane color" value={pl.color}
+                    onChange={(e) => updateMillerPlane(idx, { color: e.target.value })}
+                    className="nodrag h-5 w-6 rounded border border-border bg-transparent p-0" />
+                  <label className="flex items-center gap-1" title="Opacity">α
+                    <input type="range" min={0.1} max={1} step={0.05} value={pl.opacity}
+                      onChange={(e) => updateMillerPlane(idx, { opacity: parseFloat(e.target.value) })}
+                      className="nodrag w-12" />
+                  </label>
+                  <button type="button" title="Remove this plane"
+                    onClick={() => removeMillerPlane(idx)}
+                    className="nodrag p-0.5 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+              <button type="button" onClick={addMillerPlane}
+                className="nodrag self-start text-[10px] px-2 py-0.5 rounded border border-border bg-muted hover:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300">
+                + add plane
+              </button>
             </div>
           )}
         </CardHeader>
