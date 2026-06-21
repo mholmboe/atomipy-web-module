@@ -973,10 +973,10 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                   <label className="flex items-center gap-1" title="Offset along the plane normal (Å)">off
                     <input type="number" step={0.5} value={pl.offset}
                       onChange={(e) => updateMillerPlane(idx, { offset: parseFloat(e.target.value) || 0 })}
-                      className="nodrag w-11 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
+                      className="nodrag w-10 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
                     <input type="range" min={-10} max={10} step={0.1} value={pl.offset}
                       onChange={(e) => updateMillerPlane(idx, { offset: parseFloat(e.target.value) })}
-                      className="nodrag w-16" title="Offset slider (Å)" />
+                      className="nodrag w-12" title="Offset slider (Å)" />
                   </label>
                   <label className="flex items-center gap-1">
                     <input type="checkbox" checked={pl.family}
