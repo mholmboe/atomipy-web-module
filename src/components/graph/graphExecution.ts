@@ -1410,15 +1410,25 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             pythonCode += `    ${blockOutAtoms} = ap.center(${inAtoms})\n`;
           }
         } else if (editMode === "millerCut") {
-          const cutH = getNumber(data, "cutH", 1);
-          const cutK = getNumber(data, "cutK", 1);
-          const cutL = getNumber(data, "cutL", 1);
-          const cutSide = getString(data, "cutSide", "below");
-          const cutOffset = getNumber(data, "cutOffset", 0);
           const cutWhole = getBoolean(data, "cutWholeMolecules", false) ? "True" : "False";
-          const levelAuto = getBoolean(data, "cutLevelAuto", true);
-          const levelExpr = levelAuto ? `'auto'` : `${getNumber(data, "cutLevel", 0.5)}`;
-          pythonCode += `${blockOutAtoms} = ap.cut_miller(${inAtoms}, ${inBox}, ${cutH}, ${cutK}, ${cutL}, level=${levelExpr}, offset=${cutOffset}, side='${cutSide}', whole_molecules=${cutWhole})\n`;
+          // Build the list of cut planes (intersection of half-spaces). Migrate
+          // a legacy single-plane definition if no list is present.
+          type RawPlane = { h?: number; k?: number; l?: number; side?: string; levelAuto?: boolean; level?: number; offset?: number };
+          const raw = (data as { cutPlanes?: RawPlane[] }).cutPlanes;
+          const planeDefs: RawPlane[] = Array.isArray(raw) && raw.length > 0
+            ? raw
+            : [{
+                h: getNumber(data, "cutH", 1), k: getNumber(data, "cutK", 1), l: getNumber(data, "cutL", 1),
+                side: getString(data, "cutSide", "below"),
+                levelAuto: getBoolean(data, "cutLevelAuto", true),
+                level: getNumber(data, "cutLevel", 0.5), offset: getNumber(data, "cutOffset", 0),
+              }];
+          const planesPy = planeDefs.map((p) => {
+            const lvl = p.levelAuto === false ? `${Number(p.level) || 0}` : `'auto'`;
+            const side = p.side === "above" ? "above" : "below";
+            return `{'h': ${Math.round(Number(p.h)) || 0}, 'k': ${Math.round(Number(p.k)) || 0}, 'l': ${Math.round(Number(p.l)) || 0}, 'side': '${side}', 'level': ${lvl}, 'offset': ${Number(p.offset) || 0}}`;
+          }).join(", ");
+          pythonCode += `${blockOutAtoms} = ap.cut_planes(${inAtoms}, ${inBox}, [${planesPy}], whole_molecules=${cutWhole})\n`;
         } else {
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
         }

@@ -7,6 +7,9 @@ import type { NodeComponentProps } from "./types";
 type EditMode = "slice" | "remove" | "molecule" | "resname" | "reorder" | "center" | "millerCut";
 const OPS = ["<", "<=", ">", ">=", "==", "!="] as const;
 
+type CutPlaneDef = { h: number; k: number; l: number; side: "below" | "above"; levelAuto: boolean; level: number; offset: number };
+const DEFAULT_CUT_PLANE: CutPlaneDef = { h: 1, k: 1, l: 1, side: "below", levelAuto: true, level: 0.5, offset: 0 };
+
 type EditNodeData = {
   mode?: EditMode;
   // Slice
@@ -31,13 +34,15 @@ type EditNodeData = {
   neworder?: string;
   // Center
   centerOrigin?: boolean;
-  // Cut by Miller plane
+  // Cut by Miller plane(s) — intersection of half-spaces (carves a convex region)
+  cutPlanes?: CutPlaneDef[];
+  cutWholeMolecules?: boolean;
+  // legacy single-plane fields (migrated into cutPlanes)
   cutH?: number; cutK?: number; cutL?: number;
   cutSide?: "below" | "above";
   cutOffset?: number;
   cutLevelAuto?: boolean;
   cutLevel?: number;
-  cutWholeMolecules?: boolean;
 };
 
 export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
@@ -46,6 +51,20 @@ export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
 
   const set = (field: keyof EditNodeData, value: string | number | boolean | undefined) =>
     updateNodeData(id, { ...data, [field]: value });
+
+  // Cut planes: normalize (migrating any legacy single-plane fields) + helpers.
+  const cutPlanes: CutPlaneDef[] = (Array.isArray(data.cutPlanes) && data.cutPlanes.length > 0)
+    ? data.cutPlanes
+    : [{
+        h: data.cutH ?? 1, k: data.cutK ?? 1, l: data.cutL ?? 1,
+        side: data.cutSide ?? "below", levelAuto: data.cutLevelAuto ?? true,
+        level: data.cutLevel ?? 0.5, offset: data.cutOffset ?? 0,
+      }];
+  const setCutPlanes = (planes: CutPlaneDef[]) => updateNodeData(id, { ...data, cutPlanes: planes });
+  const updateCutPlane = (i: number, patch: Partial<CutPlaneDef>) =>
+    setCutPlanes(cutPlanes.map((p, j) => (j === i ? { ...p, ...patch } : p)));
+  const addCutPlane = () => setCutPlanes([...cutPlanes, { ...DEFAULT_CUT_PLANE }]);
+  const removeCutPlane = (i: number) => setCutPlanes(cutPlanes.filter((_, j) => j !== i));
 
   const inputCls = "nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1";
   const selectCls = "nodrag w-full text-xs bg-muted border border-border rounded-md px-1 py-1";
@@ -236,47 +255,59 @@ export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
 
         {mode === "millerCut" && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold text-muted-foreground">(hkl)</label>
-              <input type="number" title="h" className={inputCls} value={data.cutH ?? 1}
-                onChange={(e) => set("cutH", parseInt(e.target.value) || 0)} onPointerDown={(e) => e.stopPropagation()} />
-              <input type="number" title="k" className={inputCls} value={data.cutK ?? 1}
-                onChange={(e) => set("cutK", parseInt(e.target.value) || 0)} onPointerDown={(e) => e.stopPropagation()} />
-              <input type="number" title="l" className={inputCls} value={data.cutL ?? 1}
-                onChange={(e) => set("cutL", parseInt(e.target.value) || 0)} onPointerDown={(e) => e.stopPropagation()} />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground block mb-1">Keep side</label>
-              <select className={selectCls} value={data.cutSide ?? "below"}
-                onChange={(e) => set("cutSide", e.target.value)} onPointerDown={(e) => e.stopPropagation()}>
-                <option value="below">Inner side (h·x+k·y+l·z ≤ level)</option>
-                <option value="above">Outer side (h·x+k·y+l·z ≥ level)</option>
-              </select>
-            </div>
-            <label className="nodrag flex items-center gap-2 text-xs text-muted-foreground">
-              <input type="checkbox" checked={data.cutLevelAuto ?? true}
-                onChange={(e) => set("cutLevelAuto", e.target.checked)} onPointerDown={(e) => e.stopPropagation()} />
-              Auto level (split through the middle)
-            </label>
-            {!(data.cutLevelAuto ?? true) && (
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-1">Level (fractional)</label>
-                <input type="number" step={0.1} className={inputCls} value={data.cutLevel ?? 0.5}
-                  onChange={(e) => set("cutLevel", parseFloat(e.target.value) || 0)} onPointerDown={(e) => e.stopPropagation()} />
+            {cutPlanes.map((pl, i) => (
+              <div key={i} className="space-y-1 border border-border rounded-md p-2 bg-muted/30">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-semibold text-muted-foreground">(hkl)</span>
+                  <input type="number" title="h" className={inputCls} value={pl.h}
+                    onChange={(e) => updateCutPlane(i, { h: parseInt(e.target.value) || 0 })} onPointerDown={(e) => e.stopPropagation()} />
+                  <input type="number" title="k" className={inputCls} value={pl.k}
+                    onChange={(e) => updateCutPlane(i, { k: parseInt(e.target.value) || 0 })} onPointerDown={(e) => e.stopPropagation()} />
+                  <input type="number" title="l" className={inputCls} value={pl.l}
+                    onChange={(e) => updateCutPlane(i, { l: parseInt(e.target.value) || 0 })} onPointerDown={(e) => e.stopPropagation()} />
+                  {cutPlanes.length > 1 && (
+                    <button type="button" title="Remove plane" onClick={() => removeCutPlane(i)}
+                      className="nodrag px-1 text-muted-foreground hover:text-destructive">✕</button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <select className={selectCls} value={pl.side}
+                    onChange={(e) => updateCutPlane(i, { side: e.target.value as "below" | "above" })} onPointerDown={(e) => e.stopPropagation()}>
+                    <option value="below">keep ≤ (inner)</option>
+                    <option value="above">keep ≥ (outer)</option>
+                  </select>
+                  <label className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap" title="Offset along the normal (Å)">off Å
+                    <input type="number" step={0.5} className={inputCls} value={pl.offset}
+                      onChange={(e) => updateCutPlane(i, { offset: parseFloat(e.target.value) || 0 })} onPointerDown={(e) => e.stopPropagation()} />
+                  </label>
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                  <label className="nodrag flex items-center gap-1">
+                    <input type="checkbox" checked={pl.levelAuto}
+                      onChange={(e) => updateCutPlane(i, { levelAuto: e.target.checked })} onPointerDown={(e) => e.stopPropagation()} />
+                    auto level
+                  </label>
+                  {!pl.levelAuto && (
+                    <label className="flex items-center gap-1">level
+                      <input type="number" step={0.1} className={inputCls} value={pl.level}
+                        onChange={(e) => updateCutPlane(i, { level: parseFloat(e.target.value) || 0 })} onPointerDown={(e) => e.stopPropagation()} />
+                    </label>
+                  )}
+                </div>
               </div>
-            )}
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground block mb-1">Offset along normal (Å)</label>
-              <input type="number" step={0.5} className={inputCls} value={data.cutOffset ?? 0}
-                onChange={(e) => set("cutOffset", parseFloat(e.target.value) || 0)} onPointerDown={(e) => e.stopPropagation()} />
-            </div>
+            ))}
+            <button type="button" onClick={addCutPlane}
+              className="nodrag text-[11px] px-2 py-0.5 rounded border border-border bg-muted hover:bg-amber-500/15 text-amber-700">
+              + add plane (intersection)
+            </button>
             <label className="nodrag flex items-center gap-2 text-xs text-muted-foreground">
               <input type="checkbox" checked={data.cutWholeMolecules ?? false}
                 onChange={(e) => set("cutWholeMolecules", e.target.checked)} onPointerDown={(e) => e.stopPropagation()} />
               Keep whole molecules (by centroid)
             </label>
             <p className="text-[10px] text-muted-foreground/60 leading-normal">
-              Removes atoms on one side of the (hkl) plane. Needs a unit cell. Tip: preview the plane in the Viewer node first.
+              Keeps only atoms satisfying ALL planes (intersection). Needs a unit cell.
+              Several planes carve a convex region — e.g. 6 side planes 60° apart → a hexagonal column. Preview planes in the Viewer node first.
             </p>
           </div>
         )}

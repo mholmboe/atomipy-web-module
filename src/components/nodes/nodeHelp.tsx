@@ -394,10 +394,11 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Slice: keep atoms inside xlo…zhi (hi defaults to box); optionally drop molecules only partially inside.",
       "Set Molecule ID (with optional resname); Assign Resname (default MIN).",
       "Reorder: by index list, residue name, or atom type; Center: to box center or origin.",
-      "Cut by Miller plane: keep only atoms on one side of an (hkl) plane — choose h/k/l, the kept side (inner/outer), an auto or explicit level, an offset (Å) along the normal, and whether to keep whole molecules.",
+      "Cut by Miller plane(s): keep only atoms satisfying ALL planes (intersection). Each plane has h/k/l, kept side (inner ≤ / outer ≥), auto or explicit level, and an offset (Å) along the normal; add several to carve a convex region — e.g. 6 side planes 60° apart make a hexagonal column. Optional keep-whole-molecules.",
     ],
     theory: [
-      "The Miller cut is done in fractional coordinates, where the (hkl) plane is the linear threshold f = h·xf + k·yf + l·zf = s: 'inner' keeps f ≤ s, 'outer' keeps f ≥ s. 'auto' puts s at the midpoint of the structure; offset shifts s by offset / d_hkl. (Preview the plane in the Viewer node first.)",
+      "Each Miller cut is done in fractional coordinates, where the (hkl) plane is the linear threshold f = h·xf + k·yf + l·zf = s: 'inner' keeps f ≤ s, 'outer' keeps f ≥ s. 'auto' puts s at the midpoint of the structure; offset shifts s by offset / d_hkl.",
+      "Multiple planes are combined as a logical AND (intersection of half-spaces), which carves any convex shape (slab, prism, hexagonal column). Use the per-plane offset to position each face away from the centre. Preview the planes in the Viewer node first.",
     ],
     equations: [
       { label: "Keep (inner)", expr: "h·xf + k·yf + l·zf ≤ s" },
