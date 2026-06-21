@@ -108,6 +108,7 @@ type ViewerNodeData = {
   showUnitCell?: boolean;
   // Miller-plane overlay — one or more planes
   showMiller?: boolean;
+  millerFourIndex?: boolean;   // hexagonal Miller-Bravais (h k i l) input
   millerList?: MillerPlaneDef[];
   // Legacy single-plane fields (migrated into millerList on first render)
   millerH?: number;
@@ -173,6 +174,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const showOutline = data.showOutline ?? true;
   const showUnitCell = data.showUnitCell ?? true;
   const showMiller = data.showMiller ?? false;
+  const millerFourIndex = data.millerFourIndex ?? false;
   // Normalize to a list of planes; migrate legacy single-plane fields if present.
   const millerList = useMemo<MillerPlaneDef[]>(() => {
     if (Array.isArray(data.millerList) && data.millerList.length > 0) {
@@ -824,6 +826,15 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                   >
                     Miller plane (hkl)
                   </DropdownMenuCheckboxItem>
+                  {showMiller && (
+                    <DropdownMenuCheckboxItem
+                      className={compactItemClass}
+                      checked={millerFourIndex}
+                      onCheckedChange={(checked) => setViewerOption({ millerFourIndex: Boolean(checked) })}
+                    >
+                      4-index (hkil) — hexagonal
+                    </DropdownMenuCheckboxItem>
+                  )}
                   <DropdownMenuCheckboxItem
                     className={compactItemClass}
                     checked={showHydrogens}
@@ -950,13 +961,17 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
             >
               {millerList.map((pl, idx) => (
                 <div key={idx} className="flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
-                  <span className="font-semibold text-indigo-700 dark:text-indigo-300">(hkl)</span>
+                  <span className="font-semibold text-indigo-700 dark:text-indigo-300">{millerFourIndex ? "(hkil)" : "(hkl)"}</span>
                   <input type="number" title="h" value={pl.h}
                     onChange={(e) => updateMillerPlane(idx, { h: parseInt(e.target.value) || 0 })}
                     className="nodrag w-9 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
                   <input type="number" title="k" value={pl.k}
                     onChange={(e) => updateMillerPlane(idx, { k: parseInt(e.target.value) || 0 })}
                     className="nodrag w-9 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
+                  {millerFourIndex && (
+                    <input type="number" title="i = −(h+k) (auto)" value={-(pl.h + pl.k)} readOnly tabIndex={-1}
+                      className="nodrag w-9 px-1 py-0.5 rounded border border-border bg-muted/50 text-muted-foreground cursor-not-allowed" />
+                  )}
                   <input type="number" title="l" value={pl.l}
                     onChange={(e) => updateMillerPlane(idx, { l: parseInt(e.target.value) || 0 })}
                     className="nodrag w-9 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />

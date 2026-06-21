@@ -37,6 +37,7 @@ type EditNodeData = {
   // Cut by Miller plane(s) — intersection of half-spaces (carves a convex region)
   cutPlanes?: CutPlaneDef[];
   cutWholeMolecules?: boolean;
+  cutFourIndex?: boolean;   // hexagonal Miller-Bravais (h k i l) input
   // legacy single-plane fields (migrated into cutPlanes)
   cutH?: number; cutK?: number; cutL?: number;
   cutSide?: "below" | "above";
@@ -255,14 +256,22 @@ export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
 
         {mode === "millerCut" && (
           <div className="space-y-2">
+            <label className="nodrag flex items-center gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" checked={data.cutFourIndex ?? false}
+                onChange={(e) => set("cutFourIndex", e.target.checked)} onPointerDown={(e) => e.stopPropagation()} />
+              4-index (hkil) — hexagonal
+            </label>
             {cutPlanes.map((pl, i) => (
               <div key={i} className="space-y-1 border border-border rounded-md p-2 bg-muted/30">
                 <div className="flex items-center gap-1">
-                  <span className="text-xs font-semibold text-muted-foreground">(hkl)</span>
+                  <span className="text-xs font-semibold text-muted-foreground">{(data.cutFourIndex ?? false) ? "(hkil)" : "(hkl)"}</span>
                   <input type="number" title="h" className={inputCls} value={pl.h}
                     onChange={(e) => updateCutPlane(i, { h: parseInt(e.target.value) || 0 })} onPointerDown={(e) => e.stopPropagation()} />
                   <input type="number" title="k" className={inputCls} value={pl.k}
                     onChange={(e) => updateCutPlane(i, { k: parseInt(e.target.value) || 0 })} onPointerDown={(e) => e.stopPropagation()} />
+                  {(data.cutFourIndex ?? false) && (
+                    <input type="number" title="i = −(h+k) (auto)" className={`${inputCls} opacity-60 cursor-not-allowed`} value={-(pl.h + pl.k)} readOnly tabIndex={-1} />
+                  )}
                   <input type="number" title="l" className={inputCls} value={pl.l}
                     onChange={(e) => updateCutPlane(i, { l: parseInt(e.target.value) || 0 })} onPointerDown={(e) => e.stopPropagation()} />
                   {cutPlanes.length > 1 && (

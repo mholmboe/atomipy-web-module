@@ -395,7 +395,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Slice: keep atoms inside xlo…zhi (hi defaults to box); optionally drop molecules only partially inside.",
       "Set Molecule ID (with optional resname); Assign Resname (default MIN).",
       "Reorder: by index list, residue name, or atom type; Center: to box center or origin.",
-      "Cut by Miller plane(s): keep only atoms satisfying ALL planes (intersection). Each plane has h/k/l, kept side (inner ≤ / outer ≥), auto or explicit level, and an offset (Å) along the normal; add several to carve a convex region — e.g. 6 side planes 60° apart make a hexagonal column. Optional keep-whole-molecules.",
+      "Cut by Miller plane(s): keep only atoms satisfying ALL planes (intersection). Each plane has h/k/l, kept side (inner ≤ / outer ≥), auto or explicit level, and an offset (Å) along the normal; add several to carve a convex region — e.g. 6 side planes 60° apart make a hexagonal column. Optional keep-whole-molecules. Hexagonal crystals: tick “4-index (hkil)” to enter Miller–Bravais indices (i auto = −(h+k)).",
     ],
     theory: [
       "Each Miller cut is done in fractional coordinates, where the (hkl) plane is the linear threshold f = h·xf + k·yf + l·zf = s: 'inner' keeps f ≤ s, 'outer' keeps f ≥ s. 'auto' puts s at the midpoint of the structure; offset shifts s by offset / d_hkl.",
@@ -847,7 +847,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Representations: ball & stick, sticks, spheres, lines; toggle unit cell, hydrogens, outline, spin, and element/charge labels.",
       "Perspective or orthographic projection; resizable node.",
       "Multi-frame trajectory playback with play/pause and a frame slider; PNG export at 1×/2×/4×.",
-      "Miller-plane overlay — enable “Miller plane (hkl)” in the gear menu, then add one or more planes. Each uses the SAME Miller options as the Edit node’s cut — h, k, l, auto level (structure midpoint) or an explicit fractional level, and an offset (Å, with slider) along the normal — plus viewer-only display options (full family, colour, opacity). So a plane set up the same way appears exactly where the Edit cut would fall. (To actually remove atoms, use the Edit node’s “Cut by Miller plane”; the Viewer just draws the plane.)",
+      "Miller-plane overlay — enable “Miller plane (hkl)” in the gear menu, then add one or more planes. Each uses the SAME Miller options as the Edit node’s cut — h, k, l, auto level (structure midpoint) or an explicit fractional level, and an offset (Å, with slider) along the normal — plus viewer-only display options (full family, colour, opacity). So a plane set up the same way appears exactly where the Edit cut would fall. Hexagonal crystals (e.g. quartz): tick “4-index (hkil)” in the gear menu to enter Miller–Bravais indices (i auto = −(h+k)). (To actually remove atoms, use the Edit node’s “Cut by Miller plane”; the Viewer just draws the plane.)",
     ],
     theory: [
       "A Miller (hkl) plane is the set of points satisfying h·x + k·y + l·z = n in fractional coordinates (n = integer plane level). The overlay clips that plane to the cell; the full family is every integer n that crosses the cell, spaced by the interplanar distance d_hkl.",
