@@ -2,20 +2,24 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Handle, NodeResizer, Position, useReactFlow } from "@xyflow/react";
 import { Eye, RotateCw, Settings2, Palette, Box as BoxIcon, X, Play, Pause, SkipBack, SkipForward, Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { parseCryst1, millerPlanes, polygonTo3Dmol, jmolMillerCommands } from "@/lib/miller";
+import { parseCryst1, millerPlanes, polygonTo3Dmol, jmolMillerCommands, atomMidLevel } from "@/lib/miller";
 
 type MillerPlaneDef = {
   h: number;
   k: number;
   l: number;
-  offset: number;
-  family: boolean;
+  // Shared Miller-index options (same as the Edit node's Cut by Miller plane):
+  levelAuto: boolean;   // auto = structure midpoint along the normal
+  level: number;        // explicit fractional level when levelAuto is false
+  offset: number;       // shift along the normal, Å
+  // Viewer-only display options:
+  family: boolean;      // draw the full family of parallel planes
   color: string;
   opacity: number;
 };
 
 const DEFAULT_MILLER_PLANE: MillerPlaneDef = {
-  h: 1, k: 1, l: 1, offset: 0, family: false, color: "#f59e0b", opacity: 0.5,
+  h: 1, k: 1, l: 1, levelAuto: true, level: 0.5, offset: 0, family: false, color: "#f59e0b", opacity: 0.5,
 };
 import {
   DropdownMenu,
@@ -171,8 +175,12 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const showMiller = data.showMiller ?? false;
   // Normalize to a list of planes; migrate legacy single-plane fields if present.
   const millerList = useMemo<MillerPlaneDef[]>(() => {
-    if (Array.isArray(data.millerList) && data.millerList.length > 0) return data.millerList;
+    if (Array.isArray(data.millerList) && data.millerList.length > 0) {
+      // Fill in any fields missing from older saved planes.
+      return data.millerList.map((p) => ({ ...DEFAULT_MILLER_PLANE, ...p }));
+    }
     return [{
+      ...DEFAULT_MILLER_PLANE,
       h: Number.isFinite(data.millerH) ? Number(data.millerH) : 1,
       k: Number.isFinite(data.millerK) ? Number(data.millerK) : 1,
       l: Number.isFinite(data.millerL) ? Number(data.millerL) : 1,
@@ -368,8 +376,10 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
           millerList.forEach((pl) => {
             if (!pl.h && !pl.k && !pl.l) return;
             try {
+              const lvl = pl.levelAuto ? (atomMidLevel(pdb, cell, pl.h, pl.k, pl.l) ?? "auto") : pl.level;
               const polys = millerPlanes(pl.h, pl.k, pl.l, cell, {
                 singlePlane: !pl.family,
+                planeLevel: lvl,
                 offset: pl.offset,
               });
               polys.forEach((poly) => {
@@ -542,7 +552,8 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       if (cell) {
         millerList.forEach((pl, idx) => {
           if (!pl.h && !pl.k && !pl.l) return;
-          const polys = millerPlanes(pl.h, pl.k, pl.l, cell, { singlePlane: !pl.family, offset: pl.offset });
+          const lvl = pl.levelAuto ? (atomMidLevel(pdbString, cell, pl.h, pl.k, pl.l) ?? "auto") : pl.level;
+          const polys = millerPlanes(pl.h, pl.k, pl.l, cell, { singlePlane: !pl.family, planeLevel: lvl, offset: pl.offset });
           jmolMillerCommands(polys, pl.color, pl.opacity, `miller${idx}_`).forEach((c) => lines.push(c));
         });
       }
@@ -947,6 +958,16 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                   <input type="number" title="l" value={pl.l}
                     onChange={(e) => updateMillerPlane(idx, { l: parseInt(e.target.value) || 0 })}
                     className="nodrag w-9 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
+                  <label className="flex items-center gap-1" title="Auto level = structure midpoint">
+                    <input type="checkbox" checked={pl.levelAuto}
+                      onChange={(e) => updateMillerPlane(idx, { levelAuto: e.target.checked })} />
+                    auto
+                  </label>
+                  {!pl.levelAuto && (
+                    <input type="number" step={0.1} title="level (fractional)" value={pl.level}
+                      onChange={(e) => updateMillerPlane(idx, { level: parseFloat(e.target.value) || 0 })}
+                      className="nodrag w-11 px-1 py-0.5 rounded border border-border bg-muted text-foreground" />
+                  )}
                   <label className="flex items-center gap-1" title="Offset along the plane normal (Å)">off
                     <input type="number" step={0.5} value={pl.offset}
                       onChange={(e) => updateMillerPlane(idx, { offset: parseFloat(e.target.value) || 0 })}

@@ -157,7 +157,9 @@ export function millerPlanes(h: number, k: number, l: number, cell: Cell, opts: 
       for (let n = nmin; n <= nmax; n++) levels.push(n);
       levels.sort((p, q) => Math.abs(p - 1) - Math.abs(q - 1));
     } else {
-      levels = [Math.round(opts.planeLevel as number)];
+      // Explicit fractional level (may be non-integer, e.g. the structure
+      // midpoint) — use it as-is, do NOT round.
+      levels = [opts.planeLevel as number];
     }
     for (const n of levels) {
       const poly = intersectPolygon(M, h, k, l, n + ds);
@@ -185,6 +187,40 @@ export function polygonTo3Dmol(poly: Vec3[]): { vertexArr: { x: number; y: numbe
     faceArr.push(0, i + 1, i);     // back (so it's visible from both sides)
   }
   return { vertexArr, normalArr, faceArr };
+}
+
+/** "Auto" plane level = midpoint of the structure along the (h,k,l) normal,
+ *  in fractional plane-level units — the SAME convention the Edit cut uses, so
+ *  the overlay plane lands exactly where the cut would. Parses atom coordinates
+ *  from a PDB string. Returns null if no atoms/cell. */
+export function atomMidLevel(pdb: string, cell: Cell, h: number, k: number, l: number): number | null {
+  const M = fromFracMatrix(cell);
+  // invert M (3x3) to map Cartesian -> fractional
+  const det =
+    M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) -
+    M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) +
+    M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+  if (Math.abs(det) < 1e-30) return null;
+  const inv = [
+    [(M[1][1] * M[2][2] - M[1][2] * M[2][1]) / det, (M[0][2] * M[2][1] - M[0][1] * M[2][2]) / det, (M[0][1] * M[1][2] - M[0][2] * M[1][1]) / det],
+    [(M[1][2] * M[2][0] - M[1][0] * M[2][2]) / det, (M[0][0] * M[2][2] - M[0][2] * M[2][0]) / det, (M[0][2] * M[1][0] - M[0][0] * M[1][2]) / det],
+    [(M[1][0] * M[2][1] - M[1][1] * M[2][0]) / det, (M[0][1] * M[2][0] - M[0][0] * M[2][1]) / det, (M[0][0] * M[1][1] - M[0][1] * M[1][0]) / det],
+  ];
+  let fmin = Infinity, fmax = -Infinity, n = 0;
+  for (const line of pdb.split("\n")) {
+    if (!(line.startsWith("ATOM") || line.startsWith("HETATM"))) continue;
+    const x = parseFloat(line.slice(30, 38)), y = parseFloat(line.slice(38, 46)), z = parseFloat(line.slice(46, 54));
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+    const xf = inv[0][0] * x + inv[0][1] * y + inv[0][2] * z;
+    const yf = inv[1][0] * x + inv[1][1] * y + inv[1][2] * z;
+    const zf = inv[2][0] * x + inv[2][1] * y + inv[2][2] * z;
+    const f = h * xf + k * yf + l * zf;
+    if (f < fmin) fmin = f;
+    if (f > fmax) fmax = f;
+    n++;
+  }
+  if (n === 0) return null;
+  return 0.5 * (fmin + fmax);
 }
 
 function hexToRgb(hex: string): [number, number, number] {
