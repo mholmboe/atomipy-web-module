@@ -835,9 +835,20 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Representations: ball & stick, sticks, spheres, lines; toggle unit cell, hydrogens, outline, spin, and element/charge labels.",
       "Perspective or orthographic projection; resizable node.",
       "Multi-frame trajectory playback with play/pause and a frame slider; PNG export at 1×/2×/4×.",
+      "Miller-plane overlay — enable “Miller plane (hkl)” in the gear menu, then set h, k, l, an offset (Å) along the normal, single plane vs. the full family, and the plane colour/opacity. Drawn as a translucent plane in both renderers.",
+    ],
+    theory: [
+      "A Miller (hkl) plane is the set of points satisfying h·x + k·y + l·z = n in fractional coordinates (n = integer plane level). The overlay clips that plane to the cell; the full family is every integer n that crosses the cell, spaced by the interplanar distance d_hkl.",
+      "“offset” shifts the plane(s) along their normal by a distance in Å (a fractional-level shift of offset / d_hkl), so an offset equal to d_hkl moves to the next plane.",
+    ],
+    equations: [
+      { label: "Plane (fractional)", expr: "h·x + k·y + l·z = n" },
+      { label: "Interplanar spacing", expr: "1/d² = [h k l] · G⁻¹ · [h k l]ᵀ   (G = cell metric)" },
+      { label: "Offset → level shift", expr: "Δn = offset / d_hkl" },
     ],
     quirks: [
       "Renders only after a Build step provides coordinates; otherwise shows a placeholder.",
+      "The Miller overlay needs a unit cell (CRYST1 in the structure) — set a Box upstream if the plane doesn't appear.",
       "Hide periodic bonds is JSmol-only (deletes cross-cell bonds longer than 3 Å).",
       "Charge labels need a Forcefield node upstream.",
     ],
