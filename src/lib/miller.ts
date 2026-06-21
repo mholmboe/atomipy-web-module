@@ -219,7 +219,10 @@ export function atomMidLevel(pdb: string, cell: Cell, h: number, k: number, l: n
     if (f > fmax) fmax = f;
     n++;
   }
-  if (n === 0) return null;
+  // No atoms, or a degenerate set (e.g. just the dummy atom for an empty box,
+  // or a single atomic layer) → return null so the caller falls back to the
+  // cell-based "auto" level and still draws a plane across the box.
+  if (n === 0 || !(fmax > fmin + 1e-9)) return null;
   return 0.5 * (fmin + fmax);
 }
 
