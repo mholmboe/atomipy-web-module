@@ -206,9 +206,10 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const lineWidth = data.lineWidth ?? 1.2;
   // Default a bit wider so the Miller-plane controls fit on one row; min width
   // also raised so a resized-small node keeps them readable.
-  // Always respect the saved width so resizes are remembered; default 700 for a
-  // new node (wide enough for the Miller panel's one-row controls).
-  const nodeWidth = Math.max(360, Number.isFinite(data.width) ? Number(data.width) : 700);
+  // Min/default 640 (the width the Miller panel's one-row controls need);
+  // larger saved sizes are respected and remembered. Unconditional (not tied to
+  // the Miller toggle) so the size stays consistent.
+  const nodeWidth = Math.max(640, Number.isFinite(data.width) ? Number(data.width) : 640);
   const nodeHeight = Math.max(320, Number.isFinite(data.height) ? Number(data.height) : 560);
   const chargeValues = useMemo(() => (Array.isArray(data.charges) ? data.charges : []), [data.charges]);
 
@@ -748,7 +749,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     <div className="relative" style={{ width: nodeWidth, height: nodeHeight }}>
       <NodeResizer
         isVisible={Boolean(selected)}
-        minWidth={360}
+        minWidth={640}
         minHeight={320}
         lineClassName="border-indigo-400/70"
         handleClassName="w-2.5 h-2.5 bg-indigo-500 border border-white rounded-sm"
