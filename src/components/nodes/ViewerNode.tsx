@@ -87,6 +87,8 @@ type ViewerApi = {
   setStyle: (selection: ViewerSelection, style: ViewerStyle) => void;
   addUnitCell: (model: ViewerModel, options: Record<string, unknown>) => void;
   addCustom?: (spec: Record<string, unknown>) => void;
+  getView?: () => number[];
+  setView?: (view: number[]) => void;
   addPropertyLabels?: (property: string, selection: ViewerSelection, options: Record<string, unknown>) => void;
   addLabel?: (text: string, options: Record<string, unknown>) => void;
   spin?: (...args: [false] | ["x" | "y" | "z", number?]) => void;
@@ -204,9 +206,9 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const lineWidth = data.lineWidth ?? 1.2;
   // Default a bit wider so the Miller-plane controls fit on one row; min width
   // also raised so a resized-small node keeps them readable.
-  // When the Miller panel is open it needs more width for its one-row controls,
-  // so floor the width at 600 regardless of any smaller saved size.
-  const nodeWidth = Math.max(showMiller ? 600 : 440, Number.isFinite(data.width) ? Number(data.width) : 700);
+  // Always respect the saved width so resizes are remembered; default 700 for a
+  // new node (wide enough for the Miller panel's one-row controls).
+  const nodeWidth = Math.max(360, Number.isFinite(data.width) ? Number(data.width) : 700);
   const nodeHeight = Math.max(320, Number.isFinite(data.height) ? Number(data.height) : 560);
   const chargeValues = useMemo(() => (Array.isArray(data.charges) ? data.charges : []), [data.charges]);
 
@@ -672,8 +674,20 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const handleResetCamera = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (renderer === "3dmol" && viewerInstance.current) {
-      viewerInstance.current.zoomTo();
-      viewerInstance.current.render();
+      const v = viewerInstance.current;
+      // Reset rotation to identity (zoomTo only re-fits zoom/center, not rotation),
+      // then re-center and re-fit so it's a full "reset view".
+      try {
+        if (v.getView && v.setView) {
+          const view = v.getView();
+          if (Array.isArray(view) && view.length >= 8) {
+            v.setView([view[0], view[1], view[2], view[3], 0, 0, 0, 1]);
+          }
+        }
+      } catch { /* getView/setView unavailable — fall back to zoomTo only */ }
+      if (v.spin) v.spin(false);
+      v.zoomTo();
+      v.render();
     } else if (renderer === "jsmol" && jsmolAppletRef.current && window.Jmol) {
       window.Jmol.script(jsmolAppletRef.current, "reset; zoom 0");
     }
