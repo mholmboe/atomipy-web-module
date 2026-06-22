@@ -1819,7 +1819,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    ap.write_gmx_top(list(${inAtoms}), Box=${inBox}, file_path=_top_path, explicit_angles=${writeAngles ? 1 : 0}, KANGLE=${mineralKangle}, max_angle=${writeAngles ? "None" : "0.0"})\n`;
           pythonCode += `    ap.write_gro(list(${inAtoms}), ${inBox}, _gro_path)\n`;
           pythonCode += `    _gmx_defines = ['-D'+_d for _d in ${definesExpr}]  # mineral-only .top needs -D flags in the .mdp\n`;
-          pythonCode += `_gmx.stage_minff('.')\n`;
+          pythonCode += `_gmx.stage_minff('.', defines=${definesExpr})  # define-aware: strips ffbonded lines for types absent under the active FF (e.g. Feo2/Feo3 under CLAYFF)\n`;
           pythonCode += `_gmx_top = _os.path.basename(_top_path)\n`;
           pythonCode += `def _gmx_run(_stage, _struct, **_kw):\n`;
           pythonCode += `    _st = _gmx.run_local_gmx('.', _gmx_top, _struct, [_stage], defines=_gmx_defines, do_stage_minff=False, on_line=print, **_kw)\n`;
