@@ -204,7 +204,9 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const lineWidth = data.lineWidth ?? 1.2;
   // Default a bit wider so the Miller-plane controls fit on one row; min width
   // also raised so a resized-small node keeps them readable.
-  const nodeWidth = Math.max(440, Number.isFinite(data.width) ? Number(data.width) : 700);
+  // When the Miller panel is open it needs more width for its one-row controls,
+  // so floor the width at 720 regardless of any smaller saved size.
+  const nodeWidth = Math.max(showMiller ? 720 : 440, Number.isFinite(data.width) ? Number(data.width) : 700);
   const nodeHeight = Math.max(320, Number.isFinite(data.height) ? Number(data.height) : 560);
   const chargeValues = useMemo(() => (Array.isArray(data.charges) ? data.charges : []), [data.charges]);
 
@@ -992,11 +994,9 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                   <input type="color" title="Plane color" value={pl.color}
                     onChange={(e) => updateMillerPlane(idx, { color: e.target.value })}
                     className="nodrag h-5 w-6 rounded border border-border bg-transparent p-0" />
-                  <label className="flex items-center gap-1" title="Opacity">α
-                    <input type="range" min={0.1} max={1} step={0.05} value={pl.opacity}
-                      onChange={(e) => updateMillerPlane(idx, { opacity: parseFloat(e.target.value) })}
-                      className="nodrag w-12" />
-                  </label>
+                  <input type="range" min={0.1} max={1} step={0.05} value={pl.opacity}
+                    onChange={(e) => updateMillerPlane(idx, { opacity: parseFloat(e.target.value) })}
+                    title="Opacity (α)" className="nodrag w-10" />
                   <button type="button" title="Remove this plane"
                     onClick={() => removeMillerPlane(idx)}
                     className="nodrag p-0.5 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive">
