@@ -1088,13 +1088,15 @@ export default function VisualBuilder() {
   useEffect(() => {
     fetch("/api/presets")
       .then((res) => res.json())
-      .then((data: { presets?: PresetOption[]; disableSimulation?: boolean; simulationMode?: string }) => {
+      .then((data: { presets?: PresetOption[]; disableSimulation?: boolean; simulationMode?: string; gromacs?: { version?: string } | null }) => {
         setPresets(Array.isArray(data.presets) ? data.presets : []);
         const disabled = !!data.disableSimulation;
         setDisableSimulation(disabled);
         (window as any).disableSimulation = disabled;
         // 'full' | 'em_only' | 'disabled' — em_only allows EM but blocks NVT/NPT MD.
         (window as any).simulationMode = data.simulationMode || (disabled ? "disabled" : "full");
+        // Local GROMACS engine availability (null unless a local gmx is detected).
+        (window as any).gromacs = data.gromacs || null;
       })
       .catch((err) => console.error("Failed to load presets", err));
   }, []);

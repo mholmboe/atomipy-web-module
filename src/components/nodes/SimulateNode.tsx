@@ -7,8 +7,10 @@ import type { NodeComponentProps } from "./types";
 type SimulationType = "minimize" | "nvt" | "npt";
 type ForcefieldMode = "minff" | "clayff" | "preassigned";
 type PrmFile = "minff" | "minff_gminff_k0" | "minff_gminff_k250" | "minff_gminff_k1500" | "clayff";
+type Engine = "openmm" | "gromacs";
 
 type SimulateNodeData = {
+  engine?: Engine;
   forcefieldMode?: ForcefieldMode;
   prmFile?: PrmFile;
   simType?: SimulationType;
@@ -55,6 +57,11 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
   const wrapTrajectory = data?.wrapTrajectory ?? true;
   const excludeWater = data?.excludeWater ?? true;
 
+  const engine: Engine = data?.engine ?? "openmm";
+  const isGromacs = engine === "gromacs";
+  const gmxInfo = (window as any).gromacs as { version?: string } | null | undefined;
+  const gmxAvailable = !!gmxInfo;
+
   const isSimulationDisabled = (window as any).disableSimulation === true;
   const simulationMode = (window as any).simulationMode || (isSimulationDisabled ? "disabled" : "full");
   const showMdFields = simType === "nvt" || simType === "npt";
@@ -65,15 +72,42 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
     <div className={`bg-card w-[260px] shadow-lg rounded-xl border ${isSimulationDisabled ? "border-amber-500/40" : "border-emerald-500/50"} overflow-hidden font-sans select-none`}>
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <NodeHeader 
-        id={id} 
-        title={isSimulationDisabled ? "Simulate (Colab/Local)" : "Simulate (OpenMM)"} 
-        Icon={Activity} 
-        colorClass={isSimulationDisabled ? "text-amber-600" : "text-emerald-600"} 
-        className={isSimulationDisabled ? "bg-amber-500/10" : "bg-emerald-500/10"} 
+      <NodeHeader
+        id={id}
+        title={isGromacs ? "Simulate (GROMACS · local)" : (isSimulationDisabled ? "Simulate (Colab/Local)" : "Simulate (OpenMM)")}
+        Icon={Activity}
+        colorClass={isSimulationDisabled ? "text-amber-600" : "text-emerald-600"}
+        className={isSimulationDisabled ? "bg-amber-500/10" : "bg-emerald-500/10"}
       />
 
       <div className="p-4 space-y-3 bg-background">
+        {/* Engine selector: OpenMM (default) vs local GROMACS */}
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground block mb-1">Engine</label>
+          <div className="flex rounded-md overflow-hidden border border-border text-[10px] font-semibold">
+            {(["openmm", "gromacs"] as const).map((e) => (
+              <button
+                key={e}
+                type="button"
+                className={`nodrag flex-1 py-1 transition-colors ${
+                  engine === e ? "bg-emerald-500/20 text-emerald-700" : "bg-background text-muted-foreground hover:bg-muted/50"
+                }`}
+                onClick={() => updateNodeData(id, { ...data, engine: e })}
+                onPointerDown={(e2) => e2.stopPropagation()}
+              >
+                {e === "openmm" ? "OpenMM" : "GROMACS (local)"}
+              </button>
+            ))}
+          </div>
+          {isGromacs && (
+            <div className={`mt-1.5 rounded p-1.5 text-[10px] leading-relaxed border ${gmxAvailable ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700" : "bg-amber-500/10 border-amber-500/30 text-amber-700"}`}>
+              {gmxAvailable
+                ? <>Local <strong>gmx</strong> detected ({gmxInfo?.version}). Runs grompp + mdrun on this machine.</>
+                : <>No local <strong>gmx</strong> detected — the GROMACS engine runs only where GROMACS is installed (local/Colab). The downloaded script will run it there.</>}
+            </div>
+          )}
+        </div>
+
         {isSimulationDisabled && (
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 text-[10px] text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
             ⚡ <strong>Colab/Local Execution Mode</strong><br />
@@ -348,7 +382,9 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
         )}
 
         <p className="text-[10px] text-muted-foreground/60 leading-tight">
-          Requires OpenMM. Auto GPU/CPU. Water is rigid ({forcefieldMode === "clayff" || prmFile === "clayff" ? "SPC/E" : "OPC3"}).
+          {isGromacs
+            ? <>Local GROMACS: staged EM{showMdFields ? " → NVT" : ""}{simType === "npt" ? " → NPT" : ""} via grompp + mdrun (MINFF min.ff). Friction/constraints/switch are OpenMM-only and ignored here.</>
+            : <>Requires OpenMM. Auto GPU/CPU. Water is rigid ({forcefieldMode === "clayff" || prmFile === "clayff" ? "SPC/E" : "OPC3"}).</>}
         </p>
       </div>
 

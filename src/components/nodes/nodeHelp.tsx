@@ -649,13 +649,14 @@ export const NODE_HELP: Record<string, NodeHelp> = {
   },
 
   simulate: {
-    title: "Simulate (OpenMM)",
+    title: "Simulate (OpenMM / GROMACS)",
     summary:
-      "Runs the system in OpenMM: Energy Minimization, NVT (constant volume), or NPT (constant pressure). Builds the topology from the upstream Forcefield/Solvent/Ions choices, uses PME electrostatics with a cutoff, and writes a trajectory + log.",
+      "Runs the system with one of two engines: OpenMM (default) or local GROMACS. Energy Minimization, NVT (constant volume), or NPT (constant pressure). Builds the topology from the upstream Forcefield/Solvent/Ions choices, uses PME electrostatics with a cutoff, and writes a trajectory + log.",
     features: [
-      "Three modes: Energy Minimization, NVT (Langevin), NPT (Langevin + barostat).",
+      "Engine toggle: OpenMM (auto GPU/CPU, runs anywhere OpenMM is installed) or GROMACS (local) — runs grompp + mdrun on a machine where gmx is installed. Both consume the SAME atomipy topology (minerals + ions + water + organics).",
+      "Three modes: Energy Minimization, NVT (Langevin), NPT (Langevin + barostat). GROMACS runs them staged (EM → NVT → NPT), chaining each stage's output.",
       "Minimization steps; or MD steps, temperature (K), timestep (fs, ≤4), Langevin friction (1/ps), and pressure (bar) for NPT.",
-      "Constraints None / HBonds / AllBonds; LJ cutoff + switch distance; PME for long-range electrostatics.",
+      "Constraints None / HBonds / AllBonds; LJ cutoff + switch distance; PME for long-range electrostatics. (Friction/constraints/switch are OpenMM-only; the GROMACS path uses MINFF .mdp conventions.)",
       "Optional positional restraints (POSRES) on non-water/non-ion atoms; PDB trajectory + log frequencies.",
     ],
     theory: [

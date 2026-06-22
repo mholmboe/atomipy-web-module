@@ -1763,6 +1763,89 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const isNPT = simType === "npt";
         const pressure = getNumber(data, "pressure", 1.0);
 
+        // ===== Local GROMACS engine (grompp + mdrun) =====
+        // Reuses the SAME topology writers as the OpenMM path (write_merged_top /
+        // write_dummy_system_top / write_gmx_top), then runs gmx instead of OpenMM.
+        const engine = getString(data, "engine", "openmm");
+        if (engine === "gromacs") {
+          pythonCode += `\n# Set up and execute LOCAL GROMACS simulation (grompp + mdrun)\n`;
+          pythonCode += `# __ATOMIPY_SIM_TYPE__=${simType}\n`;
+          pythonCode += `import os as _os\n`;
+          pythonCode += `import atomipy.gromacs as _gmx\n`;
+          pythonCode += `_gmx_info = _gmx.detect_gmx()\n`;
+          pythonCode += `if not _gmx_info:\n`;
+          pythonCode += `    raise RuntimeError("Local GROMACS engine selected but 'gmx' was not found on PATH. Install GROMACS, or set the Simulate node engine to OpenMM.")\n`;
+          pythonCode += `print(f"[GROMACS] using {_gmx_info['version']}")\n`;
+          pythonCode += `_top_path = "${simBase}.top"\n`;
+          pythonCode += `_gro_path = "${simBase}.gro"\n`;
+          pythonCode += `_solvent_ion_res = {'SOL','WAT','HOH','TIP3','OPC','OPC3','SPC','SPCE','TIP4','TIP5','ION','NA','CL','K','LI','CS','RB','F','BR','I','CA','MG','ZN','NA+','CL-','K+','CA2+','MG2+','ZN2+'}\n`;
+          pythonCode += `_has_solvent_or_ions = any(str(a.get('resname','')).upper() in _solvent_ion_res for a in ${inAtoms})\n`;
+          pythonCode += `_has_itp = hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None\n`;
+          pythonCode += `_dummy_frame = [a for a in ${inAtoms} if a.get('_dummy_type')]\n`;
+          pythonCode += `if _dummy_frame:\n`;
+          pythonCode += `    # Frozen dummy mineral: self-contained dummy .top (true freezing via .mdp freezegrps is a follow-up; EM/NVT are meaningful as-is)\n`;
+          pythonCode += `    ap.write_dummy_system_top(list(${inAtoms}), ${inBox}, _top_path, _gro_path, water_model="${waterModel}")\n`;
+          pythonCode += `    _gmx_defines = []  # self-contained .top\n`;
+          pythonCode += `elif _has_itp or _has_solvent_or_ions:\n`;
+          pythonCode += `    _defines = ${definesExpr}\n`;
+          pythonCode += `    _ff_variant = "GMINFF_k500"; _water_model = "spce"; _ion_model = "SPCE_HFE_LM"\n`;
+          pythonCode += `    for _d in _defines:\n`;
+          pythonCode += `        if "CLAYFF" in _d: _ff_variant = "CLAYFF_EXT"\n`;
+          pythonCode += `        elif "MINFF" in _d: _ff_variant = _d\n`;
+          pythonCode += `        _d_parts = [p.upper() for p in _d.split('_')]\n`;
+          pythonCode += `        for _w in ['spce','opc3','tip3p','opc','tip4pew','spc','tip5p']:\n`;
+          pythonCode += `            if _w.upper() in _d_parts or _w.upper() == _d.upper(): _water_model = _w\n`;
+          pythonCode += `        for _ion in ['HFE_LM','IOD_LM','CM_LM','JC']:\n`;
+          pythonCode += `            if _ion in _d: _ion_model = _d\n`;
+          pythonCode += `    if not _has_itp:\n`;
+          pythonCode += `        _mineral_atoms = [a for a in ${inAtoms} if str(a.get('resname','')).upper() not in _solvent_ion_res]\n`;
+          pythonCode += `        if _mineral_atoms:\n`;
+          pythonCode += `            _, _itp, _ = ap.merge_top({'atoms': _mineral_atoms, 'itp': None, 'box': ${inBox}})\n`;
+          pythonCode += `        else:\n`;
+          pythonCode += `            _itp = {'_original_itps': [], 'atomtypes': {}, '_component_labels': ['Solvent/Ions']}\n`;
+          pythonCode += `    else:\n`;
+          pythonCode += `        _itp = ${inAtoms}.itp\n`;
+          pythonCode += `    _org_itps = []\n`;
+          pythonCode += `    if _itp.get('_source_itp'): _org_itps.append(_os.path.basename(_itp['_source_itp']))\n`;
+          pythonCode += `    for _oi in _itp.get('_original_itps', []) or []:\n`;
+          pythonCode += `        _src = _oi.get('_source_itp') if isinstance(_oi, dict) else None\n`;
+          pythonCode += `        if _src and _os.path.basename(_src) not in _org_itps: _org_itps.append(_os.path.basename(_src))\n`;
+          pythonCode += `    ap.write_merged_top(list(${inAtoms}), _itp, ${inBox}, _top_path, _gro_path,\n`;
+          pythonCode += `                        minff_variant=_ff_variant, water_model=_water_model, ion_model=_ion_model,\n`;
+          pythonCode += `                        organic_itps=_org_itps or None, angle_ka=${writeAngles ? mineralKangle : "None"},\n`;
+          pythonCode += `                        mol_counts_override=getattr(${inAtoms}, '_mol_counts_override', None))\n`;
+          pythonCode += `    _gmx_defines = []  # merged .top self-defines its #defines\n`;
+          pythonCode += `else:\n`;
+          pythonCode += `    ap.write_gmx_top(list(${inAtoms}), Box=${inBox}, file_path=_top_path, explicit_angles=${writeAngles ? 1 : 0}, KANGLE=${mineralKangle}, max_angle=${writeAngles ? "None" : "0.0"})\n`;
+          pythonCode += `    ap.write_gro(list(${inAtoms}), ${inBox}, _gro_path)\n`;
+          pythonCode += `    _gmx_defines = ['-D'+_d for _d in ${definesExpr}]  # mineral-only .top needs -D flags in the .mdp\n`;
+          pythonCode += `_gmx.stage_minff('.')\n`;
+          pythonCode += `_gmx_top = _os.path.basename(_top_path)\n`;
+          pythonCode += `def _gmx_run(_stage, _struct, **_kw):\n`;
+          pythonCode += `    _st = _gmx.run_local_gmx('.', _gmx_top, _struct, [_stage], defines=_gmx_defines, do_stage_minff=False, on_line=print, **_kw)\n`;
+          pythonCode += `    if not _st or _st[-1].get('returncode') != 0 or not _st[-1].get('gro'):\n`;
+          pythonCode += `        raise RuntimeError(f"GROMACS {_stage} failed -- see log above.")\n`;
+          pythonCode += `    print(f"  {_stage.upper()} finished OK!")\n`;
+          pythonCode += `    return _os.path.basename(_st[-1]['gro'])\n`;
+          pythonCode += `_g = _os.path.basename(_gro_path)\n`;
+          pythonCode += `_g = _gmx_run('em', _g, nsteps=${miniSteps})\n`;
+          if (simType === "nvt" || simType === "npt") {
+            pythonCode += `_g = _gmx_run('nvt', _g, nsteps=${mdSteps}, dt=${timestepFs / 1000.0}, temperature=${temp})\n`;
+          }
+          if (simType === "npt") {
+            pythonCode += `_g = _gmx_run('npt', _g, nsteps=${mdSteps}, dt=${timestepFs / 1000.0}, temperature=${temp}, pressure=${pressure})\n`;
+          }
+          pythonCode += `print("GROMACS simulation finished OK!")\n`;
+          pythonCode += `try:\n`;
+          pythonCode += `    _fa, _fb = ap.import_auto(_g)\n`;
+          pythonCode += `    ap.write_pdb(_fa, _fb, "${simBase}.pdb")\n`;
+          pythonCode += `    print(f"Wrote final structure ${simBase}.pdb ({len(_fa)} atoms)")\n`;
+          pythonCode += `except Exception as _e:\n`;
+          pythonCode += `    print(f"(note: could not write final pdb: {_e})")\n`;
+          stateVars.set(id, { atoms: inAtoms, box: inBox });
+          break;
+        }
+
         pythonCode += `\n# Set up and execute OpenMM Molecular Dynamics Simulation\n`;
         // Machine-readable marker of the ACTIVE simulation type, used by the
         // server to enforce SIMULATION_MODE (e.g. em_only). Both the EM and MD

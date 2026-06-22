@@ -786,6 +786,29 @@ async def organic_parametrize(request: Request):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+_GROMACS_CACHE = {"done": False, "info": None}
+
+
+def _detect_gromacs():
+    """Cached local-GROMACS detection (path + version), or None if absent.
+
+    Local engine only: on Cloud Run (K_SERVICE set) there is no gmx, so report
+    unavailable without probing.
+    """
+    if _GROMACS_CACHE["done"]:
+        return _GROMACS_CACHE["info"]
+    info = None
+    if not os.environ.get("K_SERVICE"):
+        try:
+            from atomipy.gromacs import detect_gmx
+            info = detect_gmx()
+        except Exception:
+            info = None
+    _GROMACS_CACHE["done"] = True
+    _GROMACS_CACHE["info"] = info
+    return info
+
+
 @router.get("/presets")
 async def list_presets():
     import atomipy as ap
@@ -856,6 +879,8 @@ async def list_presets():
         # scale-to-zero online site, NOT Colab or local. Used to show a
         # one-time cold-start notice.
         "coldStart": bool(os.environ.get("K_SERVICE")),
+        # Local GROMACS engine availability (None unless a local gmx is found).
+        "gromacs": _detect_gromacs(),
     }
 
 
