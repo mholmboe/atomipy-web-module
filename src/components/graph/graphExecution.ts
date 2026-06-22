@@ -1480,6 +1480,18 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             return `{'h': ${Math.round(Number(p.h)) || 0}, 'k': ${Math.round(Number(p.k)) || 0}, 'l': ${Math.round(Number(p.l)) || 0}, 'side': '${side}', 'level': ${lvl}, 'offset': ${Number(p.offset) || 0}}`;
           }).join(", ");
           pythonCode += `${blockOutAtoms} = ap.cut_planes(${inAtoms}, ${inBox}, [${planesPy}], whole_molecules=${cutWhole})\n`;
+        } else if (editMode === "slab") {
+          // Oriented supercell / slab exposing the (hkl) face along z — updates the box.
+          const sh = Math.round(getNumber(data, "slabH", 1));
+          const sk = Math.round(getNumber(data, "slabK", 1));
+          const sl = Math.round(getNumber(data, "slabL", 1));
+          const hklTuple = getBoolean(data, "slabFourIndex", false) ? `(${sh}, ${sk}, ${-(sh + sk)}, ${sl})` : `(${sh}, ${sk}, ${sl})`;
+          const layers = Math.max(1, Math.round(getNumber(data, "slabLayers", 1)));
+          const vacuum = getNumber(data, "slabVacuum", 0);
+          const gromacs = getBoolean(data, "slabGromacs", false) ? "True" : "False";
+          pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.make_slab(${inAtoms}, ${inBox}, ${hklTuple}, layers=${layers}, vacuum=${vacuum}, gromacs_box=${gromacs})\n`;
+          stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
+          break;
         } else {
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
         }

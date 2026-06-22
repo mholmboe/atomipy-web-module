@@ -400,11 +400,13 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Reorder: by index list, residue name, or atom type; Center: to box center or origin.",
       "Cut — three shapes: Planes, Sphere, or Cylinder. Planes: keep only atoms satisfying ALL Miller planes (intersection); each plane has h/k/l, kept side (inner ≤ / outer ≥), auto or explicit level, and an offset (Å) along the normal; add several to carve a convex region — e.g. 6 side planes 60° apart make a hexagonal column. Hexagonal crystals: tick “4-index (hkil)” for Miller–Bravais indices (i auto = −(h+k)).",
       "Cut → Sphere: keep atoms inside (spherical nanoparticle) or outside (drill a cavity) a sphere of the given radius. Cut → Cylinder: keep inside/outside a cylinder along x/y/z (nanowire or pore), with an optional length to cap the rod. Both default the centre to the cell centre (or set explicit cx/cy/cz). All shapes share the keep-whole-molecules option.",
+      "Make surface slab: build an oriented supercell with the (hkl) face in the xy-plane (surface ⟂ z), stacked over N layers and capped with an optional vacuum gap — for exposing crystal surfaces. Hexagonal crystals can use 4-index (hkil). “Reduce box for GROMACS” fixes the box tilts for GROMACS (leave off for OpenMM/LAMMPS/analysis).",
     ],
     theory: [
       "Each Miller cut is done in fractional coordinates, where the (hkl) plane is the linear threshold f = h·xf + k·yf + l·zf = s: 'inner' keeps f ≤ s, 'outer' keeps f ≥ s. 'auto' puts s at the midpoint of the structure; offset shifts s by offset / d_hkl.",
       "Multiple planes are combined as a logical AND (intersection of half-spaces), which carves any convex shape (slab, prism, hexagonal column). Use the per-plane offset to position each face away from the centre. Preview the planes in the Viewer node first.",
       "Sphere/cylinder cuts use the Cartesian distance to the centre (sphere) or to the axis line (cylinder); 'whole molecules' decides per molecule by its centroid so molecules aren't sliced.",
+      "Make surface slab finds two lattice vectors lying in the (hkl) plane plus a stacking vector (a unimodular basis change of the same lattice), re-expresses the cell so the surface is the xy-plane, then stacks/vacuums. The natural oriented cell can exceed GROMACS tilt limits (|b_x| ≤ a_x/2, etc.); “Reduce box for GROMACS” shifts lattice vectors to satisfy them (atoms wrapped back in).",
     ],
     equations: [
       { label: "Keep (inner)", expr: "h·xf + k·yf + l·zf ≤ s" },
@@ -416,6 +418,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Slice 'Remove partial molecules' (default on) discards molecules straddling the boundary, keeping molecules intact.",
       "Center to box requires a box; otherwise it falls back to a plain center.",
       "Miller-plane cuts need a unit cell (box); sphere/cylinder cuts work without one (centre falls back to the structure centroid). Any cut invalidates bond/neighbour lists, so re-detect them downstream (e.g. at Forcefield/Export).",
+      "Make surface slab needs a unit cell and changes the box (it outputs the oriented/vacuum cell). With vacuum > 0 the z-axis becomes non-periodic (a free-standing slab).",
     ],
     before: [
       "Import Structure, or build/assemble the system (Join / Merge / Insert).",

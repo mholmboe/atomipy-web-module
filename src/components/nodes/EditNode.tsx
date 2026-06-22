@@ -4,7 +4,7 @@ import { SlidersHorizontal, X } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
-type EditMode = "slice" | "remove" | "molecule" | "resname" | "reorder" | "center" | "millerCut";
+type EditMode = "slice" | "remove" | "molecule" | "resname" | "reorder" | "center" | "millerCut" | "slab";
 const OPS = ["<", "<=", ">", ">=", "==", "!="] as const;
 
 type CutPlaneDef = { h: number; k: number; l: number; side: "below" | "above"; levelAuto: boolean; level: number; offset: number };
@@ -52,6 +52,12 @@ type EditNodeData = {
   cutLength?: number;            // optional axial cap for the cylinder (Å)
   cutCenterAuto?: boolean;       // default: cell centre
   cutCx?: number; cutCy?: number; cutCz?: number;
+  // Make surface slab — oriented supercell exposing the (hkl) face along z
+  slabH?: number; slabK?: number; slabL?: number;
+  slabFourIndex?: boolean;
+  slabLayers?: number;
+  slabVacuum?: number;
+  slabGromacs?: boolean;         // reduce box to GROMACS tilt limits
 };
 
 export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
@@ -96,6 +102,7 @@ export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
             <option value="reorder">Reorder Atoms</option>
             <option value="center">Center Coordinates</option>
             <option value="millerCut">Cut (plane / sphere / cylinder)</option>
+            <option value="slab">Make surface slab</option>
           </select>
         </div>
 
@@ -397,6 +404,48 @@ export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
               Several planes carve a convex region — e.g. 6 side planes 60° apart → a hexagonal column. Preview planes in the Viewer node first.
             </p>
             </>)}
+          </div>
+        )}
+
+        {/* MAKE SURFACE SLAB */}
+        {mode === "slab" && (
+          <div className="space-y-2">
+            <label className="nodrag flex items-center gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" checked={data.slabFourIndex ?? false}
+                onChange={(e) => set("slabFourIndex", e.target.checked)} onPointerDown={(e) => e.stopPropagation()} />
+              4-index (hkil) — hexagonal
+            </label>
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-semibold text-muted-foreground">{(data.slabFourIndex ?? false) ? "(hkil)" : "(hkl)"}</span>
+              <input type="number" title="h" className={inputCls} value={data.slabH ?? 1}
+                onChange={(e) => set("slabH", parseInt(e.target.value) || 0)} onPointerDown={(e) => e.stopPropagation()} />
+              <input type="number" title="k" className={inputCls} value={data.slabK ?? 1}
+                onChange={(e) => set("slabK", parseInt(e.target.value) || 0)} onPointerDown={(e) => e.stopPropagation()} />
+              {(data.slabFourIndex ?? false) && (
+                <input type="number" title="i = −(h+k) (auto)" className={`${inputCls} opacity-60 cursor-not-allowed`} value={-((data.slabH ?? 1) + (data.slabK ?? 1))} readOnly tabIndex={-1} />
+              )}
+              <input type="number" title="l" className={inputCls} value={data.slabL ?? 1}
+                onChange={(e) => set("slabL", parseInt(e.target.value) || 0)} onPointerDown={(e) => e.stopPropagation()} />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap">layers
+                <input type="number" min={1} className={inputCls} value={data.slabLayers ?? 1}
+                  onChange={(e) => set("slabLayers", parseInt(e.target.value) || 1)} onPointerDown={(e) => e.stopPropagation()} />
+              </label>
+              <label className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap" title="Vacuum gap along z (Å); >0 makes a free-standing slab">vacuum Å
+                <input type="number" min={0} step={1} className={inputCls} value={data.slabVacuum ?? 0}
+                  onChange={(e) => set("slabVacuum", parseFloat(e.target.value) || 0)} onPointerDown={(e) => e.stopPropagation()} />
+              </label>
+            </div>
+            <label className="nodrag flex items-center gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" checked={data.slabGromacs ?? false}
+                onChange={(e) => set("slabGromacs", e.target.checked)} onPointerDown={(e) => e.stopPropagation()} />
+              Reduce box for GROMACS
+            </label>
+            <p className="text-[10px] text-muted-foreground/60 leading-normal">
+              Builds an oriented supercell with the (hkl) face in the xy-plane (surface ⟂ z), stacked over <i>layers</i> and capped with <i>vacuum</i>.
+              {" "}Leave “Reduce box for GROMACS” off for OpenMM/LAMMPS/analysis; tick it only for GROMACS (high-index faces otherwise exceed its tilt limits). Needs a unit cell.
+            </p>
           </div>
         )}
       </div>
