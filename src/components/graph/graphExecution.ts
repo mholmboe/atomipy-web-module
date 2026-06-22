@@ -1830,19 +1830,38 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `_g = _os.path.basename(_gro_path)\n`;
           pythonCode += `_g = _gmx_run('em', _g, nsteps=${miniSteps})\n`;
           if (simType === "nvt" || simType === "npt") {
-            pythonCode += `_g = _gmx_run('nvt', _g, nsteps=${mdSteps}, dt=${timestepFs / 1000.0}, temperature=${temp})\n`;
+            pythonCode += `_g = _gmx_run('nvt', _g, nsteps=${mdSteps}, dt=${timestepFs / 1000.0}, temperature=${temp}, nstxtc=${pdbFreq})\n`;
           }
           if (simType === "npt") {
-            pythonCode += `_g = _gmx_run('npt', _g, nsteps=${mdSteps}, dt=${timestepFs / 1000.0}, temperature=${temp}, pressure=${pressure})\n`;
+            pythonCode += `_g = _gmx_run('npt', _g, nsteps=${mdSteps}, dt=${timestepFs / 1000.0}, temperature=${temp}, pressure=${pressure}, nstxtc=${pdbFreq})\n`;
           }
           pythonCode += `print("GROMACS simulation finished OK!")\n`;
+          // Option A: convert the final stage's .xtc -> multi-frame PDB (same format
+          // the OpenMM path produces) so the existing 3Dmol/JSmol viewer animates it.
+          const finalStage = simType === "npt" ? "npt" : (simType === "nvt" ? "nvt" : "em");
+          pythonCode += `_final_stage = "${finalStage}"\n`;
+          pythonCode += `_traj = None\n`;
           pythonCode += `try:\n`;
-          pythonCode += `    _fa, _fb = ap.import_auto(_g)\n`;
-          pythonCode += `    ap.write_pdb(_fa, _fb, "${simBase}.pdb")\n`;
-          pythonCode += `    print(f"Wrote final structure ${simBase}.pdb ({len(_fa)} atoms)")\n`;
+          pythonCode += `    _traj = _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${trajFile}", group="System", pbc="mol", on_line=print)\n`;
           pythonCode += `except Exception as _e:\n`;
-          pythonCode += `    print(f"(note: could not write final pdb: {_e})")\n`;
-          stateVars.set(id, { atoms: inAtoms, box: inBox });
+          pythonCode += `    print(f"(trajectory conversion error: {_e})")\n`;
+          pythonCode += `if _traj:\n`;
+          pythonCode += `    print(f"Wrote trajectory ${trajFile}")\n`;
+          if (excludeWater) {
+            pythonCode += `    try:\n`;
+            pythonCode += `        _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${simBase}_no_water.pdb", group="non-Water", pbc="mol")\n`;
+            pythonCode += `    except Exception:\n`;
+            pythonCode += `        pass  # 'non-Water' group may be absent (no water) — viewer falls back to the full PDB\n`;
+          }
+          pythonCode += `else:\n`;
+          pythonCode += `    # No .xtc frames (e.g. a short EM) — write the final frame so the viewer still shows the result.\n`;
+          pythonCode += `    try:\n`;
+          pythonCode += `        _fa, _fb = ap.import_auto(_g)\n`;
+          pythonCode += `        ap.write_pdb(_fa, _fb, "${trajFile}")\n`;
+          pythonCode += `        print(f"Wrote final frame ${trajFile} ({len(_fa)} atoms)")\n`;
+          pythonCode += `    except Exception as _e:\n`;
+          pythonCode += `        print(f"(note: could not write final pdb: {_e})")\n`;
+          stateVars.set(id, { atoms: inAtoms, box: inBox, traj: `'${trajFile}'` });
           break;
         }
 
