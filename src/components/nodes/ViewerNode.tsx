@@ -770,6 +770,21 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
               <Eye className="w-4 h-4" />
               {data.title || "Structure Viewer"}
             </CardTitle>
+            {/* Compact renderer toggle, centered between the title and the actions */}
+            <div className="flex rounded-md overflow-hidden border border-border text-[9px] font-bold shrink-0">
+              <button
+                onClick={() => setViewerOption({ renderer: "3dmol" })}
+                className={`px-2 py-0.5 transition-all ${renderer === "3dmol" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
+              >
+                3Dmol
+              </button>
+              <button
+                onClick={() => setViewerOption({ renderer: "jsmol" })}
+                className={`px-2 py-0.5 transition-all ${renderer === "jsmol" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
+              >
+                JSmol
+              </button>
+            </div>
             <div className="flex gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -934,30 +949,6 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
-          </div>
-
-          {/* Renderer toggle — matches BoxNode Cell/Box_dim pattern */}
-          <div className="flex rounded-md overflow-hidden border border-border text-[10px] font-bold">
-            <button
-              onClick={() => setViewerOption({ renderer: "3dmol" })}
-              className={`flex-1 py-1 transition-all ${
-                renderer === "3dmol"
-                  ? "bg-indigo-500 text-white"
-                  : "bg-muted text-muted-foreground hover:bg-indigo-500/20"
-              }`}
-            >
-              3Dmol
-            </button>
-            <button
-              onClick={() => setViewerOption({ renderer: "jsmol" })}
-              className={`flex-1 py-1 transition-all ${
-                renderer === "jsmol"
-                  ? "bg-indigo-500 text-white"
-                  : "bg-muted text-muted-foreground hover:bg-indigo-500/20"
-              }`}
-            >
-              JSmol
-            </button>
           </div>
 
           {/* Miller-plane controls (shown when enabled via the gear menu) */}
