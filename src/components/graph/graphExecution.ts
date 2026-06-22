@@ -1443,6 +1443,25 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           }
         } else if (editMode === "millerCut") {
           const cutWhole = getBoolean(data, "cutWholeMolecules", false) ? "True" : "False";
+          const cutShape = getString(data, "cutShape", "planes");
+          if (cutShape === "sphere" || cutShape === "cylinder") {
+            const radius = getNumber(data, "cutRadius", 10);
+            const side = getString(data, "cutShapeSide", "inside") === "outside" ? "outside" : "inside";
+            const centerAuto = getBoolean(data, "cutCenterAuto", true);
+            const centerArg = centerAuto
+              ? ""
+              : `, center=(${getNumber(data, "cutCx", 0)}, ${getNumber(data, "cutCy", 0)}, ${getNumber(data, "cutCz", 0)})`;
+            if (cutShape === "sphere") {
+              pythonCode += `${blockOutAtoms} = ap.cut_sphere(${inAtoms}, ${inBox}, radius=${radius}, side='${side}'${centerArg}, whole_molecules=${cutWhole})\n`;
+            } else {
+              const axis = getString(data, "cutAxis", "z");
+              const lenRaw = (data as Record<string, unknown>).cutLength;
+              const lenArg = (lenRaw === undefined || lenRaw === null || lenRaw === "") ? "" : `, length=${getNumber(data, "cutLength", 0)}`;
+              pythonCode += `${blockOutAtoms} = ap.cut_cylinder(${inAtoms}, ${inBox}, radius=${radius}, axis='${pyEscape(axis)}', side='${side}'${lenArg}${centerArg}, whole_molecules=${cutWhole})\n`;
+            }
+            stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
+            break;
+          }
           // Build the list of cut planes (intersection of half-spaces). Migrate
           // a legacy single-plane definition if no list is present.
           type RawPlane = { h?: number; k?: number; l?: number; side?: string; levelAuto?: boolean; level?: number; offset?: number };

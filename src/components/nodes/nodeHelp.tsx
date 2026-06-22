@@ -398,11 +398,13 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Slice: keep atoms inside xlo…zhi (hi defaults to box); optionally drop molecules only partially inside.",
       "Set Molecule ID (with optional resname); Assign Resname (default MIN).",
       "Reorder: by index list, residue name, or atom type; Center: to box center or origin.",
-      "Cut by Miller plane(s): keep only atoms satisfying ALL planes (intersection). Each plane has h/k/l, kept side (inner ≤ / outer ≥), auto or explicit level, and an offset (Å) along the normal; add several to carve a convex region — e.g. 6 side planes 60° apart make a hexagonal column. Optional keep-whole-molecules. Hexagonal crystals: tick “4-index (hkil)” to enter Miller–Bravais indices (i auto = −(h+k)).",
+      "Cut — three shapes: Planes, Sphere, or Cylinder. Planes: keep only atoms satisfying ALL Miller planes (intersection); each plane has h/k/l, kept side (inner ≤ / outer ≥), auto or explicit level, and an offset (Å) along the normal; add several to carve a convex region — e.g. 6 side planes 60° apart make a hexagonal column. Hexagonal crystals: tick “4-index (hkil)” for Miller–Bravais indices (i auto = −(h+k)).",
+      "Cut → Sphere: keep atoms inside (spherical nanoparticle) or outside (drill a cavity) a sphere of the given radius. Cut → Cylinder: keep inside/outside a cylinder along x/y/z (nanowire or pore), with an optional length to cap the rod. Both default the centre to the cell centre (or set explicit cx/cy/cz). All shapes share the keep-whole-molecules option.",
     ],
     theory: [
       "Each Miller cut is done in fractional coordinates, where the (hkl) plane is the linear threshold f = h·xf + k·yf + l·zf = s: 'inner' keeps f ≤ s, 'outer' keeps f ≥ s. 'auto' puts s at the midpoint of the structure; offset shifts s by offset / d_hkl.",
       "Multiple planes are combined as a logical AND (intersection of half-spaces), which carves any convex shape (slab, prism, hexagonal column). Use the per-plane offset to position each face away from the centre. Preview the planes in the Viewer node first.",
+      "Sphere/cylinder cuts use the Cartesian distance to the centre (sphere) or to the axis line (cylinder); 'whole molecules' decides per molecule by its centroid so molecules aren't sliced.",
     ],
     equations: [
       { label: "Keep (inner)", expr: "h·xf + k·yf + l·zf ≤ s" },
@@ -413,7 +415,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Remove with no valid criteria passes the system through unchanged.",
       "Slice 'Remove partial molecules' (default on) discards molecules straddling the boundary, keeping molecules intact.",
       "Center to box requires a box; otherwise it falls back to a plain center.",
-      "Cut by Miller plane needs a unit cell (box); bond/neighbour lists are invalidated by a cut, so re-detect them downstream (e.g. at Forcefield/Export).",
+      "Miller-plane cuts need a unit cell (box); sphere/cylinder cuts work without one (centre falls back to the structure centroid). Any cut invalidates bond/neighbour lists, so re-detect them downstream (e.g. at Forcefield/Export).",
     ],
     before: [
       "Import Structure, or build/assemble the system (Join / Merge / Insert).",

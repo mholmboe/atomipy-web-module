@@ -44,6 +44,14 @@ type EditNodeData = {
   cutOffset?: number;
   cutLevelAuto?: boolean;
   cutLevel?: number;
+  // Cut shape: Miller planes (default), sphere (nanoparticle), or cylinder (nanowire)
+  cutShape?: "planes" | "sphere" | "cylinder";
+  cutRadius?: number;
+  cutShapeSide?: "inside" | "outside";
+  cutAxis?: "x" | "y" | "z";
+  cutLength?: number;            // optional axial cap for the cylinder (Å)
+  cutCenterAuto?: boolean;       // default: cell centre
+  cutCx?: number; cutCy?: number; cutCz?: number;
 };
 
 export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
@@ -87,7 +95,7 @@ export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
             <option value="resname">Assign Resname</option>
             <option value="reorder">Reorder Atoms</option>
             <option value="center">Center Coordinates</option>
-            <option value="millerCut">Cut by Miller plane</option>
+            <option value="millerCut">Cut (plane / sphere / cylinder)</option>
           </select>
         </div>
 
@@ -256,6 +264,76 @@ export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
 
         {mode === "millerCut" && (
           <div className="space-y-2">
+            {/* Shape selector: Miller planes (convex region) / sphere / cylinder */}
+            <div className="flex rounded-md overflow-hidden border border-border text-[10px] font-semibold">
+              {(["planes", "sphere", "cylinder"] as const).map((s) => (
+                <button key={s} type="button"
+                  className={`nodrag flex-1 py-1 transition-colors ${
+                    (data.cutShape ?? "planes") === s ? "bg-amber-500/20 text-amber-700" : "bg-background text-muted-foreground hover:bg-muted/50"
+                  }`}
+                  onClick={() => set("cutShape", s)} onPointerDown={(e) => e.stopPropagation()}>
+                  {s === "planes" ? "Planes" : s === "sphere" ? "Sphere" : "Cylinder"}
+                </button>
+              ))}
+            </div>
+
+            {/* Shared centre (defaults to cell centre) for sphere/cylinder */}
+            {(data.cutShape === "sphere" || data.cutShape === "cylinder") && (
+              <div className="space-y-1 border border-border rounded-md p-2 bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap">radius Å
+                    <input type="number" step={1} min={0} className={inputCls} value={data.cutRadius ?? 10}
+                      onChange={(e) => set("cutRadius", parseFloat(e.target.value) || 0)} onPointerDown={(e) => e.stopPropagation()} />
+                  </label>
+                  <select className={selectCls} value={data.cutShapeSide ?? "inside"}
+                    onChange={(e) => set("cutShapeSide", e.target.value as "inside" | "outside")} onPointerDown={(e) => e.stopPropagation()}>
+                    <option value="inside">keep inside</option>
+                    <option value="outside">keep outside</option>
+                  </select>
+                </div>
+                {data.cutShape === "cylinder" && (
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap">axis
+                      <select className={selectCls} value={data.cutAxis ?? "z"}
+                        onChange={(e) => set("cutAxis", e.target.value as "x" | "y" | "z")} onPointerDown={(e) => e.stopPropagation()}>
+                        <option value="x">x</option><option value="y">y</option><option value="z">z</option>
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap" title="Optional axial cap length (Å); blank = full box">length Å
+                      <input type="number" step={1} min={0} className={inputCls} value={data.cutLength ?? ""}
+                        placeholder="full" onChange={(e) => set("cutLength", e.target.value === "" ? undefined : (parseFloat(e.target.value) || 0))} onPointerDown={(e) => e.stopPropagation()} />
+                    </label>
+                  </div>
+                )}
+                <label className="nodrag flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <input type="checkbox" checked={data.cutCenterAuto ?? true}
+                    onChange={(e) => set("cutCenterAuto", e.target.checked)} onPointerDown={(e) => e.stopPropagation()} />
+                  centre at cell centre
+                </label>
+                {!(data.cutCenterAuto ?? true) && (
+                  <div className="grid grid-cols-3 gap-1">
+                    {(["cutCx", "cutCy", "cutCz"] as const).map((k, idx) => (
+                      <input key={k} type="number" step={1} title={["cx", "cy", "cz"][idx]} placeholder={["cx", "cy", "cz"][idx]}
+                        className={`${inputCls} text-center`} value={(data[k] as number) ?? ""}
+                        onChange={(e) => set(k, parseFloat(e.target.value) || 0)} onPointerDown={(e) => e.stopPropagation()} />
+                    ))}
+                  </div>
+                )}
+                <label className="nodrag flex items-center gap-2 text-xs text-muted-foreground pt-1">
+                  <input type="checkbox" checked={data.cutWholeMolecules ?? false}
+                    onChange={(e) => set("cutWholeMolecules", e.target.checked)} onPointerDown={(e) => e.stopPropagation()} />
+                  Keep whole molecules (by centroid)
+                </label>
+                <p className="text-[10px] text-muted-foreground/60 leading-normal">
+                  {data.cutShape === "sphere"
+                    ? "Carves a spherical nanoparticle (keep inside) or drills a cavity (keep outside)."
+                    : "Carves a cylindrical nanowire/pore along the chosen axis. Length caps the rod; blank spans the whole box."}
+                </p>
+              </div>
+            )}
+
+            {/* Miller-plane cut (default shape) */}
+            {(data.cutShape ?? "planes") === "planes" && (<>
             <label className="nodrag flex items-center gap-2 text-xs text-muted-foreground">
               <input type="checkbox" checked={data.cutFourIndex ?? false}
                 onChange={(e) => set("cutFourIndex", e.target.checked)} onPointerDown={(e) => e.stopPropagation()} />
@@ -318,6 +396,7 @@ export function EditNode({ id, data }: NodeComponentProps<EditNodeData>) {
               Keeps only atoms satisfying ALL planes (intersection). Needs a unit cell.
               Several planes carve a convex region — e.g. 6 side planes 60° apart → a hexagonal column. Preview planes in the Viewer node first.
             </p>
+            </>)}
           </div>
         )}
       </div>
