@@ -9,6 +9,19 @@ import { useInorganicLibrary, prettyCategory } from "@/lib/inorganicLibrary";
 
 const ORGANIC_FILE_ACCEPT = ".mol2,.sdf,.mol,.pdb";
 
+// Preset lattices mirror atomipy.make_lattice (atomipy/lattice.py).
+// nSpecies / speciesLabels drive how many element inputs to show.
+const LATTICE_PRESETS: { value: string; label: string; nSpecies: number; hex?: boolean; speciesLabels: string[]; aHint: string }[] = [
+  { value: "sc", label: "Simple cubic (sc)", nSpecies: 1, speciesLabels: ["Element"], aHint: "3.0" },
+  { value: "bcc", label: "Body-centred cubic (bcc)", nSpecies: 1, speciesLabels: ["Element"], aHint: "2.87" },
+  { value: "fcc", label: "Face-centred cubic (fcc)", nSpecies: 1, speciesLabels: ["Element"], aHint: "3.615" },
+  { value: "hcp", label: "Hexagonal close-packed (hcp)", nSpecies: 1, hex: true, speciesLabels: ["Element"], aHint: "3.21" },
+  { value: "diamond", label: "Diamond", nSpecies: 1, speciesLabels: ["Element"], aHint: "5.43" },
+  { value: "rocksalt", label: "Rock salt (NaCl)", nSpecies: 2, speciesLabels: ["Cation", "Anion"], aHint: "5.64" },
+  { value: "fluorite", label: "Fluorite (CaF₂)", nSpecies: 2, speciesLabels: ["Cation", "Anion"], aHint: "5.46" },
+  { value: "perovskite", label: "Perovskite (ABO₃)", nSpecies: 3, speciesLabels: ["A", "B", "X"], aHint: "3.905" },
+];
+
 // ---- Bundled organic molecule library (GET /api/molecules) ----------------
 // Static data; fetch once and share the result across all StructureNode
 // instances via a module-level cache so node data isn't bloated with ~428 rows.
@@ -35,7 +48,7 @@ function useMoleculeLibrary(): LibCategory[] {
 // Inorganic material library (presets + crystals) is shared with the Insert node.
 
 type StructureNodeData = {
-  source?: "preset" | "upload" | "organic" | "library";
+  source?: "preset" | "upload" | "organic" | "library" | "lattice";
   value?: string;
   presets?: PresetOption[];
   filename?: string;
@@ -59,6 +72,18 @@ type StructureNodeData = {
   // "amino_acids/L-alanine.cjson"). Set inputMode "library" to use it. No
   // visual picker yet — populated via raw node data or /api/molecules.
   libraryMolecule?: string;
+
+  // Build-lattice mode (source === "lattice"): preset crystal or manual unit cell.
+  latticeMode?: "preset" | "custom";
+  latticeType?: string;            // preset name, e.g. "fcc"
+  latticeA?: string;               // lattice parameter a (Å)
+  latticeC?: string;               // c for hcp (optional)
+  latticeSpecies?: string[];       // element per species slot
+  latticeRepX?: number;
+  latticeRepY?: number;
+  latticeRepZ?: number;
+  customCell?: string[];           // [a, b, c, alpha, beta, gamma]
+  customBasis?: { element: string; x: string; y: string; z: string }[];  // fractional P1 basis
 };
 
 export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData>) {
@@ -93,6 +118,36 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
 
   const source = data.source || "upload";
   const [activeTab, setActiveTab] = useState<"inorganic" | "organic">(source === "organic" ? "organic" : "inorganic");
+
+  // ---- Build-lattice helpers ----
+  const latticeMode = data.latticeMode ?? "preset";
+  const latPreset = LATTICE_PRESETS.find((p) => p.value === (data.latticeType || "fcc")) ?? LATTICE_PRESETS[0];
+  const latSpecies = data.latticeSpecies ?? [];
+  const customCell = data.customCell ?? ["", "", "", "90", "90", "90"];
+  const customBasis = data.customBasis ?? [{ element: "", x: "0", y: "0", z: "0" }];
+
+  const setLatticeType = (value: string) => {
+    const p = LATTICE_PRESETS.find((x) => x.value === value) ?? LATTICE_PRESETS[0];
+    const arr = Array.from({ length: p.nSpecies }, (_, i) => latSpecies[i] || "");
+    updateNodeData(id, { ...data, latticeType: value, latticeSpecies: arr });
+  };
+  const setSpecies = (i: number, val: string) => {
+    const arr = Array.from({ length: latPreset.nSpecies }, (_, k) => latSpecies[k] || "");
+    arr[i] = val;
+    updateNodeData(id, { ...data, latticeSpecies: arr });
+  };
+  const setCell = (i: number, val: string) => {
+    const arr = [...customCell];
+    arr[i] = val;
+    updateNodeData(id, { ...data, customCell: arr });
+  };
+  const setBasis = (i: number, field: "element" | "x" | "y" | "z", val: string) => {
+    const arr = customBasis.map((r) => ({ ...r }));
+    arr[i][field] = val;
+    updateNodeData(id, { ...data, customBasis: arr });
+  };
+  const addBasisRow = () => updateNodeData(id, { ...data, customBasis: [...customBasis, { element: "", x: "0", y: "0", z: "0" }] });
+  const removeBasisRow = (i: number) => updateNodeData(id, { ...data, customBasis: customBasis.filter((_, k) => k !== i) });
 
   // Migrate legacy 'preset' nodes to the unified Library (librarySource 'preset',
   // same UC_conf value) — the standalone Preset mode was folded into the Library.
@@ -288,7 +343,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
           <div className="space-y-3">
             {/* Sub-pill toggle for Inorganic */}
             <div className="flex rounded-md overflow-hidden border border-border text-[10px] font-semibold">
-              {(["upload", "library"] as const).map((mode) => (
+              {(["upload", "library", "lattice"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -300,7 +355,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
                   onClick={() => updateNodeData(id, { ...data, source: mode })}
                   onPointerDown={(e) => e.stopPropagation()}
                 >
-                  {mode === "upload" ? "Custom File" : "Library (presets + crystals)"}
+                  {mode === "upload" ? "File" : mode === "library" ? "Library" : "Build lattice"}
                 </button>
               ))}
             </div>
@@ -349,6 +404,172 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
               </div>
             )}
 
+            {source === "lattice" && (
+              <div className="space-y-2">
+                {/* Preset vs manual unit cell */}
+                <div className="flex rounded-md overflow-hidden border border-border text-[9px] font-semibold">
+                  {(["preset", "custom"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      className={`nodrag flex-1 py-1 transition-colors ${
+                        latticeMode === m ? "bg-primary/20 text-primary" : "bg-background text-muted-foreground hover:bg-muted/50"
+                      }`}
+                      onClick={() => updateNodeData(id, { ...data, latticeMode: m })}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      {m === "preset" ? "Preset" : "Custom cell"}
+                    </button>
+                  ))}
+                </div>
+
+                {latticeMode === "preset" ? (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Lattice</label>
+                      <select
+                        className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 h-7"
+                        value={data.latticeType || "fcc"}
+                        onChange={(e) => setLatticeType(e.target.value)}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        {LATTICE_PRESETS.map((p) => (
+                          <option key={p.value} value={p.value}>{p.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-semibold text-muted-foreground block mb-1">a (Å)</label>
+                        <input
+                          type="number" step="any"
+                          className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 h-7"
+                          placeholder={latPreset.aHint}
+                          value={data.latticeA ?? ""}
+                          onChange={(e) => updateNodeData(id, { ...data, latticeA: e.target.value })}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      {latPreset.hex && (
+                        <div>
+                          <label className="text-[10px] font-semibold text-muted-foreground block mb-1">c (Å)</label>
+                          <input
+                            type="number" step="any"
+                            className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 h-7"
+                            placeholder="auto (1.633·a)"
+                            value={data.latticeC ?? ""}
+                            onChange={(e) => updateNodeData(id, { ...data, latticeC: e.target.value })}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <div className={`grid gap-2 ${latPreset.nSpecies > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                      {latPreset.speciesLabels.map((lbl, i) => (
+                        <div key={i}>
+                          <label className="text-[10px] font-semibold text-muted-foreground block mb-1">{lbl}</label>
+                          <input
+                            type="text"
+                            className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1 h-7 font-mono"
+                            placeholder="e.g. Cu"
+                            value={latSpecies[i] ?? ""}
+                            onChange={(e) => setSpecies(i, e.target.value)}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Cell — a b c α β γ (Å, °)</label>
+                      <div className="grid grid-cols-6 gap-1">
+                        {["a", "b", "c", "α", "β", "γ"].map((lbl, i) => (
+                          <input
+                            key={i}
+                            type="number" step="any"
+                            title={lbl}
+                            className="nodrag w-full text-[10px] bg-muted border border-border rounded px-1 py-1 h-7 text-center"
+                            placeholder={lbl}
+                            value={customCell[i] ?? ""}
+                            onChange={(e) => setCell(i, e.target.value)}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-semibold text-muted-foreground">Basis atoms (fractional)</label>
+                        <button
+                          type="button"
+                          className="nodrag text-[10px] font-semibold text-primary hover:underline"
+                          onClick={addBasisRow}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          + add
+                        </button>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="grid grid-cols-[1.3fr_1fr_1fr_1fr_auto] gap-1 text-[8px] text-muted-foreground/70 px-0.5">
+                          <span>Elem</span><span>x</span><span>y</span><span>z</span><span></span>
+                        </div>
+                        {customBasis.map((row, i) => (
+                          <div key={i} className="grid grid-cols-[1.3fr_1fr_1fr_1fr_auto] gap-1">
+                            <input
+                              type="text" placeholder="Na"
+                              className="nodrag w-full text-[10px] bg-muted border border-border rounded px-1 py-1 h-6 font-mono"
+                              value={row.element}
+                              onChange={(e) => setBasis(i, "element", e.target.value)}
+                              onPointerDown={(e) => e.stopPropagation()}
+                            />
+                            {(["x", "y", "z"] as const).map((f) => (
+                              <input
+                                key={f}
+                                type="number" step="any"
+                                className="nodrag w-full text-[10px] bg-muted border border-border rounded px-1 py-1 h-6 text-center"
+                                value={row[f]}
+                                onChange={(e) => setBasis(i, f, e.target.value)}
+                                onPointerDown={(e) => e.stopPropagation()}
+                              />
+                            ))}
+                            <button
+                              type="button"
+                              className="nodrag flex items-center justify-center text-muted-foreground hover:text-destructive disabled:opacity-30"
+                              disabled={customBasis.length <= 1}
+                              onClick={() => removeBasisRow(i)}
+                              onPointerDown={(e) => e.stopPropagation()}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[8px] text-muted-foreground/60 mt-1 leading-tight">Literal P1 — atoms placed exactly as given (no symmetry expansion).</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Shared supercell replication */}
+                <div>
+                  <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Supercell (nx · ny · nz)</label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(["latticeRepX", "latticeRepY", "latticeRepZ"] as const).map((k) => (
+                      <input
+                        key={k}
+                        type="number" min="1"
+                        className="nodrag w-full text-xs bg-muted border border-border rounded px-1 py-1 h-7 text-center"
+                        value={(data[k] as number) || 1}
+                        onChange={(e) => updateNodeData(id, { ...data, [k]: parseInt(e.target.value) || 1 })}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {source === "upload" && (
               <div className="relative">
                 <input
@@ -393,7 +614,9 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
               </div>
             )}
 
-            {/* Preview & Validate -- scan elements for force-field compatibility */}
+            {/* Preview & Validate -- scan elements for force-field compatibility
+                (not applicable to the lattice builder, which has no file). */}
+            {source !== "lattice" && (
             <button
               type="button"
               className="nodrag w-full flex justify-center py-1.5 bg-primary/20 text-primary hover:bg-primary/30 rounded-md text-xs font-semibold transition-colors disabled:opacity-40"
@@ -403,8 +626,9 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
             >
               {isScanning ? "Scanning…" : "Preview & Validate"}
             </button>
+            )}
 
-            {inorgScan && (
+            {source !== "lattice" && inorgScan && (
               inorgScan.minffCompatible ? (
                 <div className="text-[10px] text-green-600 bg-green-500/10 p-2 rounded border border-green-500/20 leading-relaxed">
                   ✓ Force-field compatible — {inorgScan.nAtoms} atoms ({inorgScan.elements.join(", ")}).

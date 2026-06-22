@@ -504,6 +504,38 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           } else {
             pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.load_crystal('${file}')\n`;
           }
+        } else if (source === "lattice") {
+          // Parametric lattice builder (atomipy.make_lattice / build_cell).
+          const A_DEFAULTS: Record<string, number> = { sc: 3.0, bcc: 2.87, fcc: 3.615, hcp: 3.21, diamond: 5.43, rocksalt: 5.64, fluorite: 5.46, perovskite: 3.905 };
+          const num = (v: unknown, d = 0): number => {
+            const x = parseFloat(String(v ?? "").trim());
+            return Number.isFinite(x) ? x : d;
+          };
+          const rx = Math.max(1, Math.round(getNumber(data, "latticeRepX", 1)));
+          const ry = Math.max(1, Math.round(getNumber(data, "latticeRepY", 1)));
+          const rz = Math.max(1, Math.round(getNumber(data, "latticeRepZ", 1)));
+          const rep = `replicate=(${rx}, ${ry}, ${rz})`;
+          const latticeMode = getString(data, "latticeMode", "preset");
+          if (latticeMode === "custom") {
+            const cellRaw = (data as Record<string, unknown>).customCell as string[] | undefined ?? [];
+            const cell = [0, 1, 2, 3, 4, 5].map((i) => {
+              const v = String(cellRaw[i] ?? "").trim();
+              return v !== "" ? num(v, i < 3 ? 1.0 : 90.0) : (i < 3 ? 1.0 : 90.0);
+            });
+            const basisRaw = (data as Record<string, unknown>).customBasis as { element: string; x: string; y: string; z: string }[] | undefined ?? [];
+            const basisPy = basisRaw.length
+              ? basisRaw.map((r) => `{'element': '${pyEscape((r.element || "X").trim())}', 'x': ${num(r.x)}, 'y': ${num(r.y)}, 'z': ${num(r.z)}}`).join(", ")
+              : `{'element': 'X', 'x': 0.0, 'y': 0.0, 'z': 0.0}`;
+            pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.build_cell([${cell.join(", ")}], [${basisPy}], ${rep})\n`;
+          } else {
+            const lt = getString(data, "latticeType", "fcc");
+            const a = num(getString(data, "latticeA", ""), A_DEFAULTS[lt] ?? 3.5);
+            const speciesRaw = (data as Record<string, unknown>).latticeSpecies as string[] | undefined ?? [];
+            const speciesPy = (speciesRaw.length ? speciesRaw : ["X"]).map((s) => `'${pyEscape((s || "X").trim())}'`).join(", ");
+            const cStr = getString(data, "latticeC", "").trim();
+            const cArg = lt === "hcp" && cStr !== "" ? `, c=${num(cStr)}` : "";
+            pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.make_lattice('${pyEscape(lt)}', ${a}, [${speciesPy}]${cArg}, ${rep})\n`;
+          }
         } else {
           // source === "organic" (SMILES, uploaded file, or bundled library molecule)
           const smiles = pyEscape(getString(data, "smiles", ""));

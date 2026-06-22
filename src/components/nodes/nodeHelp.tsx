@@ -88,9 +88,11 @@ export const NODE_HELP: Record<string, NodeHelp> = {
   structure: {
     title: "Import Structure",
     summary:
-      "Loads the starting structure for the workflow — almost always the FIRST node. Two tabs: Inorganic (custom file upload or a built-in library) and Organic (SMILES, file, or molecule library).",
+      "Loads the starting structure for the workflow — almost always the FIRST node. Two tabs: Inorganic (custom file, built-in library, or Build lattice) and Organic (SMILES, file, or molecule library).",
     features: [
-      "Inorganic tab: upload a Custom File, or pick from the Library — MINFF presets plus a ~517-entry crystal library, grouped by category.",
+      "Inorganic tab: upload a Custom File, pick from the Library (MINFF presets plus a ~517-entry crystal library), or Build lattice from scratch.",
+      "Build lattice — Preset: choose a Bravais lattice (sc, bcc, fcc, hcp, diamond, rock salt, fluorite, perovskite), set the lattice parameter a (and c for hcp), and name the element(s) for each species.",
+      "Build lattice — Custom cell: enter the unit cell (a b c α β γ) and a fractional basis table (element, x, y, z); atoms are placed as literal P1 (no symmetry expansion yet). A supercell (nx·ny·nz) can be generated in either mode.",
       "Organic tab: build from a SMILES string, upload a file, or pick from a ~428-molecule library.",
       "Importable structure formats: .pdb, .gro, .xyz, .cif, .mmcif, .poscar, .contcar, .pqr, .cjson.",
       "Organic uploads (.mol, .mol2, .sdf) are routed to the GAFF/OpenFF parametrization path.",
@@ -99,6 +101,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
     quirks: [
       "The inorganic scan checks force-field compatibility; flagged elements suggest setting the Forcefield node to the Dummy FF (a frozen, qualitative EM/NVT model).",
       "MINFF-preset library entries are force-field-ready; other crystal categories often need the Dummy FF.",
+      "Build lattice presets define stoichiometry by species slot (e.g. rock salt cation:anion = 1:1, fluorite 1:2, perovskite A:B:X = 1:1:3); the Custom cell places exactly the basis you type.",
       "The Organic tab only generates/validates coordinates here — force-field assignment happens on the Forcefield node.",
     ],
     after: [
