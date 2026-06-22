@@ -205,8 +205,8 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   // Default a bit wider so the Miller-plane controls fit on one row; min width
   // also raised so a resized-small node keeps them readable.
   // When the Miller panel is open it needs more width for its one-row controls,
-  // so floor the width at 720 regardless of any smaller saved size.
-  const nodeWidth = Math.max(showMiller ? 720 : 440, Number.isFinite(data.width) ? Number(data.width) : 700);
+  // so floor the width at 600 regardless of any smaller saved size.
+  const nodeWidth = Math.max(showMiller ? 600 : 440, Number.isFinite(data.width) ? Number(data.width) : 700);
   const nodeHeight = Math.max(320, Number.isFinite(data.height) ? Number(data.height) : 560);
   const chargeValues = useMemo(() => (Array.isArray(data.charges) ? data.charges : []), [data.charges]);
 
