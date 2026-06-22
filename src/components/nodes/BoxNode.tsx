@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Handle, Position, useReactFlow, useEdges, useNodes } from "@xyflow/react";
-import { Box, X } from "lucide-react";
+import { Box, RefreshCw } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps, PresetOption } from "./types";
 
@@ -305,6 +305,18 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
     }
   }, [data, edges, nodes, id, mode, updateNodeData, getNode]);
 
+  // ------- Reset: clear manual values so the box re-inherits from upstream ----
+  const resetBoxToUpstream = () => {
+    updateNodeData(id, {
+      ...data,
+      a: undefined, b: undefined, c: undefined,
+      alpha: undefined, beta: undefined, gamma: undefined,
+      lx: undefined, ly: undefined, lz: undefined,
+      xy: undefined, xz: undefined, yz: undefined,
+      lastInferredFrom: undefined,
+    });
+  };
+
   // ------- Mode switch with live conversion --------
   const switchMode = (newMode: BoxMode) => {
     if (newMode === mode) return;
@@ -370,7 +382,19 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
     <div className="bg-card w-[270px] shadow-lg rounded-xl border border-indigo-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
-      <NodeHeader id={id} title="System Box size" Icon={Box} colorClass="text-indigo-500" className="bg-indigo-500/10" helpKey="box" />
+      <NodeHeader id={id} title="System Box size" Icon={Box} colorClass="text-indigo-500" className="bg-indigo-500/10" helpKey="box"
+        extraActions={
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); resetBoxToUpstream(); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="nodrag p-1 hover:bg-black/10 dark:hover:bg-white/10 rounded-md transition-colors text-muted-foreground hover:text-indigo-500"
+            title="Reset box to the upstream structure's box"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        }
+      />
 
       <div className="p-4 space-y-3 bg-background">
         {/* Mode Toggle */}

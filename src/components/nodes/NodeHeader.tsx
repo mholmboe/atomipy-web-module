@@ -11,9 +11,11 @@ interface NodeHeaderProps {
   className?: string;
   /** Key into NODE_HELP — when set (and content exists) a help (?) icon appears. */
   helpKey?: string;
+  /** Optional extra action button(s), rendered just before the help icon. */
+  extraActions?: React.ReactNode;
 }
 
-export const NodeHeader = ({ id, title, Icon, colorClass = "text-primary", className = "bg-primary/10", helpKey }: NodeHeaderProps) => {
+export const NodeHeader = ({ id, title, Icon, colorClass = "text-primary", className = "bg-primary/10", helpKey, extraActions }: NodeHeaderProps) => {
   const { deleteElements, getNode } = useReactFlow();
   // Auto-derive the help key from the node's type, so any node whose type has
   // a NODE_HELP entry shows the (?) icon without per-node wiring. An explicit
@@ -27,6 +29,7 @@ export const NodeHeader = ({ id, title, Icon, colorClass = "text-primary", class
         <h3 className="text-sm font-semibold text-foreground m-0">{title}</h3>
       </div>
       <div className="flex items-center gap-1">
+        {extraActions}
         <NodeHelpButton helpKey={resolvedHelpKey} />
         <button
           onClick={(e) => {
