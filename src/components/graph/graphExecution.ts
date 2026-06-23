@@ -1838,6 +1838,13 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           let runKwargs = `nsteps=${isMinimize ? miniSteps : mdSteps}`;
           if (!isMinimize) runKwargs += `, dt=${timestepFs / 1000.0}, temperature=${temp}, nstxtc=${pdbFreq}`;
           if (isNPT) runKwargs += `, pressure=${pressure}`;
+          // Full editable .mdp: if the user supplied one, it's used verbatim (the
+          // structured kwargs above are then ignored by run_stage).
+          const mdpText = getString(data, "mdpText", "").trim();
+          if (mdpText) {
+            pythonCode += `_gmx_mdp_text = ${JSON.stringify(mdpText)}\n`;
+            runKwargs += `, mdp_text=_gmx_mdp_text`;
+          }
           pythonCode += `_g = _gmx_run('${stage}', _os.path.basename(_gro_path), ${runKwargs})\n`;
           pythonCode += `print("GROMACS simulation finished OK!")\n`;
           // Convert the stage's .xtc -> multi-frame PDB (same format the OpenMM path

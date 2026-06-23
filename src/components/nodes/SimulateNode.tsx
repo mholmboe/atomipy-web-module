@@ -9,9 +9,58 @@ type ForcefieldMode = "minff" | "clayff" | "preassigned";
 type PrmFile = "minff" | "minff_gminff_k0" | "minff_gminff_k250" | "minff_gminff_k1500" | "clayff";
 type Engine = "openmm" | "gromacs";
 
+// MINFF .mdp common block (keep in sync with atomipy/gromacs/mdp.py _COMMON).
+const MDP_COMMON: [string, string][] = [
+  ["cutoff-scheme", "Verlet"], ["nstlist", "20"], ["rlist", "1.2"],
+  ["coulombtype", "PME"], ["vdw-type", "Cut-off"], ["rcoulomb", "1.2"], ["rvdw", "1.2"],
+  ["fourierspacing", "0.12"], ["pme-order", "4"], ["ewald-rtol", "1e-05"],
+  ["pbc", "xyz"], ["periodic-molecules", "yes"],
+  ["constraints", "none"], ["constraint_algorithm", "lincs"], ["lincs_order", "4"], ["lincs_iter", "1"],
+];
+
+// Build an editable .mdp template for a stage (mirrors atomipy/gromacs/mdp.py).
+function buildMdp(
+  stage: "em" | "nvt" | "npt",
+  o: { nsteps: number; dt: number; temperature: number; pressure: number; nstxtc: number },
+): string {
+  const L: string[] = [
+    "; Editable GROMACS .mdp — used verbatim when non-blank (blank = auto-generated).",
+    ";",
+    "; FORCE-FIELD DEFINES: for SOLVATED/merged systems the FF (e.g. GMINFF_k500 or",
+    "; CLAYFF_EXT), water and ion #defines are set INSIDE the .top, so leave 'define'",
+    "; blank here. For a DRY mineral (no solvent/ions) add them, e.g.:",
+    ";   define = -DGMINFF_k500      (or -DCLAYFF_EXT)",
+  ];
+  const push = (k: string, v: string) => L.push(`${k.padEnd(22)}= ${v}`);
+  push("define", "");
+  if (stage === "em") {
+    push("integrator", "steep"); push("nsteps", String(o.nsteps));
+    push("emtol", "1000.0"); push("emstep", "0.01"); push("nstxout-compressed", String(o.nstxtc));
+    MDP_COMMON.forEach(([k, v]) => push(k, v));
+    push("DispCorr", "No");
+  } else {
+    push("integrator", "md"); push("nsteps", String(o.nsteps)); push("dt", String(o.dt));
+    push("nstcomm", "100"); push("comm-mode", "Linear");
+    push("nstxout-compressed", String(o.nstxtc)); push("nstenergy", "100"); push("nstlog", "100");
+    push("continuation", stage === "nvt" ? "no" : "yes");
+    MDP_COMMON.forEach(([k, v]) => push(k, v));
+    push("tcoupl", "V-rescale"); push("tc-grps", "System"); push("tau_t", "1.0"); push("ref_t", String(o.temperature));
+    if (stage === "npt") {
+      push("pcoupl", "C-rescale"); push("pcoupltype", "semiisotropic"); push("tau_p", "2.0");
+      push("ref_p", `${o.pressure} ${o.pressure}`); push("compressibility", "4.5e-5 4.5e-5"); push("refcoord-scaling", "all");
+    } else {
+      push("pcoupl", "no");
+    }
+    if (stage === "nvt") { push("gen_vel", "yes"); push("gen_temp", String(o.temperature)); push("gen_seed", "-1"); }
+    push("DispCorr", "EnerPres");
+  }
+  return L.join("\n") + "\n";
+}
+
 type SimulateNodeData = {
   engine?: Engine;
   gmxPath?: string;
+  mdpText?: string;
   forcefieldMode?: ForcefieldMode;
   prmFile?: PrmFile;
   simType?: SimulationType;
@@ -38,6 +87,7 @@ type SimulateNodeData = {
 export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeData>) {
   const { updateNodeData } = useReactFlow();
   const [showMore, setShowMore] = useState(false);
+  const [showMdp, setShowMdp] = useState(false);
 
   const forcefieldMode = data?.forcefieldMode ?? "minff";
   const prmFile = data?.prmFile ?? "minff";
@@ -123,6 +173,56 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
               <p className="text-[9px] text-muted-foreground/60 mt-1 leading-snug">
                 Point to a custom build: the <code>gmx</code> binary, its <code>GMXRC</code>, or the install dir (e.g. for a GPU-enabled GROMACS). Its libraries are added to the loader path automatically.
               </p>
+            </div>
+          )}
+          {isGromacs && (
+            <div className="mt-2">
+              <button
+                type="button"
+                className="nodrag w-full flex items-center justify-between text-[10px] font-semibold text-muted-foreground border border-border rounded-md px-2 py-1 bg-background hover:bg-muted/50"
+                onClick={() => setShowMdp((p) => !p)}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                Advanced: edit .mdp ({simType === "minimize" ? "EM" : simType.toUpperCase()})
+                {showMdp ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              {showMdp && (
+                <div className="mt-1.5 space-y-1.5">
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      className="nodrag flex-1 text-[10px] font-semibold py-1 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20"
+                      onClick={() => updateNodeData(id, { ...data, mdpText: buildMdp(
+                        simType === "npt" ? "npt" : simType === "nvt" ? "nvt" : "em",
+                        { nsteps: simType === "minimize" ? miniSteps : mdSteps, dt: timestep / 1000, temperature, pressure, nstxtc: pdbFreq },
+                      ) })}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      Load template
+                    </button>
+                    <button
+                      type="button"
+                      className="nodrag flex-1 text-[10px] font-semibold py-1 rounded border border-border bg-background text-muted-foreground hover:bg-muted/50 disabled:opacity-40"
+                      disabled={!data?.mdpText}
+                      onClick={() => updateNodeData(id, { ...data, mdpText: "" })}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      Reset to auto
+                    </button>
+                  </div>
+                  <textarea
+                    className="nodrag w-full text-[10px] font-mono bg-muted border border-border rounded-md px-2 py-1.5 h-40 resize-y focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    placeholder="Blank = auto-generated from the settings above. Click 'Load template' to edit it, or paste a full .mdp to use verbatim."
+                    value={data?.mdpText ?? ""}
+                    spellCheck={false}
+                    onChange={(e) => updateNodeData(id, { ...data, mdpText: e.target.value })}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  />
+                  <p className="text-[9px] text-muted-foreground/60 leading-snug">
+                    Non-blank = used <strong>verbatim</strong> for this {simType === "minimize" ? "EM" : simType.toUpperCase()} run (the fields above are ignored). Blank = auto-generated.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
