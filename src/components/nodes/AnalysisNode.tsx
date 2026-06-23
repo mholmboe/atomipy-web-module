@@ -4,7 +4,7 @@ import { BarChart3, ChevronDown, ChevronUp, X } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
-type AnalysisMode = "rdf" | "cn" | "closest" | "mindist" | "occupancy" | "bvs" | "stats";
+type AnalysisMode = "rdf" | "density" | "cn" | "closest" | "mindist" | "occupancy" | "bvs" | "stats";
 
 type OutputMode = "none" | "json" | "csv" | "both";
 type ClosestReferenceMode = "index" | "coords";
@@ -37,6 +37,12 @@ type AnalysisNodeData = {
   // RDF/CN output
   rdfOutputMode?: OutputMode;
   rdfOutputBase?: string;
+  // Density profile
+  densityAxis?: "x" | "y" | "z";
+  densityBins?: number;
+  densityMode?: "number" | "mass" | "charge";
+  densityTypes?: string;
+  densityOutputBase?: string;
   cnOutputMode?: OutputMode;
   cnOutputBase?: string;
   // BVS
@@ -74,6 +80,7 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
             onPointerDown={(e) => e.stopPropagation()}
           >
             <option value="rdf">Radial Distribution (RDF)</option>
+            <option value="density">Density Profile (x/y/z)</option>
             <option value="cn">Coordination Number</option>
             <option value="closest">Find Closest Atom</option>
             <option value="mindist">Min Distances (Inter-mol)</option>
@@ -157,6 +164,81 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
                 />
               </div>
             </div>
+            <p className="text-[9px] text-muted-foreground/60 leading-snug">
+              If the input is a trajectory, g(r) is <strong>ensemble-averaged over all frames</strong>; otherwise it's the single structure. Use the trajectory atom names (e.g. <code>OW</code> for water O). Connect a Data Plotter to chart it.
+            </p>
+          </div>
+        )}
+
+        {mode === "density" && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Axis</label>
+                <select
+                  className={selectCls}
+                  value={data.densityAxis ?? "z"}
+                  onChange={(e) => set("densityAxis", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <option value="x">x</option>
+                  <option value="y">y</option>
+                  <option value="z">z</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Quantity</label>
+                <select
+                  className={selectCls}
+                  value={data.densityMode ?? "number"}
+                  onChange={(e) => set("densityMode", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <option value="number">Number (atoms/Å³)</option>
+                  <option value="mass">Mass (g/cm³)</option>
+                  <option value="charge">Charge (e/Å³)</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">
+                Atom types <span className="font-normal opacity-60">(comma-sep; blank = all; one curve per type)</span>
+              </label>
+              <input
+                type="text"
+                className={inputCls}
+                placeholder="e.g. OW, Na"
+                value={data.densityTypes ?? ""}
+                onChange={(e) => set("densityTypes", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Bins</label>
+                <input
+                  type="number"
+                  step="10"
+                  className={inputCls}
+                  value={data.densityBins ?? 100}
+                  onChange={(e) => set("densityBins", Math.max(2, parseInt(e.target.value) || 100))}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Output base</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={data.densityOutputBase ?? "density_profile"}
+                  onChange={(e) => set("densityOutputBase", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+            <p className="text-[9px] text-muted-foreground/60 leading-snug">
+              Profile along the chosen axis, <strong>averaged over all trajectory frames</strong> (or the single structure). Charge mode needs per-atom charges (structure input, not a PDB trajectory). Connect a Data Plotter to chart it.
+            </p>
           </div>
         )}
 

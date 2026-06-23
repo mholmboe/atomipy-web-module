@@ -2302,6 +2302,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         // AnalysisNode stores the selection under "mode"; "option" was a historical alias
         const option = getString(data, "mode", getString(data, "option", "rdf"));
 
+        // Route plot data to a connected Data Plotter node (else fall back to own id).
+        const plotTarget = edges.find((e) => e.source === id && nodes.find((nn) => nn.id === e.target)?.type === "plot")?.target ?? id;
+        // Frames: ensemble (trajectory) when available, else the single structure.
+        const framesSetup =
+          inTraj !== undefined
+            ? `try:\n    _frames = ap.import_traj(${inTraj})\nexcept Exception:\n    _frames = []\nif not _frames:\n    _frames = [(${inAtoms}, ${inBox})]\n`
+            : `_frames = [(${inAtoms}, ${inBox})]\n`;
+
         if (option === "rdf") {
           const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
           const typeB = pyEscape(getString(data, "atomTypeB", "Cl"));
@@ -2309,11 +2317,46 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           const dr = getNumber(data, "dr", 0.05);
           const outputBase = pyEscape(getString(data, "rdfOutputBase", "rdf_results"));
 
-          pythonCode += `\n# Run RDF Analysis\n`;
-          pythonCode += `rdf_data = ap.calculate_rdf(${inAtoms}, ${inBox}, typeA='${typeA}', typeB='${typeB}', rmax=${rMax}, dr=${dr})\n`;
+          pythonCode += `\n# RDF Analysis (ensemble-averaged over trajectory frames when available)\n`;
+          pythonCode += framesSetup;
+          pythonCode += `if len(_frames) > 1:\n`;
+          pythonCode += `    rdf_data = ap.rdf_frames(_frames, typeA='${typeA}', typeB='${typeB}', rmax=${rMax}, dr=${dr})\n`;
+          pythonCode += `else:\n`;
+          pythonCode += `    rdf_data = ap.calculate_rdf(_frames[0][0], _frames[0][1], typeA='${typeA}', typeB='${typeB}', rmax=${rMax}, dr=${dr})\n`;
+          pythonCode += `_rx = [float(x) for x in rdf_data[0]]\n_ry = [float(y) for y in rdf_data[1]]\n`;
           pythonCode += `with open('${outputBase}.json', 'w') as _rf:\n`;
-          pythonCode += `    json.dump({'x': [float(x) for x in rdf_data[0]], 'y': [float(y) for y in rdf_data[1]]}, _rf)\n`;
-          pythonCode += `print(f"RDF: {len(rdf_data[0])} bins, rmax=${rMax} A")\n`;
+          pythonCode += `    json.dump({'x': _rx, 'y': _ry}, _rf)\n`;
+          pythonCode += `print(f"RDF: {len(_rx)} bins over {len(_frames)} frame(s) [${typeA}-${typeB}]")\n`;
+          if (mode === "full") {
+            pythonCode += `print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'g(r) ${typeA}-${typeB}', 'points': [[a, b] for a, b in zip(_rx, _ry)]}], 'xLabel': 'r (Å)', 'yLabel': 'g(r)'}))\n`;
+          }
+
+        } else if (option === "density") {
+          const axis = ["x", "y", "z"].includes(getString(data, "densityAxis", "z")) ? getString(data, "densityAxis", "z") : "z";
+          const nbins = Math.max(2, Math.round(getNumber(data, "densityBins", 100)));
+          const dmode = ["number", "mass", "charge"].includes(getString(data, "densityMode", "number")) ? getString(data, "densityMode", "number") : "number";
+          const outputBase = pyEscape(getString(data, "densityOutputBase", "density_profile"));
+          const typesRaw = getString(data, "densityTypes", "").split(",").map((s) => s.trim()).filter(Boolean);
+          const typesPy = typesRaw.length ? `[${typesRaw.map((t) => `'${pyEscape(t)}'`).join(", ")}]` : "None";
+          const yUnit = dmode === "mass" ? "g/cm³" : dmode === "charge" ? "e/Å³" : "atoms/Å³";
+
+          pythonCode += `\n# Density profile along ${axis} (ensemble-averaged over trajectory frames when available)\n`;
+          pythonCode += framesSetup;
+          pythonCode += `_dtypes = ${typesPy}\n`;
+          pythonCode += `_series = []\n`;
+          pythonCode += `if _dtypes:\n`;
+          pythonCode += `    for _t in _dtypes:\n`;
+          pythonCode += `        _c, _d = ap.density_frames(_frames, axis='${axis}', nbins=${nbins}, atom_types=[_t], mode='${dmode}')\n`;
+          pythonCode += `        _series.append({'name': _t, 'points': [[float(x), float(y)] for x, y in zip(_c, _d)]})\n`;
+          pythonCode += `else:\n`;
+          pythonCode += `    _c, _d = ap.density_frames(_frames, axis='${axis}', nbins=${nbins}, mode='${dmode}')\n`;
+          pythonCode += `    _series.append({'name': 'all', 'points': [[float(x), float(y)] for x, y in zip(_c, _d)]})\n`;
+          pythonCode += `with open('${outputBase}.json', 'w') as _df:\n`;
+          pythonCode += `    json.dump({'axis': '${axis}', 'mode': '${dmode}', 'series': _series}, _df)\n`;
+          pythonCode += `print(f"Density(${axis}, ${dmode}): {len(_series)} series x ${nbins} bins over {len(_frames)} frame(s)")\n`;
+          if (mode === "full") {
+            pythonCode += `print("__PLOT_${plotTarget}__:" + json.dumps({'series': _series, 'xLabel': '${axis} (Å)', 'yLabel': '${yUnit}'}))\n`;
+          }
 
         } else if (option === "cn" || option === "coordinationNumber") {
           const typeA = pyEscape(getString(data, "atomTypeA", "Na"));

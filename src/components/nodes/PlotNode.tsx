@@ -10,18 +10,29 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
 } from "recharts";
+
+type PlotSeries = { name: string; points: [number, number][] };
 
 type PlotNodeData = {
   fileName?: string;
   xAxisLabel?: string;
   yAxisLabel?: string;
   plotData?: {
-    sourceFile: string;
-    points: [number, number][];
+    sourceFile?: string;
+    points?: [number, number][];     // legacy single series
+    series?: PlotSeries[];           // multi-series (density per type, thermo quantities…)
+    xLabel?: string;
+    yLabel?: string;
   };
 };
+
+const SERIES_COLORS = [
+  "rgb(99 102 241)", "rgb(16 185 129)", "rgb(239 68 68)", "rgb(245 158 11)",
+  "rgb(14 165 233)", "rgb(168 85 247)", "rgb(132 204 22)", "rgb(236 72 153)",
+];
 
 export function PlotNode({ id, data }: NodeComponentProps<PlotNodeData>) {
   const { updateNodeData } = useReactFlow();
@@ -30,10 +41,32 @@ export function PlotNode({ id, data }: NodeComponentProps<PlotNodeData>) {
     updateNodeData(id, { ...data, [field]: value });
   };
 
-  const chartData = useMemo(() => {
-    if (!data.plotData?.points) return [];
-    return data.plotData.points.map(([x, y]) => ({ x, y }));
-  }, [data.plotData]);
+  const { chartData, seriesKeys } = useMemo(() => {
+    const pd = data.plotData;
+    if (pd?.series && pd.series.length > 0) {
+      // Merge all series onto a shared x axis (keyed by x value).
+      const rowMap = new Map<number, Record<string, number>>();
+      pd.series.forEach((s, si) => {
+        s.points.forEach(([x, y]) => {
+          const row = rowMap.get(x) ?? { x };
+          row[`s${si}`] = y;
+          rowMap.set(x, row);
+        });
+      });
+      const rows = Array.from(rowMap.values()).sort((a, b) => a.x - b.x);
+      return { chartData: rows, seriesKeys: pd.series.map((s, si) => ({ key: `s${si}`, name: s.name })) };
+    }
+    if (pd?.points) {
+      return {
+        chartData: pd.points.map(([x, y]) => ({ x, y })),
+        seriesKeys: [{ key: "y", name: data.yAxisLabel || pd.yLabel || "Y" }],
+      };
+    }
+    return { chartData: [] as Record<string, number>[], seriesKeys: [] as { key: string; name: string }[] };
+  }, [data.plotData, data.yAxisLabel]);
+
+  const xLabel = data.xAxisLabel || data.plotData?.xLabel || "X";
+  const yLabel = data.yAxisLabel || data.plotData?.yLabel || "Y";
 
   return (
     <div className="bg-card w-[340px] shadow-lg rounded-xl border border-indigo-500/50 overflow-hidden font-sans select-none">
@@ -97,33 +130,38 @@ export function PlotNode({ id, data }: NodeComponentProps<PlotNodeData>) {
                 <ResponsiveContainer width="100%" height="100%">
                   <RechartsLineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border/40" />
-                    <XAxis 
-                      dataKey="x" 
-                      type="number" 
+                    <XAxis
+                      dataKey="x"
+                      type="number"
                       domain={['auto', 'auto']}
-                      tick={{ fontSize: 9, fill: 'currentColor' }} 
+                      tick={{ fontSize: 9, fill: 'currentColor' }}
                       className="text-muted-foreground"
                     />
-                    <YAxis 
+                    <YAxis
                       domain={['auto', 'auto']}
-                      tick={{ fontSize: 9, fill: 'currentColor' }} 
+                      tick={{ fontSize: 9, fill: 'currentColor' }}
                       className="text-muted-foreground"
                       width={40}
                     />
-                    <Tooltip 
+                    <Tooltip
                       contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '6px', fontSize: '11px' }}
                       itemStyle={{ color: 'hsl(var(--foreground))' }}
-                      labelFormatter={(val) => `${data.xAxisLabel || 'X'}: ${Number(val).toFixed(2)}`}
-                      formatter={(val: number) => [val.toFixed(2), data.yAxisLabel || 'Y']}
+                      labelFormatter={(val) => `${xLabel}: ${Number(val).toFixed(2)}`}
                     />
-                    <Line 
-                      type="monotone" 
-                      dataKey="y" 
-                      stroke="rgb(99 102 241)" 
-                      strokeWidth={1.5} 
-                      dot={false}
-                      isAnimationActive={false}
-                    />
+                    {seriesKeys.length > 1 && <Legend wrapperStyle={{ fontSize: "9px" }} />}
+                    {seriesKeys.map((sk, i) => (
+                      <Line
+                        key={sk.key}
+                        type="monotone"
+                        dataKey={sk.key}
+                        name={sk.name}
+                        stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                        strokeWidth={1.5}
+                        dot={false}
+                        isAnimationActive={false}
+                        connectNulls
+                      />
+                    ))}
                   </RechartsLineChart>
                 </ResponsiveContainer>
               </div>
