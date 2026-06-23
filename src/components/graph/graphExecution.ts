@@ -2466,6 +2466,43 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             }
           }
 
+        } else if (option === "hbond") {
+          const rcut = getNumber(data, "hbondRcut", 3.5);
+          const angle = getNumber(data, "hbondAngle", 30.0);
+          const excl = getBoolean(data, "hbondExcludeSameMol", true) ? "True" : "False";
+          const plotKind = getString(data, "hbondPlot", "dist") === "series" ? "series" : "dist";
+          const outputBase = pyEscape(getString(data, "hbondOutputBase", "hbonds"));
+          const donorsRaw = getString(data, "hbondDonors", "").split(",").map((s) => s.trim()).filter(Boolean);
+          const accRaw = getString(data, "hbondAcceptors", "").split(",").map((s) => s.trim()).filter(Boolean);
+          const donorsPy = donorsRaw.length ? `[${donorsRaw.map((t) => `'${pyEscape(t)}'`).join(", ")}]` : "None";
+          const accPy = accRaw.length ? `[${accRaw.map((t) => `'${pyEscape(t)}'`).join(", ")}]` : "None";
+
+          pythonCode += `\n# Hydrogen-bond analysis (D...A < ${rcut} A, H-D...A <= ${angle} deg; gmx hbond convention)\n`;
+          pythonCode += framesSetup;
+          pythonCode += `_hb = ap.hbonds_frames(_frames, donor_types=${donorsPy}, acceptor_types=${accPy}, r_cut=${rcut}, angle_cut=${angle}, exclude_same_molecule=${excl})\n`;
+          pythonCode += `if _hb is None:\n`;
+          pythonCode += `    print("H-bonds: no donors/acceptors found (O/N/F by element; check atom names)")\n`;
+          pythonCode += `else:\n`;
+          pythonCode += `    print(f"H-bonds: mean total = {_hb['mean_total']:.1f}/frame, mean per molecule = {_hb['mean_per_molecule']:.2f} over {_hb['n_frames']} frame(s) -> ${outputBase}.dat/.json")\n`;
+          pythonCode += `    with open('${outputBase}.json', 'w') as _hf:\n`;
+          pythonCode += `        json.dump(_hb, _hf)\n`;
+          pythonCode += `    with open('${outputBase}.dat', 'w') as _hf:\n`;
+          pythonCode += `        _hf.write("# atomipy H-bond per-molecule distribution; mean_total=%.3f mean_per_molecule=%.3f frames=%d\\n" % (_hb['mean_total'], _hb['mean_per_molecule'], _hb['n_frames']))\n`;
+          pythonCode += `        _hf.write("#%13s%14s\\n" % ('n_hbonds', 'fraction'))\n`;
+          pythonCode += `        for _k, _v in zip(_hb['dist_x'], _hb['dist_y']):\n`;
+          pythonCode += `            _hf.write("%14d%14.6g\\n" % (_k, _v))\n`;
+          pythonCode += `    with open('${outputBase}_timeseries.dat', 'w') as _hf:\n`;
+          pythonCode += `        _hf.write("#%13s%14s\\n" % ('frame', 'n_hbonds'))\n`;
+          pythonCode += `        for _i, _v in enumerate(_hb['time_series']):\n`;
+          pythonCode += `            _hf.write("%14d%14d\\n" % (_i, _v))\n`;
+          if (mode === "full") {
+            if (plotKind === "series") {
+              pythonCode += `    print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'H-bonds', 'points': [[float(_i), float(_v)] for _i, _v in enumerate(_hb['time_series'])]}], 'xLabel': 'frame', 'yLabel': '# H-bonds'}))\n`;
+            } else {
+              pythonCode += `    print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'P(n H-bonds)', 'points': [[float(_k), float(_v)] for _k, _v in zip(_hb['dist_x'], _hb['dist_y'])]}], 'xLabel': '# H-bonds per molecule', 'yLabel': 'fraction'}))\n`;
+            }
+          }
+
         } else if (option === "cn" || option === "coordinationNumber") {
           const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
           const typeB = getString(data, "atomTypeB", "").trim();

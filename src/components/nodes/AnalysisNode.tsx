@@ -4,7 +4,7 @@ import { BarChart3, ChevronDown, ChevronUp, X } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
-type AnalysisMode = "rdf" | "density" | "msd" | "cn" | "closest" | "mindist" | "occupancy" | "bvs" | "stats";
+type AnalysisMode = "rdf" | "density" | "msd" | "hbond" | "cn" | "closest" | "mindist" | "occupancy" | "bvs" | "stats";
 
 type OutputMode = "none" | "json" | "csv" | "both";
 type ClosestReferenceMode = "index" | "coords";
@@ -51,6 +51,14 @@ type AnalysisNodeData = {
   msdOriginStride?: number;
   msdPlot?: "msd" | "dist";
   msdOutputBase?: string;
+  // H-bonding
+  hbondDonors?: string;
+  hbondAcceptors?: string;
+  hbondRcut?: number;
+  hbondAngle?: number;
+  hbondExcludeSameMol?: boolean;
+  hbondPlot?: "dist" | "series";
+  hbondOutputBase?: string;
   cnOutputMode?: OutputMode;
   cnOutputBase?: string;
   // BVS
@@ -90,6 +98,7 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
             <option value="rdf">Radial Distribution (RDF)</option>
             <option value="density">Density Profile (x/y/z)</option>
             <option value="msd">MSD / Diffusion</option>
+            <option value="hbond">Hydrogen Bonds</option>
             <option value="cn">Coordination Number</option>
             <option value="closest">Find Closest Atom</option>
             <option value="mindist">Min Distances (Inter-mol)</option>
@@ -347,6 +356,104 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
             </div>
             <p className="text-[9px] text-muted-foreground/60 leading-snug">
               Trajectory is <strong>unwrapped</strong> (PBC jumps removed) and averaged over <strong>multiple time origins</strong>. D = slope / (2·dim); printed to console (Å²/ps, cm²/s, 10⁻⁹ m²/s). Use trajectory atom names (e.g. <code>OW</code>). Connect a Data Plotter.
+            </p>
+          </div>
+        )}
+
+        {mode === "hbond" && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">
+                  Donor types <span className="font-normal opacity-60">(blank = all O/N/F)</span>
+                </label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="e.g. OW"
+                  value={data.hbondDonors ?? ""}
+                  onChange={(e) => set("hbondDonors", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">
+                  Acceptor types <span className="font-normal opacity-60">(blank = all)</span>
+                </label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="e.g. OW, Ob, Oh"
+                  value={data.hbondAcceptors ?? ""}
+                  onChange={(e) => set("hbondAcceptors", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5" title="Donor···Acceptor distance cutoff (GROMACS gmx hbond default 0.35 nm)">
+                  D···A cutoff (Å)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className={inputCls}
+                  value={data.hbondRcut ?? 3.5}
+                  onChange={(e) => set("hbondRcut", parseFloat(e.target.value) || 3.5)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5" title="H–D···A angle at the donor (GROMACS gmx hbond default 30°)">
+                  Angle (°, H-D···A ≤)
+                </label>
+                <input
+                  type="number"
+                  step="5"
+                  className={inputCls}
+                  value={data.hbondAngle ?? 30}
+                  onChange={(e) => set("hbondAngle", parseFloat(e.target.value) || 30)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+            <label className="nodrag flex items-center justify-between text-[11px] text-muted-foreground">
+              Exclude intramolecular
+              <input
+                type="checkbox"
+                className="nodrag"
+                checked={data.hbondExcludeSameMol ?? true}
+                onChange={(e) => set("hbondExcludeSameMol", e.target.checked)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Plot</label>
+                <select
+                  className={selectCls}
+                  value={data.hbondPlot ?? "dist"}
+                  onChange={(e) => set("hbondPlot", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <option value="dist">Per-molecule distribution</option>
+                  <option value="series">Count vs time</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Output base</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={data.hbondOutputBase ?? "hbonds"}
+                  onChange={(e) => set("hbondOutputBase", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+            <p className="text-[9px] text-muted-foreground/60 leading-snug">
+              Geometric H-bonds (GROMACS <code>gmx hbond</code> convention). Reports mean total + the <strong>per-molecule distribution</strong> (single vs. multiple) to console/.dat/.json. Donors/acceptors are O/N/F by element; use trajectory atom names. Connect a Data Plotter.
             </p>
           </div>
         )}
