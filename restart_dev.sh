@@ -150,12 +150,15 @@ main() {
   export INTERCHANGE_EXPERIMENTAL=1
   # PYTHONPATH = ROOT_DIR so that the local atomipy/ package inside atomipy-web-module is used
   export PYTHONPATH="${ROOT_DIR}"
+  # Force UTF-8 stdio: the conda envs can default to an ASCII locale, which makes
+  # atomipy print()s containing non-ASCII (Å, ·, ⁻²) raise UnicodeEncodeError.
+  export PYTHONIOENCODING=utf-8
   # --reload-dir includes the embedded atomipy package (a sibling of backend/
   # and workers/), so re-vendoring atomipy triggers a hot reload. Without this,
   # uvicorn only watches the cwd and vendored atomipy edits are ignored until a
   # full restart.
   nohup conda run --cwd workers/openff_worker -n atomipy-openff \
-    env PYTHONPATH="${PYTHONPATH}" INTERCHANGE_EXPERIMENTAL=1 \
+    env PYTHONPATH="${PYTHONPATH}" PYTHONIOENCODING=utf-8 INTERCHANGE_EXPERIMENTAL=1 \
     uvicorn main:app --reload \
       --reload-dir "${ROOT_DIR}/workers/openff_worker" --reload-dir "${ROOT_DIR}/atomipy" \
       --port "${OPENFF_PORT}" >"${openff_log}" 2>&1 &
@@ -164,7 +167,7 @@ main() {
   echo "Starting Core Backend on port ${CORE_PORT}..."
   export OPENFF_WORKER_URL="${OPENFF_URL}"
   nohup conda run --cwd backend/core -n atomipy-core \
-    env PYTHONPATH="${PYTHONPATH}" OPENFF_WORKER_URL="${OPENFF_URL}" \
+    env PYTHONPATH="${PYTHONPATH}" PYTHONIOENCODING=utf-8 OPENFF_WORKER_URL="${OPENFF_URL}" \
     uvicorn main:app --reload \
       --reload-dir "${ROOT_DIR}/backend/core" --reload-dir "${ROOT_DIR}/atomipy" \
       --port "${CORE_PORT}" >"${core_log}" 2>&1 &
@@ -173,7 +176,7 @@ main() {
   echo "Starting Celery Worker..."
   export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
   nohup conda run --cwd backend/core -n atomipy-core \
-    env PYTHONPATH="${PYTHONPATH}" OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES \
+    env PYTHONPATH="${PYTHONPATH}" PYTHONIOENCODING=utf-8 OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES \
     celery -A celery_app.app worker --loglevel=info >"${celery_log}" 2>&1 &
   local celery_pid=$!
 
