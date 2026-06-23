@@ -2405,6 +2405,38 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             pythonCode += `print("__PLOT_${plotTarget}__:" + json.dumps({'series': _series, 'xLabel': '${axis} (Å)', 'yLabel': '${yUnit}'}))\n`;
           }
 
+        } else if (option === "msd") {
+          const dims = ["xyz", "xy", "z", "x", "y"].includes(getString(data, "msdDims", "xyz")) ? getString(data, "msdDims", "xyz") : "xyz";
+          const dt = getNumber(data, "msdDt", 1.0);
+          const stride = Math.max(1, Math.round(getNumber(data, "msdOriginStride", 1)));
+          const plotKind = getString(data, "msdPlot", "msd") === "dist" ? "dist" : "msd";
+          const outputBase = pyEscape(getString(data, "msdOutputBase", "msd_results"));
+          const typesRaw = getString(data, "msdTypes", "").split(",").map((s) => s.trim()).filter(Boolean);
+          const typesPy = typesRaw.length ? `[${typesRaw.map((t) => `'${pyEscape(t)}'`).join(", ")}]` : "None";
+          const dimLabel = dims === "z" ? "1D z" : dims === "xy" ? "2D xy" : "3D";
+
+          pythonCode += `\n# MSD / diffusion (${dimLabel}; PBC-unwrapped, multi-origin restarts)\n`;
+          pythonCode += framesSetup;
+          pythonCode += `_msd = ap.msd(_frames, atom_types=${typesPy}, dims='${dims}', origin_stride=${stride}, dt=${dt})\n`;
+          pythonCode += `_dd = ap.displacement_distribution(_frames, atom_types=${typesPy}, dims='${dims}', origin_stride=${stride})\n`;
+          pythonCode += `if _msd is None:\n`;
+          pythonCode += `    print("MSD: needs a trajectory with >= 3 frames and matching atom types")\n`;
+          pythonCode += `else:\n`;
+          pythonCode += `    print(f"MSD ${dimLabel}: {_msd['n_atoms']} atoms x {_msd['n_frames']} frames -> D = {_msd['D_A2_ps']:.4g} A^2/ps = {_msd['D_cm2_s']:.4g} cm^2/s = {_msd['D_1e9_m2_s']:.4g}e-9 m^2/s")\n`;
+          pythonCode += `    with open('${outputBase}.json', 'w') as _mf:\n`;
+          pythonCode += `        json.dump({'lags_ps': [float(x) for x in _msd['lags']], 'msd_A2': [float(y) for y in _msd['msd']], 'D_A2_ps': _msd['D_A2_ps'], 'D_cm2_s': _msd['D_cm2_s'], 'D_1e9_m2_s': _msd['D_1e9_m2_s'], 'dim': _msd['dim']}, _mf)\n`;
+          pythonCode += `    if _dd is not None:\n`;
+          pythonCode += `        with open('${outputBase}_dist.json', 'w') as _ddf:\n`;
+          pythonCode += `            json.dump({'centers': [float(x) for x in _dd['centers']], 'pdf': [float(y) for y in _dd['pdf']], 'gauss': [float(y) for y in _dd['gauss']], 'sigma': _dd['sigma'], 'lag_frames': _dd['lag_frames']}, _ddf)\n`;
+          if (mode === "full") {
+            if (plotKind === "dist") {
+              pythonCode += `    if _dd is not None:\n`;
+              pythonCode += `        print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'P(Δ)', 'points': [[float(x), float(y)] for x, y in zip(_dd['centers'], _dd['pdf'])]}, {'name': 'Gaussian', 'points': [[float(x), float(y)] for x, y in zip(_dd['centers'], _dd['gauss'])]}], 'xLabel': 'displacement (Å)', 'yLabel': 'P(Δ)'}))\n`;
+            } else {
+              pythonCode += `    print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'MSD (${dimLabel})', 'points': [[float(x), float(y)] for x, y in zip(_msd['lags'], _msd['msd'])]}], 'xLabel': 'time (ps)', 'yLabel': 'MSD (Å²)'}))\n`;
+            }
+          }
+
         } else if (option === "cn" || option === "coordinationNumber") {
           const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
           const typeB = getString(data, "atomTypeB", "").trim();

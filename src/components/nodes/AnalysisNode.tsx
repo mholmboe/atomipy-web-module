@@ -4,7 +4,7 @@ import { BarChart3, ChevronDown, ChevronUp, X } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
-type AnalysisMode = "rdf" | "density" | "cn" | "closest" | "mindist" | "occupancy" | "bvs" | "stats";
+type AnalysisMode = "rdf" | "density" | "msd" | "cn" | "closest" | "mindist" | "occupancy" | "bvs" | "stats";
 
 type OutputMode = "none" | "json" | "csv" | "both";
 type ClosestReferenceMode = "index" | "coords";
@@ -43,6 +43,13 @@ type AnalysisNodeData = {
   densityMode?: "number" | "mass" | "charge";
   densityTypes?: string;
   densityOutputBase?: string;
+  // MSD / diffusion
+  msdTypes?: string;
+  msdDims?: "xyz" | "xy" | "z";
+  msdDt?: number;
+  msdOriginStride?: number;
+  msdPlot?: "msd" | "dist";
+  msdOutputBase?: string;
   cnOutputMode?: OutputMode;
   cnOutputBase?: string;
   // BVS
@@ -81,6 +88,7 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
           >
             <option value="rdf">Radial Distribution (RDF)</option>
             <option value="density">Density Profile (x/y/z)</option>
+            <option value="msd">MSD / Diffusion</option>
             <option value="cn">Coordination Number</option>
             <option value="closest">Find Closest Atom</option>
             <option value="mindist">Min Distances (Inter-mol)</option>
@@ -238,6 +246,93 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
             </div>
             <p className="text-[9px] text-muted-foreground/60 leading-snug">
               Profile along the chosen axis, <strong>averaged over all trajectory frames</strong> (or the single structure). Charge mode needs per-atom charges (structure input, not a PDB trajectory). Connect a Data Plotter to chart it.
+            </p>
+          </div>
+        )}
+
+        {mode === "msd" && (
+          <div className="space-y-2">
+            <div>
+              <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">
+                Atom types <span className="font-normal opacity-60">(comma-sep; e.g. Na, OW)</span>
+              </label>
+              <input
+                type="text"
+                className={inputCls}
+                placeholder="e.g. Na"
+                value={data.msdTypes ?? ""}
+                onChange={(e) => set("msdTypes", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Dimensionality</label>
+                <select
+                  className={selectCls}
+                  value={data.msdDims ?? "xyz"}
+                  onChange={(e) => set("msdDims", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <option value="xyz">3D isotropic (xyz)</option>
+                  <option value="xy">2D in-plane (xy)</option>
+                  <option value="z">1D normal (z)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Plot</label>
+                <select
+                  className={selectCls}
+                  value={data.msdPlot ?? "msd"}
+                  onChange={(e) => set("msdPlot", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <option value="msd">MSD vs time</option>
+                  <option value="dist">Displacement distribution</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5" title="Time between trajectory frames = MD timestep × output frequency (e.g. 1 fs × 1000 = 1 ps)">
+                  Time/frame (ps)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className={inputCls}
+                  value={data.msdDt ?? 1.0}
+                  onChange={(e) => set("msdDt", parseFloat(e.target.value) || 1.0)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5" title="Stride between time origins (restarts). 1 = use every frame as an origin (best statistics).">
+                  Restart stride
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  className={inputCls}
+                  value={data.msdOriginStride ?? 1}
+                  onChange={(e) => set("msdOriginStride", Math.max(1, parseInt(e.target.value) || 1))}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Output base</label>
+              <input
+                type="text"
+                className={inputCls}
+                value={data.msdOutputBase ?? "msd_results"}
+                onChange={(e) => set("msdOutputBase", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </div>
+            <p className="text-[9px] text-muted-foreground/60 leading-snug">
+              Trajectory is <strong>unwrapped</strong> (PBC jumps removed) and averaged over <strong>multiple time origins</strong>. D = slope / (2·dim); printed to console (Å²/ps, cm²/s, 10⁻⁹ m²/s). Use trajectory atom names (e.g. <code>OW</code>). Connect a Data Plotter.
             </p>
           </div>
         )}
