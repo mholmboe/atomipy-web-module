@@ -2557,7 +2557,9 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    if os.path.exists(_no_water_file):\n`;
           pythonCode += `        _traj_file = _no_water_file\n`;
           pythonCode += `    if os.path.exists(_traj_file):\n`;
-          pythonCode += `        with open(_traj_file, 'r', encoding='utf-8') as _f:\n`;
+          pythonCode += `        # errors='replace': trajectory PDBs (e.g. from gmx trjconv) can carry a\n`;
+          pythonCode += `        # stray non-UTF8 byte in a title/remark; never let the viewer crash on it.\n`;
+          pythonCode += `        with open(_traj_file, 'r', encoding='utf-8', errors='replace') as _f:\n`;
           pythonCode += `            _vis_pdb_content = _f.read()\n`;
           pythonCode += `        # Downsample PDB models if there are too many (max 10 models to prevent SSE crash)\n`;
           pythonCode += `        _models = []\n`;
