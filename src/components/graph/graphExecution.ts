@@ -2580,8 +2580,10 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `                    _curr_model.append(_l)\n`;
           pythonCode += `            \n`;
           pythonCode += `            # Cap frames sent to the viewer: the trajectory is inlined in a single SSE\n`;
-          pythonCode += `            # message, so too many frames (a 100+ MB message) stalls the browser/stream.\n`;
-          pythonCode += `            _max_out_models = 200\n`;
+          pythonCode += `            # message, so too many frames stall the browser/stream on large systems.\n`;
+          pythonCode += `            # This only downsamples the in-browser ANIMATION — the full trajectory is\n`;
+          pythonCode += `            # written to disk and included in the downloadable bundle unchanged.\n`;
+          pythonCode += `            _max_out_models = 100\n`;
           pythonCode += `            if len(_models) > _max_out_models:\n`;
           pythonCode += `                _keep_indices = sorted(set(int(i * (len(_models) - 1) / (_max_out_models - 1)) for i in range(_max_out_models)))\n`;
           pythonCode += `                _models = [_models[_idx] for _idx in _keep_indices]\n`;
