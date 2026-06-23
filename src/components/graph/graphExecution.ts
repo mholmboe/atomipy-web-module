@@ -2579,7 +2579,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `                elif _in_model:\n`;
           pythonCode += `                    _curr_model.append(_l)\n`;
           pythonCode += `            \n`;
-          pythonCode += `            _max_out_models = 1000\n`;
+          pythonCode += `            _max_out_models = 200  # cap frames to the viewer: a huge single SSE message (500+ frames) can stall the browser/stream\n`;
           pythonCode += `            if len(_models) > _max_out_models:\n`;
           pythonCode += `                _keep_indices = [int(i * (len(_models) - 1) / (_max_out_models - 1)) for i in range(_max_out_models)]\n`;
           pythonCode += `                _keep_indices = sorted(list(set(_keep_indices)))\n`;
