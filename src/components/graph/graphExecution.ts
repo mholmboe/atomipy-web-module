@@ -1763,6 +1763,21 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const isNPT = simType === "npt";
         const pressure = getNumber(data, "pressure", 1.0);
 
+        // Thermodynamic time-series plot: parse the engine's energy output and emit it
+        // to a connected Data Plotter (GROMACS .edr via gmx energy; OpenMM StateDataReporter log).
+        const thermoPlot = getString(data, "thermoPlot", "off");
+        const thermoPlotTarget = edges.find((e) => e.source === id && nodes.find((nn) => nn.id === e.target)?.type === "plot")?.target;
+        const THERMO_MAP: Record<string, { gmx: string; omm: string; label: string }> = {
+          potential:   { gmx: "Potential",    omm: "Potential Energy", label: "Potential energy" },
+          total:       { gmx: "Total-Energy", omm: "Total Energy",      label: "Total energy" },
+          temperature: { gmx: "Temperature",  omm: "Temperature",       label: "Temperature" },
+          pressure:    { gmx: "Pressure",     omm: "",                  label: "Pressure" },
+          volume:      { gmx: "Volume",       omm: "Box Volume",        label: "Volume" },
+          density:     { gmx: "Density",      omm: "Density",           label: "Density" },
+        };
+        const thermo = THERMO_MAP[thermoPlot];
+        const doThermo = !!thermo && !!thermoPlotTarget && mode === "full";
+
         // ===== Local GROMACS engine (grompp + mdrun) =====
         // Reuses the SAME topology writers as the OpenMM path (write_merged_top /
         // write_dummy_system_top / write_gmx_top), then runs gmx instead of OpenMM.
@@ -1874,6 +1889,21 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `        print(f"Wrote final frame ${trajFile} ({len(_fa)} atoms)")\n`;
           pythonCode += `    except Exception as _e:\n`;
           pythonCode += `        print(f"(note: could not write final pdb: {_e})")\n`;
+          if (doThermo) {
+            pythonCode += `# Thermodynamic time-series (${thermo.label}) -> Data Plotter\n`;
+            pythonCode += `try:\n`;
+            pythonCode += `    import json as _json\n`;
+            pythonCode += `    _th = _gmx.energy_timeseries('.', _final_stage + '.edr', terms=['${thermo.gmx}'], gmx=_gmx_spec, on_line=print)\n`;
+            pythonCode += `    if _th and _th.get('series'):\n`;
+            pythonCode += `        _ts = _th['series'][0]\n`;
+            pythonCode += `        _pts = [[float(t), float(v)] for t, v in zip(_th['time'], _ts['values'])]\n`;
+            pythonCode += `        print("__PLOT_${thermoPlotTarget}__:" + _json.dumps({'series': [{'name': _ts['name'], 'points': _pts}], 'xLabel': 'time (ps)', 'yLabel': _ts['name']}))\n`;
+            pythonCode += `    else:\n`;
+            pythonCode += `        print("(thermo: '${thermo.gmx}' not found in ${"$"}{_final_stage}.edr)")\n`;
+            pythonCode += `except Exception as _te:\n`;
+            pythonCode += `    print(f"(thermo plot skipped: {_te})")\n`;
+          }
+
           // Output the SIMULATED structure (relaxed coords + final box) so a chained
           // Simulate node continues from here. Keep the full FF metadata (itp etc.)
           // on the original atoms; only update x/y/z and the box from the result .gro.
@@ -2213,7 +2243,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `            def close(self):\n`;
         pythonCode += `                if hasattr(self._stream, 'close'):\n`;
         pythonCode += `                    self._stream.close()\n`;
-        pythonCode += `        simulation.reporters.append(app.StateDataReporter(CleanHeaderStream(open('${logFile}', 'w', encoding='utf-8')), max(1, ${logFreq}), step=True, potentialEnergy=True, temperature=True))\n`;
+        pythonCode += `        simulation.reporters.append(app.StateDataReporter(CleanHeaderStream(open('${logFile}', 'w', encoding='utf-8')), max(1, ${logFreq}), step=True, potentialEnergy=True, totalEnergy=True, temperature=True, volume=True, density=True))\n`;
         pythonCode += `        simulation.reporters.append(app.StateDataReporter(CleanHeaderStream(_sys.stdout), max(1, ${logFreq}), step=True, potentialEnergy=True, temperature=True))\n`;
         pythonCode += `        simulation.step(${mdSteps})\n`;
         pythonCode += `        print("\\u2705 ${simType.toUpperCase()} simulation finished OK!")\n`;
@@ -2245,6 +2275,23 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `        if hasattr(${inAtoms}, 'itp'): ${blockOutAtoms}.itp = ${inAtoms}.itp\n`;
         pythonCode += `        ${blockOutBox} = _new_box\n`;
         pythonCode += `        ap.write_pdb(list(_sim_atoms), _new_box, "${simBase}_final.pdb")\n`;
+
+        if (doThermo && thermo.omm && !isMinimize) {
+          pythonCode += `    # Thermodynamic time-series (${thermo.label}) -> Data Plotter\n`;
+          pythonCode += `    try:\n`;
+          pythonCode += `        import csv as _csv, json as _json\n`;
+          pythonCode += `        with open('${logFile}', 'r', encoding='utf-8') as _lf: _rows = list(_csv.reader(_lf))\n`;
+          pythonCode += `        _hdr = [str(_h).strip().strip('#').strip('"') for _h in _rows[0]]\n`;
+          pythonCode += `        _ci = next((_i for _i, _h in enumerate(_hdr) if '${thermo.omm}' in _h), None)\n`;
+          pythonCode += `        _si = next((_i for _i, _h in enumerate(_hdr) if 'Step' in _h), 0)\n`;
+          pythonCode += `        if _ci is not None:\n`;
+          pythonCode += `            _pts = [[float(_r[_si]), float(_r[_ci])] for _r in _rows[1:] if len(_r) > _ci]\n`;
+          pythonCode += `            print("__PLOT_${thermoPlotTarget}__:" + _json.dumps({'series': [{'name': _hdr[_ci], 'points': _pts}], 'xLabel': 'Step', 'yLabel': _hdr[_ci]}))\n`;
+          pythonCode += `    except Exception as _te:\n`;
+          pythonCode += `        print(f"(thermo plot skipped: {_te})")\n`;
+        } else if (doThermo && !thermo.omm && !isMinimize) {
+          pythonCode += `    print("(thermo: '${thermo.label}' is not available from OpenMM's reporter — use the GROMACS engine for pressure)")\n`;
+        }
 
         pythonCode += `except Exception as md_err:\n`;
         pythonCode += `    import traceback as _tb\n`;

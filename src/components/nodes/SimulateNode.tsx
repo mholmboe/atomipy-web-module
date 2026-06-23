@@ -62,6 +62,7 @@ type SimulateNodeData = {
   engine?: Engine;
   gmxPath?: string;
   mdpText?: string;
+  thermoPlot?: string;
   forcefieldMode?: ForcefieldMode;
   prmFile?: PrmFile;
   simType?: SimulationType;
@@ -545,6 +546,27 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </label>
+            {/* Thermo time-series -> connect a Data Plotter. Engine energy output
+                (GROMACS .edr / OpenMM StateDataReporter), independent of the .mdp. */}
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1" title="Parses the run's energy output and sends it to a connected Data Plotter node">
+                Plot thermodynamics (→ Data Plotter)
+              </label>
+              <select
+                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+                value={data?.thermoPlot ?? "off"}
+                onChange={(e) => updateNodeData(id, { ...data, thermoPlot: e.target.value })}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <option value="off">Off</option>
+                <option value="potential">Potential energy</option>
+                <option value="total">Total energy</option>
+                <option value="temperature">Temperature</option>
+                <option value="pressure">Pressure (GROMACS only)</option>
+                <option value="volume">Volume</option>
+                <option value="density">Density</option>
+              </select>
+            </div>
             {!mdpActive && (
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">Log frequency (steps)</label>
