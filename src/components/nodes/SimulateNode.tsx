@@ -125,6 +125,9 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
   }) });
   const resetMdp = () => updateNodeData(id, { ...data, mdpText: "" });
   const setMdp = (t: string) => updateNodeData(id, { ...data, mdpText: t });
+  // A non-blank custom .mdp drives the GROMACS run; the structured run-parameter
+  // fields below are then ignored, so we hide them (the .mdp is the source of truth).
+  const mdpActive = isGromacs && !!(data?.mdpText && data.mdpText.trim());
 
   const isSimulationDisabled = (window as any).disableSimulation === true;
   const simulationMode = (window as any).simulationMode || (isSimulationDisabled ? "disabled" : "full");
@@ -186,62 +189,6 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
               <p className="text-[9px] text-muted-foreground/60 mt-1 leading-snug">
                 Point to a custom build: the <code>gmx</code> binary, its <code>GMXRC</code>, or the install dir (e.g. for a GPU-enabled GROMACS). Its libraries are added to the loader path automatically.
               </p>
-            </div>
-          )}
-          {isGromacs && (
-            <div className="mt-2">
-              <button
-                type="button"
-                className="nodrag w-full flex items-center justify-between text-[10px] font-semibold text-muted-foreground border border-border rounded-md px-2 py-1 bg-background hover:bg-muted/50"
-                onClick={() => setShowMdp((p) => !p)}
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                Advanced: edit .mdp ({simType === "minimize" ? "EM" : simType.toUpperCase()})
-                {showMdp ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-              {showMdp && (
-                <div className="mt-1.5 space-y-1.5">
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      className="nodrag flex-1 text-[10px] font-semibold py-1 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20"
-                      onClick={loadMdpTemplate}
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      Load template
-                    </button>
-                    <button
-                      type="button"
-                      className="nodrag flex-1 text-[10px] font-semibold py-1 rounded border border-border bg-background text-muted-foreground hover:bg-muted/50 disabled:opacity-40"
-                      disabled={!data?.mdpText}
-                      onClick={resetMdp}
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      Reset to auto
-                    </button>
-                    <button
-                      type="button"
-                      title="Pop out the editor"
-                      className="nodrag shrink-0 px-2 py-1 rounded border border-border bg-background text-muted-foreground hover:bg-muted/50"
-                      onClick={() => setMdpOpen(true)}
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      <Maximize2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <textarea
-                    className="nodrag w-full text-[10px] font-mono bg-muted border border-border rounded-md px-2 py-1.5 h-40 resize-y focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    placeholder="Blank = auto-generated from the settings above. Click 'Load template' to edit it, or paste a full .mdp to use verbatim."
-                    value={data?.mdpText ?? ""}
-                    spellCheck={false}
-                    onChange={(e) => setMdp(e.target.value)}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  />
-                  <p className="text-[9px] text-muted-foreground/60 leading-snug">
-                    Non-blank = used <strong>verbatim</strong> for this {stageLabel} run (the fields above are ignored). Blank = auto-generated. Use ⤢ for a larger editor.
-                  </p>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -314,8 +261,66 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
           </div>
         )}
 
+        {/* GROMACS: full editable .mdp for the selected stage (advanced) */}
+        {isGromacs && (
+          <div>
+            <button
+              type="button"
+              className="nodrag w-full flex items-center justify-between text-xs font-semibold text-muted-foreground border border-border rounded-md px-2 py-1.5 bg-background hover:bg-muted/50"
+              onClick={() => setShowMdp((p) => !p)}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              Advanced: edit .mdp ({stageLabel}){mdpActive ? " — custom" : ""}
+              {showMdp ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+            {showMdp && (
+              <div className="mt-1.5 space-y-1.5">
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    className="nodrag flex-1 text-[10px] font-semibold py-1 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20"
+                    onClick={loadMdpTemplate}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    Load template
+                  </button>
+                  <button
+                    type="button"
+                    className="nodrag flex-1 text-[10px] font-semibold py-1 rounded border border-border bg-background text-muted-foreground hover:bg-muted/50 disabled:opacity-40"
+                    disabled={!data?.mdpText}
+                    onClick={resetMdp}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    Reset to auto
+                  </button>
+                  <button
+                    type="button"
+                    title="Pop out the editor"
+                    className="nodrag shrink-0 px-2 py-1 rounded border border-border bg-background text-muted-foreground hover:bg-muted/50"
+                    onClick={() => setMdpOpen(true)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <textarea
+                  className="nodrag w-full text-[10px] font-mono bg-muted border border-border rounded-md px-2 py-1.5 h-40 resize-y focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  placeholder="Blank = auto-generated from the fields below. Click 'Load template' to edit it, or paste a full .mdp to use verbatim."
+                  value={data?.mdpText ?? ""}
+                  spellCheck={false}
+                  onChange={(e) => setMdp(e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+                <p className="text-[9px] text-muted-foreground/60 leading-snug">
+                  Non-blank = used <strong>verbatim</strong> for this {stageLabel} run (the run-parameter fields below are hidden/ignored). Blank = auto-generated. Use ⤢ for a larger editor.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Minimization steps — only for minimize */}
-        {simType === "minimize" && (
+        {!mdpActive && simType === "minimize" && (
           <div>
             <label className="text-xs font-semibold text-muted-foreground block mb-1">
               Minimization Steps
@@ -332,8 +337,15 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
           </div>
         )}
 
+        {/* When a custom .mdp drives the run, the structured fields are the .mdp's job. */}
+        {mdpActive && (
+          <p className="text-[10px] text-muted-foreground/70 leading-snug border border-emerald-500/20 bg-emerald-500/5 rounded-md px-2 py-1.5">
+            Run parameters (steps, temperature, timestep{simType === "npt" ? ", pressure" : ""}, cut-offs, output frequency) come from your <strong>custom .mdp</strong> above.
+          </p>
+        )}
+
         {/* MD-specific fields */}
-        {showMdFields && (
+        {!mdpActive && showMdFields && (
           <>
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -438,6 +450,9 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
 
         {showMore && (
           <div className="space-y-2 border border-border rounded-md p-2 bg-muted/30">
+            {/* Physics knobs — hidden when a custom .mdp supplies them */}
+            {!mdpActive && (
+            <>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1">Cutoff (Å)</label>
@@ -495,6 +510,8 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                 />
               </div>
             )}
+            </>
+            )}
 
             <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
               Write PDB trajectory
@@ -506,6 +523,7 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </label>
+            {!mdpActive && (
             <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
               Wrap trajectory (periodic box)
               <input
@@ -516,6 +534,7 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </label>
+            )}
             <label className="nodrag flex items-center justify-between text-xs text-muted-foreground" title="Generates traj_no_water.pdb for high-performance visual display while retaining full traj.pdb">
               Exclude water in viewer
               <input
@@ -526,6 +545,7 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </label>
+            {!mdpActive && (
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">Log frequency (steps)</label>
               <input
@@ -538,7 +558,8 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </div>
-            {writePdb && (
+            )}
+            {!mdpActive && writePdb && (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1">PDB frequency (steps)</label>
                 <input
