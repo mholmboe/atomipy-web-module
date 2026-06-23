@@ -2579,12 +2579,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `                elif _in_model:\n`;
           pythonCode += `                    _curr_model.append(_l)\n`;
           pythonCode += `            \n`;
-          pythonCode += `            _max_out_models = 200  # cap frames to the viewer: a huge single SSE message (500+ frames) can stall the browser/stream\n`;
-          pythonCode += `            if len(_models) > _max_out_models:\n`;
-          pythonCode += `                _keep_indices = [int(i * (len(_models) - 1) / (_max_out_models - 1)) for i in range(_max_out_models)]\n`;
-          pythonCode += `                _keep_indices = sorted(list(set(_keep_indices)))\n`;
-          pythonCode += `                _models = [_models[_idx] for _idx in _keep_indices]\n`;
-          pythonCode += `            \n`;
+          pythonCode += `            # No frame cap: send every frame to the viewer (clean per-frame PDB makes this fine).\n`;
           pythonCode += `            print(f"Preparing trajectory for the viewer ({len(_models)} frames)...", flush=True)\n`;
           pythonCode += `            _vis_pdb_str = '\\\\\\\\n'.join('\\\\\\\\n'.join(_m) for _m in _models)\n`;
           pythonCode += `        else:\n`;
