@@ -11,6 +11,7 @@ type Engine = "openmm" | "gromacs";
 
 type SimulateNodeData = {
   engine?: Engine;
+  gmxPath?: string;
   forcefieldMode?: ForcefieldMode;
   prmFile?: PrmFile;
   simType?: SimulationType;
@@ -102,8 +103,26 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
           {isGromacs && (
             <div className={`mt-1.5 rounded p-1.5 text-[10px] leading-relaxed border ${gmxAvailable ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700" : "bg-amber-500/10 border-amber-500/30 text-amber-700"}`}>
               {gmxAvailable
-                ? <>Local <strong>gmx</strong> detected ({gmxInfo?.version}). Runs grompp + mdrun on this machine.</>
-                : <>No local <strong>gmx</strong> detected — the GROMACS engine runs only where GROMACS is installed (local/Colab). The downloaded script will run it there.</>}
+                ? <>Default <strong>gmx</strong> detected ({gmxInfo?.version}). Runs grompp + mdrun on this machine.</>
+                : <>No default <strong>gmx</strong> on PATH — set a custom path below, or it runs only where GROMACS is installed (local/Colab).</>}
+            </div>
+          )}
+          {isGromacs && (
+            <div className="mt-1.5">
+              <label className="text-[10px] font-semibold text-muted-foreground block mb-1">
+                GROMACS path <span className="font-normal opacity-60">(blank = default <code>gmx</code>)</span>
+              </label>
+              <input
+                type="text"
+                className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                placeholder="e.g. /usr/local/gromacs-2024.2/bin/GMXRC"
+                value={data?.gmxPath ?? ""}
+                onChange={(e) => updateNodeData(id, { ...data, gmxPath: e.target.value })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+              <p className="text-[9px] text-muted-foreground/60 mt-1 leading-snug">
+                Point to a custom build: the <code>gmx</code> binary, its <code>GMXRC</code>, or the install dir (e.g. for a GPU-enabled GROMACS). Its libraries are added to the loader path automatically.
+              </p>
             </div>
           )}
         </div>

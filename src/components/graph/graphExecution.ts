@@ -1768,14 +1768,17 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         // write_dummy_system_top / write_gmx_top), then runs gmx instead of OpenMM.
         const engine = getString(data, "engine", "openmm");
         if (engine === "gromacs") {
+          // Optional custom GROMACS path (gmx binary, GMXRC, or install dir); blank = default 'gmx' on PATH.
+          const gmxSpec = getString(data, "gmxPath", "").trim() || "gmx";
           pythonCode += `\n# Set up and execute LOCAL GROMACS simulation (grompp + mdrun)\n`;
           pythonCode += `# __ATOMIPY_SIM_TYPE__=${simType}\n`;
           pythonCode += `import os as _os\n`;
           pythonCode += `import atomipy.gromacs as _gmx\n`;
-          pythonCode += `_gmx_info = _gmx.detect_gmx()\n`;
+          pythonCode += `_gmx_spec = '${pyEscape(gmxSpec)}'\n`;
+          pythonCode += `_gmx_info = _gmx.detect_gmx(_gmx_spec)\n`;
           pythonCode += `if not _gmx_info:\n`;
-          pythonCode += `    raise RuntimeError("Local GROMACS engine selected but 'gmx' was not found on PATH. Install GROMACS, or set the Simulate node engine to OpenMM.")\n`;
-          pythonCode += `print(f"[GROMACS] using {_gmx_info['version']}")\n`;
+          pythonCode += `    raise RuntimeError(f"Local GROMACS engine selected but no usable gmx was found for '{_gmx_spec}'. Set a valid GROMACS path (gmx binary, GMXRC, or install dir) in the Simulate node, or use the OpenMM engine.")\n`;
+          pythonCode += `print(f"[GROMACS] using {_gmx_info['version']} ({_gmx_info['path']})")\n`;
           pythonCode += `_top_path = "${simBase}.top"\n`;
           pythonCode += `_gro_path = "${simBase}.gro"\n`;
           pythonCode += `_solvent_ion_res = {'SOL','WAT','HOH','TIP3','OPC','OPC3','SPC','SPCE','TIP4','TIP5','ION','NA','CL','K','LI','CS','RB','F','BR','I','CA','MG','ZN','NA+','CL-','K+','CA2+','MG2+','ZN2+'}\n`;
@@ -1822,7 +1825,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `_gmx.stage_minff('.', defines=${definesExpr})  # define-aware: strips ffbonded lines for types absent under the active FF (e.g. Feo2/Feo3 under CLAYFF)\n`;
           pythonCode += `_gmx_top = _os.path.basename(_top_path)\n`;
           pythonCode += `def _gmx_run(_stage, _struct, **_kw):\n`;
-          pythonCode += `    _st = _gmx.run_local_gmx('.', _gmx_top, _struct, [_stage], defines=_gmx_defines, do_stage_minff=False, on_line=print, **_kw)\n`;
+          pythonCode += `    _st = _gmx.run_local_gmx('.', _gmx_top, _struct, [_stage], defines=_gmx_defines, gmx=_gmx_spec, do_stage_minff=False, on_line=print, **_kw)\n`;
           pythonCode += `    if not _st or _st[-1].get('returncode') != 0 or not _st[-1].get('gro'):\n`;
           pythonCode += `        raise RuntimeError(f"GROMACS {_stage} failed -- see log above.")\n`;
           pythonCode += `    print(f"  {_stage.upper()} finished OK!")\n`;
@@ -1842,14 +1845,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `_final_stage = "${finalStage}"\n`;
           pythonCode += `_traj = None\n`;
           pythonCode += `try:\n`;
-          pythonCode += `    _traj = _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${trajFile}", group="System", pbc="atom", on_line=print)\n`;
+          pythonCode += `    _traj = _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${trajFile}", group="System", pbc="atom", gmx=_gmx_spec, on_line=print)\n`;
           pythonCode += `except Exception as _e:\n`;
           pythonCode += `    print(f"(trajectory conversion error: {_e})")\n`;
           pythonCode += `if _traj:\n`;
           pythonCode += `    print(f"Wrote trajectory ${trajFile}")\n`;
           if (excludeWater) {
             pythonCode += `    try:\n`;
-            pythonCode += `        _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${simBase}_no_water.pdb", group="non-Water", pbc="atom")\n`;
+            pythonCode += `        _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${simBase}_no_water.pdb", group="non-Water", pbc="atom", gmx=_gmx_spec)\n`;
             pythonCode += `    except Exception:\n`;
             pythonCode += `        pass  # 'non-Water' group may be absent (no water) — viewer falls back to the full PDB\n`;
           }
