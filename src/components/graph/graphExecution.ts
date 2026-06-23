@@ -2373,7 +2373,12 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `_rx = [float(x) for x in rdf_data[0]]\n_ry = [float(y) for y in rdf_data[1]]\n`;
           pythonCode += `with open('${outputBase}.json', 'w') as _rf:\n`;
           pythonCode += `    json.dump({'x': _rx, 'y': _ry}, _rf)\n`;
-          pythonCode += `print(f"RDF: {len(_rx)} bins over {len(_frames)} frame(s) [${typeA}-${typeB}]")\n`;
+          pythonCode += `with open('${outputBase}.dat', 'w') as _rf:\n`;
+          pythonCode += `    _rf.write("# atomipy RDF g(r) ${typeA}-${typeB} over %d frame(s)\\n" % len(_frames))\n`;
+          pythonCode += `    _rf.write("#%13s%14s\\n" % ('r_A', 'g_r'))\n`;
+          pythonCode += `    for _a, _b in zip(_rx, _ry):\n`;
+          pythonCode += `        _rf.write("%14.6g%14.6g\\n" % (_a, _b))\n`;
+          pythonCode += `print(f"RDF: {len(_rx)} bins over {len(_frames)} frame(s) [${typeA}-${typeB}] -> ${outputBase}.dat/.json")\n`;
           if (mode === "full") {
             pythonCode += `print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'g(r) ${typeA}-${typeB}', 'points': [[a, b] for a, b in zip(_rx, _ry)]}], 'xLabel': 'r (Å)', 'yLabel': 'g(r)'}))\n`;
           }
@@ -2400,7 +2405,13 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    _series.append({'name': 'all', 'points': [[float(x), float(y)] for x, y in zip(_c, _d)]})\n`;
           pythonCode += `with open('${outputBase}.json', 'w') as _df:\n`;
           pythonCode += `    json.dump({'axis': '${axis}', 'mode': '${dmode}', 'series': _series}, _df)\n`;
-          pythonCode += `print(f"Density(${axis}, ${dmode}): {len(_series)} series x ${nbins} bins over {len(_frames)} frame(s)")\n`;
+          pythonCode += `with open('${outputBase}.dat', 'w') as _df:\n`;
+          pythonCode += `    _df.write("# atomipy density along ${axis} (${dmode}, ${yUnit}) over %d frame(s)\\n" % len(_frames))\n`;
+          pythonCode += `    _df.write("#" + "%13s" % '${axis}_A' + "".join("%14s" % _s['name'] for _s in _series) + "\\n")\n`;
+          pythonCode += `    _ndp = len(_series[0]['points']) if _series else 0\n`;
+          pythonCode += `    for _i in range(_ndp):\n`;
+          pythonCode += `        _df.write(("%14.6g" % _series[0]['points'][_i][0]) + "".join("%14.6g" % _s['points'][_i][1] for _s in _series) + "\\n")\n`;
+          pythonCode += `print(f"Density(${axis}, ${dmode}): {len(_series)} series x ${nbins} bins over {len(_frames)} frame(s) -> ${outputBase}.dat/.json")\n`;
           if (mode === "full") {
             pythonCode += `print("__PLOT_${plotTarget}__:" + json.dumps({'series': _series, 'xLabel': '${axis} (Å)', 'yLabel': '${yUnit}'}))\n`;
           }
@@ -2425,9 +2436,20 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    print(f"MSD ${dimLabel}: {_msd['n_atoms']} atoms x {_msd['n_frames']} frames -> D = {_msd['D_A2_ps']:.4g} A^2/ps = {_msd['D_cm2_s']:.4g} cm^2/s = {_msd['D_1e9_m2_s']:.4g}e-9 m^2/s")\n`;
           pythonCode += `    with open('${outputBase}.json', 'w') as _mf:\n`;
           pythonCode += `        json.dump({'lags_ps': [float(x) for x in _msd['lags']], 'msd_A2': [float(y) for y in _msd['msd']], 'D_A2_ps': _msd['D_A2_ps'], 'D_cm2_s': _msd['D_cm2_s'], 'D_1e9_m2_s': _msd['D_1e9_m2_s'], 'dim': _msd['dim']}, _mf)\n`;
+          pythonCode += `    with open('${outputBase}.dat', 'w') as _mf:\n`;
+          pythonCode += `        _mf.write("# atomipy MSD (${dimLabel}); atoms=%d frames=%d\\n" % (_msd['n_atoms'], _msd['n_frames']))\n`;
+          pythonCode += `        _mf.write("# D = %.6g A^2/ps = %.6g cm^2/s = %.6g e-9 m^2/s\\n" % (_msd['D_A2_ps'], _msd['D_cm2_s'], _msd['D_1e9_m2_s']))\n`;
+          pythonCode += `        _mf.write("#%13s%14s\\n" % ('time_ps', 'MSD_A2'))\n`;
+          pythonCode += `        for _t, _m in zip(_msd['lags'], _msd['msd']):\n`;
+          pythonCode += `            _mf.write("%14.6g%14.6g\\n" % (_t, _m))\n`;
           pythonCode += `    if _dd is not None:\n`;
           pythonCode += `        with open('${outputBase}_dist.json', 'w') as _ddf:\n`;
           pythonCode += `            json.dump({'centers': [float(x) for x in _dd['centers']], 'pdf': [float(y) for y in _dd['pdf']], 'gauss': [float(y) for y in _dd['gauss']], 'sigma': _dd['sigma'], 'lag_frames': _dd['lag_frames']}, _ddf)\n`;
+          pythonCode += `        with open('${outputBase}_dist.dat', 'w') as _ddf:\n`;
+          pythonCode += `            _ddf.write("# atomipy displacement distribution (van Hove self-part); lag=%d frames sigma=%.6g A\\n" % (_dd['lag_frames'], _dd['sigma']))\n`;
+          pythonCode += `            _ddf.write("#%13s%14s%14s\\n" % ('disp_A', 'P', 'Gaussian'))\n`;
+          pythonCode += `            for _x, _p, _g in zip(_dd['centers'], _dd['pdf'], _dd['gauss']):\n`;
+          pythonCode += `                _ddf.write("%14.6g%14.6g%14.6g\\n" % (_x, _p, _g))\n`;
           if (mode === "full") {
             if (plotKind === "dist") {
               pythonCode += `    if _dd is not None:\n`;
