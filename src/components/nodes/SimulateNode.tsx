@@ -110,13 +110,13 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
           {isGromacs && (
             <div className="mt-1.5">
               <label className="text-[10px] font-semibold text-muted-foreground block mb-1">
-                GROMACS path <span className="font-normal opacity-60">(blank = default <code>gmx</code>)</span>
+                GROMACS path <span className="font-normal opacity-60">(clear for <code>gmx</code> on PATH)</span>
               </label>
               <input
                 type="text"
                 className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                placeholder="e.g. /usr/local/gromacs-2024.2/bin/GMXRC"
-                value={data?.gmxPath ?? ""}
+                placeholder="gmx"
+                value={data?.gmxPath ?? "/usr/local/gromacs-2024.2/bin/GMXRC"}
                 onChange={(e) => updateNodeData(id, { ...data, gmxPath: e.target.value })}
                 onPointerDown={(e) => e.stopPropagation()}
               />
