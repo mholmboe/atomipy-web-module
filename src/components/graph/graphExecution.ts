@@ -2363,24 +2363,31 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           const rMax = getNumber(data, "rmax", 10.0);
           const dr = getNumber(data, "dr", 0.05);
           const outputBase = pyEscape(getString(data, "rdfOutputBase", "rdf_results"));
+          const rdfPlot = ["gr", "cn", "both"].includes(getString(data, "rdfPlot", "gr")) ? getString(data, "rdfPlot", "gr") : "gr";
 
-          pythonCode += `\n# RDF Analysis (ensemble-averaged over trajectory frames when available)\n`;
+          pythonCode += `\n# RDF g(r) + running coordination number n(r) (ensemble-averaged over frames when available)\n`;
           pythonCode += framesSetup;
           pythonCode += `if len(_frames) > 1:\n`;
-          pythonCode += `    rdf_data = ap.rdf_frames(_frames, typeA='${typeA}', typeB='${typeB}', rmax=${rMax}, dr=${dr})\n`;
+          pythonCode += `    rdf_data = ap.rdf_frames(_frames, typeA='${typeA}', typeB='${typeB}', rmax=${rMax}, dr=${dr}, return_cn=True)\n`;
           pythonCode += `else:\n`;
-          pythonCode += `    rdf_data = ap.calculate_rdf(_frames[0][0], _frames[0][1], typeA='${typeA}', typeB='${typeB}', rmax=${rMax}, dr=${dr})\n`;
-          pythonCode += `_rx = [float(x) for x in rdf_data[0]]\n_ry = [float(y) for y in rdf_data[1]]\n`;
+          pythonCode += `    rdf_data = ap.calculate_rdf(_frames[0][0], _frames[0][1], typeA='${typeA}', typeB='${typeB}', rmax=${rMax}, dr=${dr}, return_cn=True)\n`;
+          pythonCode += `_rx = [float(x) for x in rdf_data[0]]\n_ry = [float(y) for y in rdf_data[1]]\n_rn = [float(y) for y in rdf_data[2]]\n`;
           pythonCode += `with open('${outputBase}.json', 'w') as _rf:\n`;
-          pythonCode += `    json.dump({'x': _rx, 'y': _ry}, _rf)\n`;
+          pythonCode += `    json.dump({'x': _rx, 'y': _ry, 'cn': _rn}, _rf)\n`;
           pythonCode += `with open('${outputBase}.dat', 'w') as _rf:\n`;
-          pythonCode += `    _rf.write("# atomipy RDF g(r) ${typeA}-${typeB} over %d frame(s)\\n" % len(_frames))\n`;
-          pythonCode += `    _rf.write("#%13s%14s\\n" % ('r_A', 'g_r'))\n`;
-          pythonCode += `    for _a, _b in zip(_rx, _ry):\n`;
-          pythonCode += `        _rf.write("%14.6g%14.6g\\n" % (_a, _b))\n`;
-          pythonCode += `print(f"RDF: {len(_rx)} bins over {len(_frames)} frame(s) [${typeA}-${typeB}] -> ${outputBase}.dat/.json")\n`;
+          pythonCode += `    _rf.write("# atomipy RDF g(r) + running coordination number n(r), ${typeA}-${typeB}, over %d frame(s)\\n" % len(_frames))\n`;
+          pythonCode += `    _rf.write("#%13s%14s%14s\\n" % ('r_A', 'g_r', 'CN_r'))\n`;
+          pythonCode += `    for _a, _b, _c in zip(_rx, _ry, _rn):\n`;
+          pythonCode += `        _rf.write("%14.6g%14.6g%14.6g\\n" % (_a, _b, _c))\n`;
+          pythonCode += `print(f"RDF: {len(_rx)} bins over {len(_frames)} frame(s) [${typeA}-${typeB}]; CN within ${rMax} A = {(_rn[-1] if _rn else 0):.3f} -> ${outputBase}.dat/.json")\n`;
           if (mode === "full") {
-            pythonCode += `print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'g(r) ${typeA}-${typeB}', 'points': [[a, b] for a, b in zip(_rx, _ry)]}], 'xLabel': 'r (Å)', 'yLabel': 'g(r)'}))\n`;
+            if (rdfPlot === "cn") {
+              pythonCode += `print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'n(r) ${typeA}-${typeB}', 'points': [[a, c] for a, c in zip(_rx, _rn)]}], 'xLabel': 'r (Å)', 'yLabel': 'coordination n(r)'}))\n`;
+            } else if (rdfPlot === "both") {
+              pythonCode += `print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'g(r)', 'points': [[a, b] for a, b in zip(_rx, _ry)]}, {'name': 'n(r) (CN)', 'points': [[a, c] for a, c in zip(_rx, _rn)]}], 'xLabel': 'r (Å)', 'yLabel': 'g(r) / n(r)'}))\n`;
+            } else {
+              pythonCode += `print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'g(r) ${typeA}-${typeB}', 'points': [[a, b] for a, b in zip(_rx, _ry)]}], 'xLabel': 'r (Å)', 'yLabel': 'g(r)'}))\n`;
+            }
           }
 
         } else if (option === "density") {

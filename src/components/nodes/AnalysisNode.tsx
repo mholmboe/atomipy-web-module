@@ -37,6 +37,7 @@ type AnalysisNodeData = {
   // RDF/CN output
   rdfOutputMode?: OutputMode;
   rdfOutputBase?: string;
+  rdfPlot?: "gr" | "cn" | "both";
   // Density profile
   densityAxis?: "x" | "y" | "z";
   densityBins?: number;
@@ -172,8 +173,21 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
                 />
               </div>
             </div>
+            <div>
+              <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Plot</label>
+              <select
+                className={selectCls}
+                value={data.rdfPlot ?? "gr"}
+                onChange={(e) => set("rdfPlot", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <option value="gr">g(r)</option>
+                <option value="cn">Running coordination n(r)</option>
+                <option value="both">Both (shared axis)</option>
+              </select>
+            </div>
             <p className="text-[9px] text-muted-foreground/60 leading-snug">
-              If the input is a trajectory, g(r) is <strong>ensemble-averaged over all frames</strong>; otherwise it's the single structure. Use the trajectory atom names (e.g. <code>OW</code> for water O). Connect a Data Plotter to chart it.
+              Computes g(r) <strong>and</strong> the running coordination number n(r) = ∫g(r)·4πr²ρ dr (both exported to .dat/.json; CN within R-max printed to console). Ensemble-averaged over a connected trajectory. Use trajectory atom names (e.g. <code>OW</code>). Connect a Data Plotter to chart it.
             </p>
           </div>
         )}
