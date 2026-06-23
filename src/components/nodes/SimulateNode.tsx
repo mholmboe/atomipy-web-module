@@ -523,7 +523,8 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </label>
-            {!mdpActive && (
+            {/* Wrap is a trjconv/post-processing step (GROMACS: -pbc atom vs none),
+                independent of the .mdp — keep it visible even with a custom .mdp. */}
             <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
               Wrap trajectory (periodic box)
               <input
@@ -534,7 +535,6 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </label>
-            )}
             <label className="nodrag flex items-center justify-between text-xs text-muted-foreground" title="Generates traj_no_water.pdb for high-performance visual display while retaining full traj.pdb">
               Exclude water in viewer
               <input
