@@ -1751,6 +1751,16 @@ export default function VisualBuilder() {
 
     // Helper to resolve dynamic or default node widths aligned with their CSS classes
     const getNodeWidth = (n: any) => {
+      // The Viewer stores its (resized) width in data.width and renders at
+      // max(640, data.width) — honor that so layout reserves the real width.
+      const dataW = Number(n.data?.width);
+      if (Number.isFinite(dataW) && dataW > 0) {
+        return n.type === "viewer" ? Math.max(640, dataW) : dataW;
+      }
+      // React Flow v12 keeps the measured size in n.measured; the legacy n.width
+      // is usually undefined, which is why a resized node was ignored before.
+      const measuredW = Number(n.measured?.width);
+      if (Number.isFinite(measuredW) && measuredW > 0) return measuredW;
       if (n.width) return n.width;
       if (n.style?.width) {
         const w = parseInt(String(n.style.width));
@@ -1758,7 +1768,7 @@ export default function VisualBuilder() {
       }
 
       const defaultWidths: Record<string, number> = {
-        viewer: 480,
+        viewer: 640,
         structure: 300,
         preset: 300,
         upload: 300,
