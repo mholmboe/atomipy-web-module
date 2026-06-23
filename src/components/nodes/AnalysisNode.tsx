@@ -54,6 +54,8 @@ type AnalysisNodeData = {
   // H-bonding
   hbondDonors?: string;
   hbondAcceptors?: string;
+  hbondDonorResnames?: string;
+  hbondAcceptorResnames?: string;
   hbondRcut?: number;
   hbondAngle?: number;
   hbondExcludeSameMol?: boolean;
@@ -362,33 +364,43 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
 
         {mode === "hbond" && (
           <div className="space-y-2">
+            <div className="text-[9px] text-muted-foreground/60 -mb-1">Donor — atom types / residue names (blank = all)</div>
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">
-                  Donor types <span className="font-normal opacity-60">(blank = all O/N/F)</span>
-                </label>
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder="e.g. OW"
-                  value={data.hbondDonors ?? ""}
-                  onChange={(e) => set("hbondDonors", e.target.value)}
-                  onPointerDown={(e) => e.stopPropagation()}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">
-                  Acceptor types <span className="font-normal opacity-60">(blank = all)</span>
-                </label>
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder="e.g. OW, Ob, Oh"
-                  value={data.hbondAcceptors ?? ""}
-                  onChange={(e) => set("hbondAcceptors", e.target.value)}
-                  onPointerDown={(e) => e.stopPropagation()}
-                />
-              </div>
+              <input
+                type="text"
+                className={inputCls}
+                placeholder="types e.g. OW"
+                value={data.hbondDonors ?? ""}
+                onChange={(e) => set("hbondDonors", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+              <input
+                type="text"
+                className={inputCls}
+                placeholder="resnames e.g. SOL"
+                value={data.hbondDonorResnames ?? ""}
+                onChange={(e) => set("hbondDonorResnames", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </div>
+            <div className="text-[9px] text-muted-foreground/60 -mb-1">Acceptor — atom types / residue names (blank = all)</div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                className={inputCls}
+                placeholder="types e.g. Ob, Oh"
+                value={data.hbondAcceptors ?? ""}
+                onChange={(e) => set("hbondAcceptors", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+              <input
+                type="text"
+                className={inputCls}
+                placeholder="resnames e.g. MIN"
+                value={data.hbondAcceptorResnames ?? ""}
+                onChange={(e) => set("hbondAcceptorResnames", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -453,7 +465,7 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
               </div>
             </div>
             <p className="text-[9px] text-muted-foreground/60 leading-snug">
-              Geometric H-bonds (GROMACS <code>gmx hbond</code> convention). Reports mean total + the <strong>per-molecule distribution</strong> (single vs. multiple) to console/.dat/.json. Donors/acceptors are O/N/F by element; use trajectory atom names. Connect a Data Plotter.
+              Geometric H-bonds (GROMACS <code>gmx hbond</code> convention). Donors/acceptors are O/N/F by element, filtered by atom type <strong>and/or</strong> residue name (both blank = whole system; e.g. donor resname <code>SOL</code> → acceptor resname mineral for water↔surface). Reports mean total + the <strong>per-molecule distribution</strong> (single vs. multiple). Connect a Data Plotter.
             </p>
           </div>
         )}

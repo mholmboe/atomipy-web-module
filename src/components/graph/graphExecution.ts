@@ -2472,14 +2472,18 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           const excl = getBoolean(data, "hbondExcludeSameMol", true) ? "True" : "False";
           const plotKind = getString(data, "hbondPlot", "dist") === "series" ? "series" : "dist";
           const outputBase = pyEscape(getString(data, "hbondOutputBase", "hbonds"));
-          const donorsRaw = getString(data, "hbondDonors", "").split(",").map((s) => s.trim()).filter(Boolean);
-          const accRaw = getString(data, "hbondAcceptors", "").split(",").map((s) => s.trim()).filter(Boolean);
-          const donorsPy = donorsRaw.length ? `[${donorsRaw.map((t) => `'${pyEscape(t)}'`).join(", ")}]` : "None";
-          const accPy = accRaw.length ? `[${accRaw.map((t) => `'${pyEscape(t)}'`).join(", ")}]` : "None";
+          const listPy = (key: string) => {
+            const raw = getString(data, key, "").split(",").map((s) => s.trim()).filter(Boolean);
+            return raw.length ? `[${raw.map((t) => `'${pyEscape(t)}'`).join(", ")}]` : "None";
+          };
+          const donorsPy = listPy("hbondDonors");
+          const accPy = listPy("hbondAcceptors");
+          const donorResPy = listPy("hbondDonorResnames");
+          const accResPy = listPy("hbondAcceptorResnames");
 
           pythonCode += `\n# Hydrogen-bond analysis (D...A < ${rcut} A, H-D...A <= ${angle} deg; gmx hbond convention)\n`;
           pythonCode += framesSetup;
-          pythonCode += `_hb = ap.hbonds_frames(_frames, donor_types=${donorsPy}, acceptor_types=${accPy}, r_cut=${rcut}, angle_cut=${angle}, exclude_same_molecule=${excl})\n`;
+          pythonCode += `_hb = ap.hbonds_frames(_frames, donor_types=${donorsPy}, acceptor_types=${accPy}, donor_resnames=${donorResPy}, acceptor_resnames=${accResPy}, r_cut=${rcut}, angle_cut=${angle}, exclude_same_molecule=${excl})\n`;
           pythonCode += `if _hb is None:\n`;
           pythonCode += `    print("H-bonds: no donors/acceptors found (O/N/F by element; check atom names)")\n`;
           pythonCode += `else:\n`;
