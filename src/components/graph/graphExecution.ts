@@ -1831,19 +1831,18 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `        raise RuntimeError(f"GROMACS {_stage} failed -- see log above.")\n`;
           pythonCode += `    print(f"  {_stage.upper()} finished OK!")\n`;
           pythonCode += `    return _os.path.basename(_st[-1]['gro'])\n`;
-          pythonCode += `_g = _os.path.basename(_gro_path)\n`;
-          pythonCode += `_g = _gmx_run('em', _g, nsteps=${miniSteps})\n`;
-          if (simType === "nvt" || simType === "npt") {
-            pythonCode += `_g = _gmx_run('nvt', _g, nsteps=${mdSteps}, dt=${timestepFs / 1000.0}, temperature=${temp}, nstxtc=${pdbFreq})\n`;
-          }
-          if (simType === "npt") {
-            pythonCode += `_g = _gmx_run('npt', _g, nsteps=${mdSteps}, dt=${timestepFs / 1000.0}, temperature=${temp}, pressure=${pressure}, nstxtc=${pdbFreq})\n`;
-          }
+          // Run ONLY the selected stage (no implicit EM before NVT/NPT) — like the
+          // OpenMM node. Chain EM/NVT/NPT in any order by connecting Simulate nodes;
+          // each continues from the previous one's relaxed structure (carried below).
+          const stage = simType === "npt" ? "npt" : (simType === "nvt" ? "nvt" : "em");
+          let runKwargs = `nsteps=${isMinimize ? miniSteps : mdSteps}`;
+          if (!isMinimize) runKwargs += `, dt=${timestepFs / 1000.0}, temperature=${temp}, nstxtc=${pdbFreq}`;
+          if (isNPT) runKwargs += `, pressure=${pressure}`;
+          pythonCode += `_g = _gmx_run('${stage}', _os.path.basename(_gro_path), ${runKwargs})\n`;
           pythonCode += `print("GROMACS simulation finished OK!")\n`;
-          // Option A: convert the final stage's .xtc -> multi-frame PDB (same format
-          // the OpenMM path produces) so the existing 3Dmol/JSmol viewer animates it.
-          const finalStage = simType === "npt" ? "npt" : (simType === "nvt" ? "nvt" : "em");
-          pythonCode += `_final_stage = "${finalStage}"\n`;
+          // Convert the stage's .xtc -> multi-frame PDB (same format the OpenMM path
+          // produces) so the existing 3Dmol/JSmol viewer animates it.
+          pythonCode += `_final_stage = "${stage}"\n`;
           pythonCode += `_traj = None\n`;
           pythonCode += `try:\n`;
           pythonCode += `    _traj = _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${trajFile}", group="System", pbc="atom", gmx=_gmx_spec, on_line=print)\n`;
@@ -1865,7 +1864,26 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `        print(f"Wrote final frame ${trajFile} ({len(_fa)} atoms)")\n`;
           pythonCode += `    except Exception as _e:\n`;
           pythonCode += `        print(f"(note: could not write final pdb: {_e})")\n`;
-          stateVars.set(id, { atoms: inAtoms, box: inBox, traj: `'${trajFile}'` });
+          // Output the SIMULATED structure (relaxed coords + final box) so a chained
+          // Simulate node continues from here. Keep the full FF metadata (itp etc.)
+          // on the original atoms; only update x/y/z and the box from the result .gro.
+          pythonCode += `try:\n`;
+          pythonCode += `    _rel_atoms, _rel_box = ap.import_auto(_g)\n`;
+          pythonCode += `    _out_atoms = [dict(_a) for _a in ${inAtoms}]\n`;
+          pythonCode += `    for _i in range(min(len(_out_atoms), len(_rel_atoms))):\n`;
+          pythonCode += `        _out_atoms[_i]['x'] = _rel_atoms[_i].get('x', _out_atoms[_i].get('x'))\n`;
+          pythonCode += `        _out_atoms[_i]['y'] = _rel_atoms[_i].get('y', _out_atoms[_i].get('y'))\n`;
+          pythonCode += `        _out_atoms[_i]['z'] = _rel_atoms[_i].get('z', _out_atoms[_i].get('z'))\n`;
+          pythonCode += `    class _SimList(list): pass\n`;
+          pythonCode += `    ${blockOutAtoms} = _SimList(_out_atoms)\n`;
+          pythonCode += `    if hasattr(${inAtoms}, 'itp'): ${blockOutAtoms}.itp = ${inAtoms}.itp\n`;
+          pythonCode += `    if hasattr(${inAtoms}, '_mol_counts_override'): ${blockOutAtoms}._mol_counts_override = ${inAtoms}._mol_counts_override\n`;
+          pythonCode += `    ${blockOutBox} = _rel_box if (_rel_box is not None and hasattr(_rel_box, '__len__') and len(_rel_box)) else ${inBox}\n`;
+          pythonCode += `except Exception as _e:\n`;
+          pythonCode += `    print(f"(note: could not carry forward the simulated structure: {_e})")\n`;
+          pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
+          pythonCode += `    ${blockOutBox} = ${inBox}\n`;
+          stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox, traj: `'${trajFile}'` });
           break;
         }
 

@@ -402,7 +402,7 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
 
         <p className="text-[10px] text-muted-foreground/60 leading-tight">
           {isGromacs
-            ? <>Local GROMACS: staged EM{showMdFields ? " → NVT" : ""}{simType === "npt" ? " → NPT" : ""} via grompp + mdrun (MINFF min.ff). Friction/constraints/switch are OpenMM-only and ignored here.</>
+            ? <>Local GROMACS: runs this one {simType === "minimize" ? "EM" : simType.toUpperCase()} stage via grompp + mdrun (MINFF min.ff). Chain Simulate nodes for EM→NVT→NPT in any order. Friction/constraints/switch are OpenMM-only and ignored here.</>
             : <>Requires OpenMM. Auto GPU/CPU. Water is rigid ({forcefieldMode === "clayff" || prmFile === "clayff" ? "SPC/E" : "OPC3"}).</>}
         </p>
       </div>
