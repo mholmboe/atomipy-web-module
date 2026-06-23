@@ -1842,14 +1842,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `_final_stage = "${finalStage}"\n`;
           pythonCode += `_traj = None\n`;
           pythonCode += `try:\n`;
-          pythonCode += `    _traj = _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${trajFile}", group="System", pbc="mol", on_line=print)\n`;
+          pythonCode += `    _traj = _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${trajFile}", group="System", pbc="atom", on_line=print)\n`;
           pythonCode += `except Exception as _e:\n`;
           pythonCode += `    print(f"(trajectory conversion error: {_e})")\n`;
           pythonCode += `if _traj:\n`;
           pythonCode += `    print(f"Wrote trajectory ${trajFile}")\n`;
           if (excludeWater) {
             pythonCode += `    try:\n`;
-            pythonCode += `        _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${simBase}_no_water.pdb", group="non-Water", pbc="mol")\n`;
+            pythonCode += `        _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${simBase}_no_water.pdb", group="non-Water", pbc="atom")\n`;
             pythonCode += `    except Exception:\n`;
             pythonCode += `        pass  # 'non-Water' group may be absent (no water) — viewer falls back to the full PDB\n`;
           }
