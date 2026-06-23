@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { ChevronDown, ChevronUp, Activity } from "lucide-react";
+import { ChevronDown, ChevronUp, Activity, Maximize2 } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { NodeComponentProps } from "./types";
 
 type SimulationType = "minimize" | "nvt" | "npt";
@@ -88,6 +89,7 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
   const { updateNodeData } = useReactFlow();
   const [showMore, setShowMore] = useState(false);
   const [showMdp, setShowMdp] = useState(false);
+  const [mdpOpen, setMdpOpen] = useState(false);
 
   const forcefieldMode = data?.forcefieldMode ?? "minff";
   const prmFile = data?.prmFile ?? "minff";
@@ -112,6 +114,17 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
   const isGromacs = engine === "gromacs";
   const gmxInfo = (window as any).gromacs as { version?: string } | null | undefined;
   const gmxAvailable = !!gmxInfo;
+
+  // Shared .mdp editor handlers (used by the inline editor and the pop-out dialog).
+  const gmxStage = simType === "npt" ? "npt" : simType === "nvt" ? "nvt" : "em";
+  const stageLabel = simType === "minimize" ? "EM" : simType.toUpperCase();
+  const loadMdpTemplate = () => updateNodeData(id, { ...data, mdpText: buildMdp(gmxStage, {
+    nsteps: simType === "minimize" ? (data?.miniSteps ?? 500) : (data?.mdSteps ?? 5000),
+    dt: (data?.timestep ?? 1.0) / 1000, temperature: data?.temperature ?? 298.15,
+    pressure: data?.pressure ?? 1.0, nstxtc: data?.pdbFreq ?? data?.dcdFreq ?? 1000,
+  }) });
+  const resetMdp = () => updateNodeData(id, { ...data, mdpText: "" });
+  const setMdp = (t: string) => updateNodeData(id, { ...data, mdpText: t });
 
   const isSimulationDisabled = (window as any).disableSimulation === true;
   const simulationMode = (window as any).simulationMode || (isSimulationDisabled ? "disabled" : "full");
@@ -192,10 +205,7 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                     <button
                       type="button"
                       className="nodrag flex-1 text-[10px] font-semibold py-1 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20"
-                      onClick={() => updateNodeData(id, { ...data, mdpText: buildMdp(
-                        simType === "npt" ? "npt" : simType === "nvt" ? "nvt" : "em",
-                        { nsteps: simType === "minimize" ? miniSteps : mdSteps, dt: timestep / 1000, temperature, pressure, nstxtc: pdbFreq },
-                      ) })}
+                      onClick={loadMdpTemplate}
                       onPointerDown={(e) => e.stopPropagation()}
                     >
                       Load template
@@ -204,10 +214,19 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                       type="button"
                       className="nodrag flex-1 text-[10px] font-semibold py-1 rounded border border-border bg-background text-muted-foreground hover:bg-muted/50 disabled:opacity-40"
                       disabled={!data?.mdpText}
-                      onClick={() => updateNodeData(id, { ...data, mdpText: "" })}
+                      onClick={resetMdp}
                       onPointerDown={(e) => e.stopPropagation()}
                     >
                       Reset to auto
+                    </button>
+                    <button
+                      type="button"
+                      title="Pop out the editor"
+                      className="nodrag shrink-0 px-2 py-1 rounded border border-border bg-background text-muted-foreground hover:bg-muted/50"
+                      onClick={() => setMdpOpen(true)}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                   <textarea
@@ -215,17 +234,53 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                     placeholder="Blank = auto-generated from the settings above. Click 'Load template' to edit it, or paste a full .mdp to use verbatim."
                     value={data?.mdpText ?? ""}
                     spellCheck={false}
-                    onChange={(e) => updateNodeData(id, { ...data, mdpText: e.target.value })}
+                    onChange={(e) => setMdp(e.target.value)}
                     onPointerDown={(e) => e.stopPropagation()}
                   />
                   <p className="text-[9px] text-muted-foreground/60 leading-snug">
-                    Non-blank = used <strong>verbatim</strong> for this {simType === "minimize" ? "EM" : simType.toUpperCase()} run (the fields above are ignored). Blank = auto-generated.
+                    Non-blank = used <strong>verbatim</strong> for this {stageLabel} run (the fields above are ignored). Blank = auto-generated. Use ⤢ for a larger editor.
                   </p>
                 </div>
               )}
             </div>
           )}
         </div>
+
+        {/* Pop-out .mdp editor */}
+        <Dialog open={mdpOpen} onOpenChange={setMdpOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>GROMACS .mdp — {stageLabel} stage</DialogTitle>
+            </DialogHeader>
+            <div className="flex gap-2 mb-2">
+              <button
+                type="button"
+                className="text-xs font-semibold px-3 py-1 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20"
+                onClick={loadMdpTemplate}
+              >
+                Load template
+              </button>
+              <button
+                type="button"
+                className="text-xs font-semibold px-3 py-1 rounded border border-border bg-background text-muted-foreground hover:bg-muted/50 disabled:opacity-40"
+                disabled={!data?.mdpText}
+                onClick={resetMdp}
+              >
+                Reset to auto
+              </button>
+            </div>
+            <textarea
+              className="w-full text-xs font-mono bg-muted border border-border rounded-md px-3 py-2 h-[60vh] resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              placeholder="Blank = auto-generated. Click 'Load template' to edit it, or paste a full .mdp to use verbatim."
+              value={data?.mdpText ?? ""}
+              spellCheck={false}
+              onChange={(e) => setMdp(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground/70 leading-snug mt-1">
+              Non-blank is used <strong>verbatim</strong> for this {stageLabel} run. For solvated/merged systems leave <code>define</code> blank (the .top sets the FF/water/ion #defines); for a dry mineral add e.g. <code>define = -DGMINFF_k500</code>.
+            </p>
+          </DialogContent>
+        </Dialog>
 
         {isSimulationDisabled && (
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 text-[10px] text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
