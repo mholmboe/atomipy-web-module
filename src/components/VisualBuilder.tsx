@@ -2343,36 +2343,38 @@ export default function VisualBuilder() {
               const { nodeId, data: pdbData } = data;
               // Out-of-band trajectory: "@FILE:<name>" means the (large) trajectory was
               // NOT inlined — fetch it from the result bundle once the run completes.
+              // NOTE: must NOT `return` here — a bare return exits the whole SSE reader
+              // loop, so `complete` would never be processed (run stuck on "Running…").
               if (typeof pdbData === "string" && pdbData.startsWith("@FILE:")) {
                 pendingVizFetchRef.current[nodeId] = pdbData.slice("@FILE:".length).trim();
                 setBuildStatus("Trajectory will load from the result bundle when the run finishes…");
-                return;
-              }
-              // A large multi-frame trajectory is parsed synchronously by the
-              // 3Dmol viewer, which briefly blocks the main thread. Show a
-              // "Loading…" status and defer the node update one tick so that
-              // status actually paints before the parse blocks.
-              const frameCount = typeof pdbData === "string"
-                ? (pdbData.match(/ENDMDL/g)?.length || 0)
-                : 0;
-              setBuildStatus(
-                frameCount > 1
-                  ? `Loading trajectory into the viewer (${frameCount} frames)…`
-                  : "Loading structure into the viewer…",
-              );
-              setTimeout(() => {
-                setNodes((nds) =>
-                  nds.map((node) => {
-                    if (node.id === nodeId) {
-                      return {
-                        ...node,
-                        data: { ...node.data, pdb: pdbData },
-                      };
-                    }
-                    return node;
-                  })
+              } else {
+                // A large multi-frame trajectory is parsed synchronously by the
+                // 3Dmol viewer, which briefly blocks the main thread. Show a
+                // "Loading…" status and defer the node update one tick so that
+                // status actually paints before the parse blocks.
+                const frameCount = typeof pdbData === "string"
+                  ? (pdbData.match(/ENDMDL/g)?.length || 0)
+                  : 0;
+                setBuildStatus(
+                  frameCount > 1
+                    ? `Loading trajectory into the viewer (${frameCount} frames)…`
+                    : "Loading structure into the viewer…",
                 );
-              }, 0);
+                setTimeout(() => {
+                  setNodes((nds) =>
+                    nds.map((node) => {
+                      if (node.id === nodeId) {
+                        return {
+                          ...node,
+                          data: { ...node.data, pdb: pdbData },
+                        };
+                      }
+                      return node;
+                    })
+                  );
+                }, 0);
+              }
             } else if (data.type === "plot") {
               const { nodeId, data: plotData } = data;
               setNodes((nds) =>
