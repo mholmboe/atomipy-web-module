@@ -1,11 +1,9 @@
 import React, { useState } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { ChevronDown, ChevronUp, Activity, Maximize2, Cloud } from "lucide-react";
-import { toast } from "sonner";
+import { ChevronDown, ChevronUp, Activity, Maximize2 } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { NodeComponentProps } from "./types";
-import { downloadGromacsColabNotebook } from "../graph/gromacsColab";
 
 type SimulationType = "minimize" | "nvt" | "npt";
 type ForcefieldMode = "minff" | "clayff" | "preassigned";
@@ -89,19 +87,7 @@ type SimulateNodeData = {
 };
 
 export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeData>) {
-  const { updateNodeData, getNodes, getEdges } = useReactFlow();
-
-  const handleColabDownload = () => {
-    try {
-      const name = downloadGromacsColabNotebook(getNodes(), getEdges());
-      toast.success(`GROMACS GPU Colab notebook downloaded: ${name}`, {
-        description: "Open in Google Colab, set Runtime → GPU, then run the cells top to bottom.",
-        duration: 7000,
-      });
-    } catch (e) {
-      toast.error("Failed to generate Colab notebook: " + (e instanceof Error ? e.message : String(e)));
-    }
-  };
+  const { updateNodeData } = useReactFlow();
   const [showMore, setShowMore] = useState(false);
   const [showMdp, setShowMdp] = useState(false);
   const [mdpOpen, setMdpOpen] = useState(false);
@@ -202,19 +188,7 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                 onPointerDown={(e) => e.stopPropagation()}
               />
               <p className="text-[9px] text-muted-foreground/60 mt-1 leading-snug">
-                Point to a custom build: the <code>gmx</code> binary, its <code>GMXRC</code>, or the install dir (e.g. for a GPU-enabled GROMACS). Its libraries are added to the loader path automatically.
-              </p>
-              <button
-                type="button"
-                className="nodrag mt-2 w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold py-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 transition-colors"
-                onClick={handleColabDownload}
-                onPointerDown={(e) => e.stopPropagation()}
-                title="Download a Colab notebook that runs this whole workflow on a free Colab GPU (installs CUDA GROMACS)"
-              >
-                <Cloud className="w-3.5 h-3.5" /> Run on Google Colab (GPU)
-              </button>
-              <p className="text-[9px] text-muted-foreground/60 mt-1 leading-snug">
-                Downloads a notebook for this workflow that installs CUDA GROMACS + atomipy and runs it on a Colab T4 — no local GROMACS needed.
+                Point to a custom build: the <code>gmx</code> binary, its <code>GMXRC</code>, or the install dir (e.g. for a GPU-enabled GROMACS). Its libraries are added to the loader path automatically. On Google Colab, run the launcher's <strong>Step 1c</strong> cell and clear this field to use <code>gmx</code> on PATH.
               </p>
             </div>
           )}
@@ -626,7 +600,7 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
 
         <p className="text-[10px] text-muted-foreground/60 leading-tight">
           {isGromacs
-            ? <>GROMACS: runs this one {simType === "minimize" ? "EM" : simType.toUpperCase()} stage via grompp + mdrun (MINFF min.ff). Chain Simulate nodes for EM→NVT→NPT in any order. Use <strong>Run on Google Colab (GPU)</strong> above to run on a free GPU. Friction/constraints/switch are OpenMM-only and ignored here.</>
+            ? <>GROMACS: runs this one {simType === "minimize" ? "EM" : simType.toUpperCase()} stage via grompp + mdrun (MINFF min.ff). Chain Simulate nodes for EM→NVT→NPT in any order. On Colab, enable GROMACS via the launcher's Step 1c cell. Friction/constraints/switch are OpenMM-only and ignored here.</>
             : <>Requires OpenMM. Auto GPU/CPU. Water is rigid ({forcefieldMode === "clayff" || prmFile === "clayff" ? "SPC/E" : "OPC3"}).</>}
         </p>
       </div>

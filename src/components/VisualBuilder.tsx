@@ -76,7 +76,6 @@ import { toast } from "sonner";
 import { isValidConnection } from "./graph/connectionValidation";
 import { useGraphHistory } from "./graph/useGraphHistory";
 import { generatePythonCode, checkWorkflowPrerequisites } from "./graph/graphExecution";
-import { hasGromacsSimulateNode, downloadGromacsColabNotebook } from "./graph/gromacsColab";
 
 // Import Custom Nodes
 import { StructureNode } from "./nodes/StructureNode";
@@ -2032,22 +2031,6 @@ export default function VisualBuilder() {
     toast.success(`Workflow exported: ${link.download}`);
   }, [edges, nodes]);
 
-  // True when the workflow has a Simulate node using the local GROMACS engine — that's
-  // the only case where the GPU-Colab notebook (CUDA gmx) is relevant.
-  const hasGromacsSimulate = React.useMemo(() => hasGromacsSimulateNode(nodes), [nodes]);
-
-  const handleDownloadGromacsColab = useCallback(() => {
-    try {
-      const name = downloadGromacsColabNotebook(nodes, edges);
-      toast.success(`GROMACS GPU Colab notebook downloaded: ${name}`, {
-        description: "Open in Colab, set Runtime → GPU, then run the cells top to bottom.",
-        duration: 7000,
-      });
-    } catch (e) {
-      toast.error("Failed to generate Colab notebook: " + (e instanceof Error ? e.message : String(e)));
-    }
-  }, [nodes, edges]);
-
   const handleImportWorkflowClick = useCallback(() => {
     workflowImportInputRef.current?.click();
   }, []);
@@ -2735,17 +2718,6 @@ export default function VisualBuilder() {
                 <Button className="gap-1" variant="ghost" size="sm" onClick={handleImportWorkflowClick} title="Upload workflow JSON file">
                   <Upload className="w-4 h-4" /> Upload
                 </Button>
-                {hasGromacsSimulate && (
-                  <Button
-                    className="gap-1"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleDownloadGromacsColab}
-                    title="Download a GPU Colab notebook that runs this GROMACS workflow on a Colab T4 (CUDA gmx)"
-                  >
-                    <Atom className="w-4 h-4 text-emerald-600" /> GROMACS GPU Colab
-                  </Button>
-                )}
 
                 {(selectedSavedWorkflow || selectedCustomTemplate) && (
                   <Button className="gap-1" variant="ghost" size="sm" onClick={handleDeleteSelectedEntry} title="Delete selected workflow/template">

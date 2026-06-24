@@ -11,7 +11,7 @@ A powerful, node-based visual programming environment for designing, manipulatin
 - **Interactive MD & Energy Minimization (EM) Simulations**:
     - **Two engines — OpenMM and local GROMACS**: the Simulation node runs either **OpenMM** (CPU/GPU) or a local **GROMACS** engine (grompp + mdrun, MINFF/CLAYFF). Each node runs **one stage** (EM, NVT or NPT) and they **chain in any order** (e.g. EM → NPT → NVT), each continuing from the previous structure.
     - **Editable `.mdp` (GROMACS)**: pop out and edit the full GROMACS `.mdp` per stage, or let it auto-generate from the structured fields; point to any local GROMACS install (binary, `GMXRC`, or install dir).
-    - **GPU GROMACS on Google Colab** — two ways: (1) run the launcher's optional **Step 1c** cell to enable the GROMACS engine *inside* the Colab app (CUDA gmx via micromamba, no kernel restart), or (2) click **"Run on Google Colab (GPU)"** on the node to download a self-contained notebook that installs CUDA GROMACS + atomipy and runs *that* workflow on a Colab T4.
+    - **GPU GROMACS on Google Colab**: run the launcher's optional **Step 1c** cell to enable the GROMACS engine *inside* the Colab app (CUDA gmx via micromamba, no kernel restart), then run grompp + mdrun on a free Colab GPU.
     - **Thermodynamics plot**: stream energy / temperature / pressure / volume / density vs time from `.edr` (GROMACS) or the OpenMM reporter to a Data Plotter.
     - **Simulation Node**: Execute Molecular Dynamics (NVT/NPT) and Energy Minimization (EM) simulations directly in the node workspace.
     - **Dynamic EM Trajectories**: Unlike standard minimizers, EM now runs step-by-step to compile a smooth, real-time relaxation trajectory of your system.
@@ -193,12 +193,6 @@ and launches the **FastAPI server** (which serves both the UI and the API) with
 > PATH — then grompp + mdrun run on the GPU. After it finishes, **clear the
 > "GROMACS path" field** in the GROMACS Simulate node so it uses `gmx` on PATH.
 > The **OpenMM** engine and everything else work without it.
-
-> **Prefer a one-off, headless run?** Build your workflow in the app and click
-> **"Run on Google Colab (GPU)"** on the GROMACS Simulate node (or **"GROMACS GPU
-> Colab"** on the toolbar). It downloads a self-contained notebook *for that
-> workflow* that installs CUDA GROMACS + atomipy via `condacolab`, runs it on a
-> Colab T4, and zips the results — no app server, no fixed link.
 
 ---
 

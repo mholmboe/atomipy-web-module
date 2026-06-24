@@ -17,13 +17,10 @@ feedback, and two ways to run **GROMACS on a Colab GPU**.
 * **Thermodynamics plot**: energy / temperature / pressure / volume / density vs
   time from `.edr` (GROMACS) or the OpenMM reporter.
 
-## 🟢 GROMACS on a Google Colab GPU (two ways)
-* **In the Colab app** — the launcher's optional **Step 1c** cell installs a CUDA
-  GROMACS via micromamba (no kernel restart) and puts `gmx` on PATH, so the GROMACS
-  Simulate node runs on the GPU. (Clear the node's GROMACS-path field to use `gmx`.)
-* **Headless, per workflow** — the **"Run on Google Colab (GPU)"** button on the
-  node (and **"GROMACS GPU Colab"** on the toolbar) downloads a self-contained
-  notebook that installs CUDA GROMACS + atomipy and runs *that* workflow on a T4.
+## 🟢 GROMACS on a Google Colab GPU
+* The launcher notebook's optional **Step 1c** cell installs a CUDA GROMACS via
+  micromamba (no kernel restart) and puts `gmx` on PATH, so the GROMACS Simulate
+  node runs on the GPU. (Clear the node's GROMACS-path field to use `gmx` on PATH.)
 
 ## 📈 Trajectory analysis nodes
 * **RDF g(r) + running coordination n(r)**, **density profiles** (x/y/z;

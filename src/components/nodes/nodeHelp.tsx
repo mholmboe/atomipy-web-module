@@ -684,7 +684,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Keep the timestep ≤2 fs with HBonds constraints (≤1 fs with None) to stay stable.",
       "Use POSRES during NVT equilibration to let water relax around a fixed solute.",
       "OpenMM: download the generated script to run NVT/NPT on a Colab GPU when blocked here.",
-      "GROMACS: click \"Run on Google Colab (GPU)\" on the node for a one-off run on a free Colab GPU (it downloads a notebook that installs CUDA GROMACS), or run the launcher's Step 1c cell to enable the GROMACS engine inside the Colab app.",
+      "GROMACS: run the launcher notebook's Step 1c cell to enable the GROMACS engine on a free Colab GPU (then clear the node's GROMACS-path field).",
     ],
   },
 
