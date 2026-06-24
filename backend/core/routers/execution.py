@@ -989,6 +989,32 @@ async def inorganic_library():
     except Exception:
         pass
 
+    # 1b) Water presets (force-field-ready solvent boxes). Loaded from the package
+    #     structures/water dir; atom names OW/HW1/HW2 (+ MW for TIP4P, LP1/LP2 for
+    #     TIP5P) and resname SOL, so the topology writer uses the water model .itp.
+    try:
+        water_dir = os.path.join(os.path.dirname(ap.__file__), "structures", "water")
+        # (file, display name) — variants evident: count · model · arrangement.
+        _water = [
+            ("1xspce.pdb",            "1 × SPC/E — single molecule"),
+            ("96spc_hex_ice_h.pdb",   "96 × SPC — hexagonal ice"),
+            ("96tip4p_hex_ice_h.pdb", "96 × TIP4P — hexagonal ice"),
+            ("spc216.gro",            "216 × SPC — equilibrated"),
+            ("864_spce.pdb",          "864 × SPC/E — equilibrated"),
+            ("864_spce_grid.pdb",     "864 × SPC/E — grid"),
+            ("864_tip3p.pdb",         "864 × TIP3P — equilibrated"),
+            ("864_tip4p.pdb",         "864 × TIP4P — equilibrated"),
+            ("864_tip5p.pdb",         "864 × TIP5P — equilibrated"),
+        ]
+        water_mats = [
+            {"name": nm, "file": fn, "source": "water"}
+            for fn, nm in _water if os.path.isfile(os.path.join(water_dir, fn))
+        ]
+        if water_mats:
+            categories.append({"name": "Water", "source": "water", "materials": water_mats})
+    except Exception:
+        pass
+
     # 2) Bundled crystal library (Avogadro), one entry per category.
     try:
         for c in ap.crystal_categories():

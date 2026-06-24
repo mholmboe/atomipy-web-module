@@ -501,6 +501,10 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           const librarySource = getString(data, "librarySource", "crystal");
           if (librarySource === "preset") {
             pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(f'UC_conf/${file}')\n`;
+          } else if (librarySource === "water") {
+            // Bundled water boxes (structures/water), loaded by package path (cwd-independent).
+            pythonCode += `import os as _wos\n`;
+            pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.import_auto(_wos.path.join(_wos.path.dirname(ap.__file__), 'structures', 'water', '${file}'))\n`;
           } else {
             pythonCode += `${blockOutAtoms}, ${blockOutBox} = ap.load_crystal('${file}')\n`;
           }
