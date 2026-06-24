@@ -2466,6 +2466,44 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
             }
           }
 
+        } else if (option === "vacf") {
+          const dt = getNumber(data, "vacfDt", 0.01);
+          const stride = Math.max(1, Math.round(getNumber(data, "vacfOriginStride", 1)));
+          const plotKind = getString(data, "vacfPlot", "spectrum") === "vacf" ? "vacf" : "spectrum";
+          const outputBase = pyEscape(getString(data, "vacfOutputBase", "vacf_results"));
+          const typesRaw = getString(data, "vacfTypes", "").split(",").map((s) => s.trim()).filter(Boolean);
+          const typesPy = typesRaw.length ? `[${typesRaw.map((t) => `'${pyEscape(t)}'`).join(", ")}]` : "None";
+
+          pythonCode += `\n# VACF / power spectrum / Green-Kubo D (velocities = finite difference of positions; NO trajectory velocities)\n`;
+          pythonCode += framesSetup;
+          pythonCode += `_vacf = ap.vacf(_frames, atom_types=${typesPy}, dt=${dt}, origin_stride=${stride})\n`;
+          pythonCode += `if _vacf is None:\n`;
+          pythonCode += `    print("VACF: needs a trajectory with >= 4 frames and matching atoms")\n`;
+          pythonCode += `else:\n`;
+          pythonCode += `    print("VACF: velocities estimated by FINITE DIFFERENCE of positions (no trajectory velocities); spectrum Nyquist limit = %.0f cm^-1 (save every few fs for vibrational modes)" % _vacf['nyquist_cm1'])\n`;
+          pythonCode += `    print(f"Green-Kubo D = {_vacf['D_A2_ps']:.4g} A^2/ps = {_vacf['D_cm2_s']:.4g} cm^2/s = {_vacf['D_1e9_m2_s']:.4g}e-9 m^2/s")\n`;
+          pythonCode += `    with open('${outputBase}.json', 'w') as _vf:\n`;
+          pythonCode += `        json.dump({'lags_ps': [float(x) for x in _vacf['lags']], 'vacf': [float(x) for x in _vacf['vacf']], 'vacf_norm': [float(x) for x in _vacf['vacf_norm']], 'wavenumber_cm1': [float(x) for x in _vacf['wavenumber_cm1']], 'freq_thz': [float(x) for x in _vacf['freq_thz']], 'spectrum': [float(x) for x in _vacf['spectrum']], 'D_A2_ps': _vacf['D_A2_ps'], 'D_cm2_s': _vacf['D_cm2_s'], 'D_1e9_m2_s': _vacf['D_1e9_m2_s'], 'nyquist_cm1': _vacf['nyquist_cm1']}, _vf)\n`;
+          pythonCode += `    with open('${outputBase}_vacf.dat', 'w') as _vf:\n`;
+          pythonCode += `        _vf.write("# atomipy VACF (velocities = finite difference of positions; NO trajectory velocities)\\n")\n`;
+          pythonCode += `        _vf.write("# Green-Kubo D = %.6g A^2/ps = %.6g cm^2/s = %.6g e-9 m^2/s\\n" % (_vacf['D_A2_ps'], _vacf['D_cm2_s'], _vacf['D_1e9_m2_s']))\n`;
+          pythonCode += `        _vf.write("#%13s%14s%14s\\n" % ('time_ps', 'VACF', 'VACF_norm'))\n`;
+          pythonCode += `        for _t, _c, _cn in zip(_vacf['lags'], _vacf['vacf'], _vacf['vacf_norm']):\n`;
+          pythonCode += `            _vf.write("%14.6g%14.6g%14.6g\\n" % (_t, _c, _cn))\n`;
+          pythonCode += `    with open('${outputBase}_spectrum.dat', 'w') as _vf:\n`;
+          pythonCode += `        _vf.write("# atomipy VACF power spectrum (vibrational DOS); Nyquist = %.1f cm^-1\\n" % _vacf['nyquist_cm1'])\n`;
+          pythonCode += `        _vf.write("# Velocities = finite difference of positions (no trajectory velocities); high freqs damped ~ sinc(w dt).\\n")\n`;
+          pythonCode += `        _vf.write("#%13s%14s%14s\\n" % ('wavenum_cm1', 'freq_THz', 'intensity'))\n`;
+          pythonCode += `        for _w, _f, _s in zip(_vacf['wavenumber_cm1'], _vacf['freq_thz'], _vacf['spectrum']):\n`;
+          pythonCode += `            _vf.write("%14.6g%14.6g%14.6g\\n" % (_w, _f, _s))\n`;
+          if (mode === "full") {
+            if (plotKind === "vacf") {
+              pythonCode += `    print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'VACF (norm)', 'points': [[float(t), float(c)] for t, c in zip(_vacf['lags'], _vacf['vacf_norm'])]}], 'xLabel': 'time (ps)', 'yLabel': 'VACF (normalized)'}))\n`;
+            } else {
+              pythonCode += `    print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'power spectrum', 'points': [[float(w), float(s)] for w, s in zip(_vacf['wavenumber_cm1'], _vacf['spectrum'])]}], 'xLabel': 'wavenumber (cm⁻¹)', 'yLabel': 'intensity (a.u.)'}))\n`;
+            }
+          }
+
         } else if (option === "hbond") {
           const rcut = getNumber(data, "hbondRcut", 3.5);
           const angle = getNumber(data, "hbondAngle", 30.0);

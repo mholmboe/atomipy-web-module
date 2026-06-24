@@ -719,35 +719,42 @@ export const NODE_HELP: Record<string, NodeHelp> = {
   analysis: {
     title: "Analysis Ops",
     summary:
-      "Structural analysis: radial distribution function (RDF), coordination number, closest-atom / minimum distances, site occupancy, bond-valence sum (BVS), and composition stats. Emits optional JSON/CSV and a plot-data stream.",
+      "Structural and trajectory analysis. Static/ensemble: RDF g(r) + running coordination n(r), density profiles, coordination number, closest-atom / min distances, site occupancy, BVS, stats. Trajectory: MSD/diffusion, VACF/power spectrum, hydrogen bonds. Every mode runs on a single structure OR ensemble-averages over a connected trajectory, and exports ASCII .dat + JSON and a plot-data stream.",
     features: [
-      "Modes: RDF g(r), Coordination Number, Find Closest Atom, Min Distances, Site Occupancy, Bond Valence Sum, Structure Stats.",
-      "RDF takes Type A / Type B, R-max, and bin width dr; CN takes Type A, neighbour Type B, and a cutoff.",
-      "Per-mode output (None / JSON / CSV / both) with a configurable basename; a 'data' handle streams to Plot.",
+      "Static/ensemble: RDF g(r) (+ running coordination n(r)), Density Profile (x/y/z), Coordination Number, Find Closest Atom, Min Distances, Site Occupancy, BVS, Structure Stats.",
+      "Trajectory: MSD / Diffusion (3D/2D/1D, PBC-unwrapped, multi-origin restarts), VACF / Power spectrum (Green-Kubo D + vibrational DOS), Hydrogen Bonds (gmx-hbond geometry, per-molecule distribution).",
+      "RDF/density/MSD/VACF/H-bond auto-average over all frames when a trajectory is connected; otherwise they use the single structure.",
+      "Exports aligned ASCII .dat (numpy.loadtxt-ready) and JSON; a 'data' handle streams the chosen curve to a Data Plotter.",
     ],
     theory: [
-      "RDF g(r) is a histogram of A–B pair distances normalized by the count expected for a uniform distribution at the same number density ρ; g(r) → 1 at large r and peaks mark coordination shells.",
-      "Coordination Number here is a direct neighbour count within the cutoff (no g(r) integration).",
+      "RDF g(r): histogram of A–B pair distances normalized to a uniform gas at density ρ; → 1 at large r, peaks mark shells. Running n(r) = ∫ g·4πr²ρ dr is the average #B within r of an A (read it at the first g(r) minimum for the shell coordination).",
+      "Density profile bins atoms along an axis (number/mass/charge), averaged over frames — e.g. interfacial water layering.",
+      "MSD: Einstein relation, D = slope/(2·dim); coordinates are nojump-unwrapped and averaged over multiple time origins. Also gives the van Hove self-part (Gaussian for normal diffusion).",
+      "VACF: D = ⅓∫⟨v(0)·v(t)⟩dt (Green-Kubo); its Fourier transform is the vibrational power spectrum (DOS). Velocities are estimated by FINITE DIFFERENCE of positions (no trajectory velocities) — see quirks.",
+      "H-bonds: geometric D-H···A with D···A < r_cut and H–D···A angle ≤ angle_cut (GROMACS gmx hbond convention).",
     ],
     equations: [
       { label: "RDF", expr: "g(r) = hist(r) / (N_A·ρ·V_shell(r))" },
-      { label: "shell volume", expr: "V_shell(r) = (4/3)·π·((r+dr)³ − r³)" },
-      { label: "number density", expr: "ρ = N_B / V" },
-      { label: "coordination", expr: "CN(i) = #{ j ∈ B : r_ij < cutoff }" },
+      { label: "coordination n(r)", expr: "n(r) = Σ_{r'≤r} hist(r') / N_A = ∫ g·4πr²ρ dr" },
+      { label: "diffusion (MSD)", expr: "D = ⟨|r(t)−r(0)|²⟩ / (2·dim·t)" },
+      { label: "diffusion (Green-Kubo)", expr: "D = (1/3) ∫₀^∞ ⟨v(0)·v(t)⟩ dt" },
+      { label: "spectrum Nyquist", expr: "f_max = 1/(2·Δt_frame)" },
     ],
     quirks: [
-      "Type A / Type B match the atom 'type' field (the force-field name), not the element.",
-      "RDF/CN need a box for minimum-image distances; set R-max below half the shortest box edge.",
-      "BVS and Stats modes mirror the standalone BVS and Stats nodes.",
+      "Selections match the atom 'type' field (force-field/trajectory name, e.g. OW — not the element); H-bonds also accept residue-name filters (SOL water, MIN mineral).",
+      "Trajectory modes use the TRAJECTORY atom names (water = OW/HW1/HW2), which differ from the minff types (Ow/Hw) in a static structure.",
+      "VACF uses no real velocities — finite-difference of positions caps the spectrum at the Nyquist frequency 1/(2·Δt) and damps high frequencies (~sinc). Save every few fs for vibrational spectra; the Green-Kubo D (low-freq) is robust.",
+      "MSD/VACF need the correct Time/frame (ps) = MD timestep × output frequency; getting it wrong rescales D.",
+      "RDF/CN/density need a box for minimum-image distances; set R-max below half the shortest box edge.",
     ],
     before: [
-      "Import Structure (and Forcefield, so atom types exist for type-based selections).",
+      "Import Structure (+ Forcefield for type-based selections); for trajectory modes, connect a Simulate or Trajectory node so frames are available.",
     ],
     after: [
-      "Plot — chart g(r) or CN from the data handle. Usually a leaf branch; the structure passes through.",
+      "Data Plotter — chart the selected curve (g(r)/n(r), density, MSD, VACF/spectrum, H-bond distribution). Usually a leaf branch; the structure passes through. All curves are also in the Download Results bundle (.dat/.json).",
     ],
     tips: [
-      "Read CN at the first g(r) minimum to choose a physically meaningful cutoff.",
+      "Read coordination at the first g(r) minimum. Cross-check the Green-Kubo D against the Einstein/MSD D. For water↔surface H-bonds set donor resname SOL → acceptor resname MIN.",
     ],
   },
 
@@ -826,18 +833,18 @@ export const NODE_HELP: Record<string, NodeHelp> = {
   plot: {
     title: "Data Plotter",
     summary:
-      "Charts CSV/series data produced upstream (XRD, RDF, energy/temperature, etc.) as an interactive line plot. Reads a named file or a connected data stream, with editable axis labels.",
+      "Charts series data produced upstream (RDF g(r)/n(r), density, MSD, VACF/power spectrum, H-bond distribution, thermodynamics, XRD…) as an interactive line plot. Supports multiple series (legend) and editable axis labels.",
     features: [
-      "Plots two-column (x, y) data such as xrd.dat or RDF output.",
-      "Reads from a named file (.dat, .csv) or an upstream node's plot-data handle.",
-      "Editable X/Y axis labels; interactive hover tooltips.",
+      "Plots single- or multi-series (x, y) data — e.g. density per atom type, or VACF distribution + Gaussian overlay.",
+      "Fed by an upstream node's plot-data handle (the analysis/simulate node's selected curve).",
+      "Editable X/Y axis labels; interactive hover tooltips; legend for multi-series.",
     ],
     quirks: [
       "Shows a placeholder until an upstream node runs and supplies data.",
-      "Expects numeric two-column series; non-numeric rows are skipped.",
+      "One node → one plot; multi-quantity sources (thermo, RDF g(r) vs n(r)) have a selector for which curve to send.",
     ],
     before: [
-      "A producing node: XRD, Analysis (RDF/CN), BVS, Stats, or a simulation that writes a series.",
+      "A producing node: Analysis (RDF/n(r), density, MSD, VACF/spectrum, H-bonds), Simulate (thermodynamics), XRD, BVS, or Stats.",
     ],
     after: [
       "Terminal node — for inspecting results, not modifying the structure.",

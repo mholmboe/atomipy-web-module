@@ -4,7 +4,7 @@ import { BarChart3, ChevronDown, ChevronUp, X } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
-type AnalysisMode = "rdf" | "density" | "msd" | "hbond" | "cn" | "closest" | "mindist" | "occupancy" | "bvs" | "stats";
+type AnalysisMode = "rdf" | "density" | "msd" | "vacf" | "hbond" | "cn" | "closest" | "mindist" | "occupancy" | "bvs" | "stats";
 
 type OutputMode = "none" | "json" | "csv" | "both";
 type ClosestReferenceMode = "index" | "coords";
@@ -51,6 +51,12 @@ type AnalysisNodeData = {
   msdOriginStride?: number;
   msdPlot?: "msd" | "dist";
   msdOutputBase?: string;
+  // VACF / power spectrum / Green-Kubo
+  vacfTypes?: string;
+  vacfDt?: number;
+  vacfOriginStride?: number;
+  vacfPlot?: "spectrum" | "vacf";
+  vacfOutputBase?: string;
   // H-bonding
   hbondDonors?: string;
   hbondAcceptors?: string;
@@ -100,6 +106,7 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
             <option value="rdf">Radial Distribution (RDF)</option>
             <option value="density">Density Profile (x/y/z)</option>
             <option value="msd">MSD / Diffusion</option>
+            <option value="vacf">VACF / Power spectrum</option>
             <option value="hbond">Hydrogen Bonds</option>
             <option value="cn">Coordination Number</option>
             <option value="closest">Find Closest Atom</option>
@@ -358,6 +365,83 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
             </div>
             <p className="text-[9px] text-muted-foreground/60 leading-snug">
               Trajectory is <strong>unwrapped</strong> (PBC jumps removed) and averaged over <strong>multiple time origins</strong>. D = slope / (2·dim); printed to console (Å²/ps, cm²/s, 10⁻⁹ m²/s). Use trajectory atom names (e.g. <code>OW</code>). Connect a Data Plotter.
+            </p>
+          </div>
+        )}
+
+        {mode === "vacf" && (
+          <div className="space-y-2">
+            <div>
+              <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">
+                Atom types <span className="font-normal opacity-60">(comma-sep; e.g. OW)</span>
+              </label>
+              <input
+                type="text"
+                className={inputCls}
+                placeholder="blank = all atoms"
+                value={data.vacfTypes ?? ""}
+                onChange={(e) => set("vacfTypes", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5" title="Time between trajectory frames = MD timestep × output frequency. Sets the Nyquist frequency 1/(2·Δt).">
+                  Time/frame (ps)
+                </label>
+                <input
+                  type="number"
+                  step="0.001"
+                  className={inputCls}
+                  value={data.vacfDt ?? 0.01}
+                  onChange={(e) => set("vacfDt", parseFloat(e.target.value) || 0.01)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Plot</label>
+                <select
+                  className={selectCls}
+                  value={data.vacfPlot ?? "spectrum"}
+                  onChange={(e) => set("vacfPlot", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <option value="spectrum">Power spectrum (cm⁻¹)</option>
+                  <option value="vacf">VACF vs time</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5" title="Stride between time origins (restarts) for averaging the VACF.">
+                  Restart stride
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  className={inputCls}
+                  value={data.vacfOriginStride ?? 1}
+                  onChange={(e) => set("vacfOriginStride", Math.max(1, parseInt(e.target.value) || 1))}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Output base</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={data.vacfOutputBase ?? "vacf_results"}
+                  onChange={(e) => set("vacfOutputBase", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+            <div className="text-[9px] text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 leading-snug">
+              ⚠️ <strong>No trajectory velocities are used.</strong> Velocities are estimated by central finite difference of the (unwrapped) positions, v(t) ≈ [r(t+Δt)−r(t−Δt)]/(2Δt). Consequences: the spectrum only resolves up to the <strong>Nyquist limit 1/(2·Δt)</strong> (save every few fs for vibrational modes), and the difference damps high frequencies (∝ sinc(ωΔt)). The Green-Kubo <strong>D</strong> (low-frequency) is robust; sharp spectra need true <code>.trr</code> velocities.
+            </div>
+            <p className="text-[9px] text-muted-foreground/60 leading-snug">
+              Outputs the VACF, the power spectrum (vibrational DOS, cm⁻¹/THz) and the Green-Kubo diffusion D = ⅓∫⟨v(0)·v(t)⟩dt (cross-check of the MSD D). Console prints D + the Nyquist ceiling. Connect a Data Plotter.
             </p>
           </div>
         )}
