@@ -2292,9 +2292,13 @@ export default function VisualBuilder() {
                 if (trackedOrder.includes(nodeId)) {
                   setNodeRunStatus((prev) => {
                     const next = { ...prev };
-                    const previousRunning = currentRunningNodeRef.current;
-                    if (previousRunning && previousRunning !== nodeId && next[previousRunning] === "running") {
-                      next[previousRunning] = "done";
+                    // Execution is sequential: when a node starts, any node still marked
+                    // "running" has finished → mark it done. Derive this from the accumulated
+                    // state (NOT currentRunningNodeRef, which is mutated synchronously and is
+                    // already the last node when SSE events arrive batched — that previously
+                    // left every prior node "running", so they ALL turned red on failure).
+                    for (const nid of Object.keys(next)) {
+                      if (nid !== nodeId && next[nid] === "running") next[nid] = "done";
                     }
                     next[nodeId] = "running";
                     return next;
