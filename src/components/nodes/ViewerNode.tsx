@@ -47,11 +47,14 @@ declare global {
       script: (applet: any, script: string) => void;
       getAppletHtml: (applet: any) => string;
     };
+    // NGL viewer (UMD global). Typed loosely — NGL's API surface is large and we
+    // only use a small, guarded subset (Stage, loadFile, representations, trajectory).
+    NGL?: any;
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-type ViewerRenderer = "3dmol" | "jsmol";
+type ViewerRenderer = "3dmol" | "jsmol" | "ngl";
 type ViewerProjection = "perspective" | "orthographic";
 
 type ViewerAtom = {
@@ -161,6 +164,16 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const jsmolAppletRef = useRef<any>(null);
   const jsmolReadyRef = useRef(false);
   const jsmolIdRef = useRef(`jsmol_${id.replace(/[^a-zA-Z0-9]/g, "_")}`);
+
+  // --- NGL refs (GPU impostor renderer; fast for large MD trajectories) ---
+  const nglContainerRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const nglStageRef = useRef<any>(null);   // NGL.Stage
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const nglCompRef = useRef<any>(null);    // loaded structure component
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const nglTrajRef = useRef<any>(null);    // trajectory object (multi-model PDB)
+
   // Track which renderer was active last render to detect switches
   const prevRendererRef = useRef<ViewerRenderer | null>(null);
   // Track which PDB was last loaded and by which renderer, to avoid
@@ -242,6 +255,8 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       if (jsmolAppletRef.current && window.Jmol) {
         window.Jmol.script(jsmolAppletRef.current, `frame ${n + 1}`);
       }
+    } else if (renderer === "ngl") {
+      try { nglTrajRef.current?.setFrame?.(n); } catch { /* trajectory not ready */ }
     }
   }, [renderer]);
 
@@ -287,6 +302,17 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       jsmolReadyRef.current = false;
       if (jsmolContainerRef.current) {
         jsmolContainerRef.current.innerHTML = "";
+      }
+    }
+
+    // Switching AWAY from NGL → dispose the WebGL stage to free the GL context
+    if (prev === "ngl" && nglStageRef.current) {
+      try { nglStageRef.current.dispose(); } catch { /* ignore */ }
+      nglStageRef.current = null;
+      nglCompRef.current = null;
+      nglTrajRef.current = null;
+      if (nglContainerRef.current) {
+        nglContainerRef.current.innerHTML = "";
       }
     }
   }, [renderer]);
@@ -473,9 +499,83 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     // Note: Do not include currentFrame here, or else it will re-render the whole model 10 times a second!
   ]);
 
+  // ─── NGL rendering effect (load structure + trajectory) ───────────────────
+  // NGL draws atoms/bonds as GPU impostors (billboards), not triangulated meshes,
+  // so it stays smooth for large MD trajectories where 3Dmol bogs down. A
+  // multi-MODEL PDB is loaded with asTrajectory so frames play via the trajectory.
+  useEffect(() => {
+    if (renderer !== "ngl") return;
+    if (!nglContainerRef.current || !window.NGL) return;
+
+    if (!nglStageRef.current) {
+      nglStageRef.current = new window.NGL.Stage(nglContainerRef.current, {
+        backgroundColor: BACKGROUNDS[background],
+      });
+    }
+    const stage = nglStageRef.current;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resetComponents = () => {
+      try { stage.removeAllComponents(); } catch { /* ignore */ }
+      nglCompRef.current = null;
+      nglTrajRef.current = null;
+    };
+
+    if (!pdb) {
+      resetComponents();
+      return;
+    }
+
+    let cancelled = false;
+    resetComponents();
+
+    const reprType = viewStyle === "sphere" ? "spacefill"
+      : viewStyle === "stick" ? "licorice"
+      : viewStyle === "line" ? "line"
+      : "ball+stick";
+    const sele = showHydrogens ? undefined : "not _H";
+
+    const blob = new Blob([pdb], { type: "text/plain" });
+    stage.loadFile(blob, { ext: "pdb", asTrajectory: isMulti })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then((comp: any) => {
+        if (cancelled || !comp) { return; }
+        nglCompRef.current = comp;
+        comp.addRepresentation(reprType, sele ? { sele } : {});
+        if (showUnitCell) {
+          try { comp.addRepresentation("unitcell", {}); } catch { /* no crystal data */ }
+        }
+        if (isMulti) {
+          try {
+            const trajComp = comp.addTrajectory(undefined, {});
+            nglTrajRef.current = trajComp?.trajectory ?? null;
+            if (nglTrajRef.current?.setFrame) nglTrajRef.current.setFrame(currentFrameRef.current);
+          } catch { /* trajectory unavailable */ }
+        }
+        comp.autoView();
+        try { stage.handleResize(); } catch { /* ignore */ }
+      })
+      .catch(() => { /* parse failed — leave the stage empty */ });
+
+    return () => { cancelled = true; };
+  }, [renderer, pdb, viewStyle, showHydrogens, showUnitCell, isMulti]);
+
+  // ─── NGL light params (no reload): background, projection, spin ────────────
+  useEffect(() => {
+    if (renderer !== "ngl" || !nglStageRef.current) return;
+    const stage = nglStageRef.current;
+    try {
+      stage.setParameters({
+        backgroundColor: BACKGROUNDS[background],
+        cameraType: projection === "orthographic" ? "orthographic" : "perspective",
+      });
+    } catch { /* ignore */ }
+    try { stage.setSpin(spin ? [0, 1, 0] : null, 0.01); } catch { /* ignore */ }
+  }, [renderer, background, projection, spin]);
+
   // ─── Custom Trajectory Animation Loop ─────────────────────────────────────
   useEffect(() => {
-    if (!isMulti || (renderer !== "3dmol" && renderer !== "jsmol")) return;
+    if (!isMulti || (renderer !== "3dmol" && renderer !== "jsmol" && renderer !== "ngl")) return;
 
     let interval: ReturnType<typeof setInterval>;
     if (isPlaying) {
@@ -669,6 +769,8 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     if (renderer === "3dmol" && viewerInstance.current) {
       viewerInstance.current.resize();
       viewerInstance.current.render();
+    } else if (renderer === "ngl" && nglStageRef.current) {
+      try { nglStageRef.current.handleResize(); } catch { /* ignore */ }
     }
   }, [selected, renderer]);
 
@@ -691,6 +793,8 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       v.render();
     } else if (renderer === "jsmol" && jsmolAppletRef.current && window.Jmol) {
       window.Jmol.script(jsmolAppletRef.current, "reset; zoom 0");
+    } else if (renderer === "ngl" && nglStageRef.current) {
+      try { (nglCompRef.current?.autoView ? nglCompRef.current : nglStageRef.current).autoView(); } catch { /* ignore */ }
     }
   };
 
@@ -709,6 +813,24 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       const w = Math.max(1, Math.round((el?.clientWidth || 640) * scale));
       const h = Math.max(1, Math.round((el?.clientHeight || 480) * scale));
       window.Jmol.script(applet, `write IMAGE ${w} ${h} PNG "${fname}"`);
+      return;
+    }
+
+    if (renderer === "ngl") {
+      const stage = nglStageRef.current;
+      if (!stage?.makeImage) return;
+      stage.makeImage({ factor: scale, antialias: true, trim: false, transparent: false })
+        .then((blob: Blob) => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fname;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        })
+        .catch((err: unknown) => console.error("NGL save image failed", err));
       return;
     }
 
@@ -783,6 +905,13 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                 className={`px-2 py-0.5 transition-all ${renderer === "jsmol" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
               >
                 JSmol
+              </button>
+              <button
+                onClick={() => setViewerOption({ renderer: "ngl" })}
+                title="NGL — GPU-accelerated, fastest for large trajectories"
+                className={`px-2 py-0.5 transition-all ${renderer === "ngl" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
+              >
+                NGL
               </button>
             </div>
             <div className="flex gap-1">
@@ -1031,9 +1160,17 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
             className={`w-full h-full cursor-move ${renderer !== "3dmol" ? "hidden" : ""}`}
           />
           {/* JSmol container — relative + overflow:hidden keeps JSmol canvas inside bounds */}
-          <div 
-            ref={jsmolContainerRef} 
+          <div
+            ref={jsmolContainerRef}
             className={`w-full h-full cursor-move ${renderer !== "jsmol" ? "hidden" : ""}`}
+            style={{ position: "relative", overflow: "hidden" }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          />
+          {/* NGL container (WebGL canvas) */}
+          <div
+            ref={nglContainerRef}
+            className={`w-full h-full cursor-move ${renderer !== "ngl" ? "hidden" : ""}`}
             style={{ position: "relative", overflow: "hidden" }}
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
@@ -1046,7 +1183,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
           )}
 
           {/* Trajectory Controls Overlay */}
-          {isMulti && (renderer === "3dmol" || renderer === "jsmol") && (
+          {isMulti && (renderer === "3dmol" || renderer === "jsmol" || renderer === "ngl") && (
             <div 
               className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-card/90 backdrop-blur-sm border border-border rounded-lg shadow-lg flex items-center gap-2 p-1.5 nodrag pointer-events-auto select-none"
               onPointerDown={(e) => e.stopPropagation()}

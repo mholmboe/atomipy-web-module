@@ -882,9 +882,9 @@ export const NODE_HELP: Record<string, NodeHelp> = {
   viewer: {
     title: "Structure Viewer",
     summary:
-      "Interactive in-browser 3D view of the current structure or trajectory. Switch between the 3Dmol and JSmol renderers, restyle atoms/bonds, animate multi-frame trajectories, and export a PNG. Usually a terminal node.",
+      "Interactive in-browser 3D view of the current structure or trajectory. Switch between the 3Dmol, JSmol, and NGL renderers, restyle atoms/bonds, animate multi-frame trajectories, and export a PNG. Usually a terminal node.",
     features: [
-      "Two renderers: 3Dmol and JSmol (with JSmol scripting/measurements).",
+      "Three renderers: 3Dmol (fast styling, PNG), JSmol (scripting/measurements), and NGL (GPU impostor rendering — fastest for large MD trajectories).",
       "Representations: ball & stick, sticks, spheres, lines; toggle unit cell, hydrogens, outline, spin, and element/charge labels.",
       "Perspective or orthographic projection; resizable node.",
       "Multi-frame trajectory playback with play/pause and a frame slider; PNG export at 1×/2×/4×.",
@@ -912,7 +912,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Terminal node — view/export only; the structure can still pass through to other branches.",
     ],
     tips: [
-      "Use JSmol for measurements and periodic-bond cleanup; 3Dmol for fast styling and PNG export.",
+      "Use NGL for large/long trajectories (smoothest playback), JSmol for measurements and periodic-bond cleanup, 3Dmol for fast styling and PNG export.",
     ],
   },
 
