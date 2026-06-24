@@ -1776,7 +1776,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           density:     { gmx: "Density",      omm: "Density",           label: "Density" },
         };
         const thermo = THERMO_MAP[thermoPlot];
-        const doThermo = !!thermo && !!thermoPlotTarget && mode === "full";
+        const doThermo = !!thermo && !!thermoPlotTarget && mode !== "strict";
 
         // ===== Local GROMACS engine (grompp + mdrun) =====
         // Reuses the SAME topology writers as the OpenMM path (write_merged_top /
@@ -2380,7 +2380,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    for _a, _b, _c in zip(_rx, _ry, _rn):\n`;
           pythonCode += `        _rf.write("%14.6g%14.6g%14.6g\\n" % (_a, _b, _c))\n`;
           pythonCode += `print(f"RDF: {len(_rx)} bins over {len(_frames)} frame(s) [${typeA}-${typeB}]; CN within ${rMax} A = {(_rn[-1] if _rn else 0):.3f} -> ${outputBase}.dat/.json")\n`;
-          if (mode === "full") {
+          if (mode !== "strict") {
             if (rdfPlot === "cn") {
               pythonCode += `print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'n(r) ${typeA}-${typeB}', 'points': [[a, c] for a, c in zip(_rx, _rn)]}], 'xLabel': 'r (Å)', 'yLabel': 'coordination n(r)'}))\n`;
             } else if (rdfPlot === "both") {
@@ -2419,7 +2419,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    for _i in range(_ndp):\n`;
           pythonCode += `        _df.write(("%14.6g" % _series[0]['points'][_i][0]) + "".join("%14.6g" % _s['points'][_i][1] for _s in _series) + "\\n")\n`;
           pythonCode += `print(f"Density(${axis}, ${dmode}): {len(_series)} series x ${nbins} bins over {len(_frames)} frame(s) -> ${outputBase}.dat/.json")\n`;
-          if (mode === "full") {
+          if (mode !== "strict") {
             pythonCode += `print("__PLOT_${plotTarget}__:" + json.dumps({'series': _series, 'xLabel': '${axis} (Å)', 'yLabel': '${yUnit}'}))\n`;
           }
 
@@ -2457,7 +2457,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `            _ddf.write("#%13s%14s%14s\\n" % ('disp_A', 'P', 'Gaussian'))\n`;
           pythonCode += `            for _x, _p, _g in zip(_dd['centers'], _dd['pdf'], _dd['gauss']):\n`;
           pythonCode += `                _ddf.write("%14.6g%14.6g%14.6g\\n" % (_x, _p, _g))\n`;
-          if (mode === "full") {
+          if (mode !== "strict") {
             if (plotKind === "dist") {
               pythonCode += `    if _dd is not None:\n`;
               pythonCode += `        print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'P(Δ)', 'points': [[float(x), float(y)] for x, y in zip(_dd['centers'], _dd['pdf'])]}, {'name': 'Gaussian', 'points': [[float(x), float(y)] for x, y in zip(_dd['centers'], _dd['gauss'])]}], 'xLabel': 'displacement (Å)', 'yLabel': 'P(Δ)'}))\n`;
@@ -2496,7 +2496,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `        _vf.write("#%13s%14s%14s\\n" % ('wavenum_cm1', 'freq_THz', 'intensity'))\n`;
           pythonCode += `        for _w, _f, _s in zip(_vacf['wavenumber_cm1'], _vacf['freq_thz'], _vacf['spectrum']):\n`;
           pythonCode += `            _vf.write("%14.6g%14.6g%14.6g\\n" % (_w, _f, _s))\n`;
-          if (mode === "full") {
+          if (mode !== "strict") {
             if (plotKind === "vacf") {
               pythonCode += `    print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'VACF (norm)', 'points': [[float(t), float(c)] for t, c in zip(_vacf['lags'], _vacf['vacf_norm'])]}], 'xLabel': 'time (ps)', 'yLabel': 'VACF (normalized)'}))\n`;
             } else {
@@ -2537,7 +2537,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `        _hf.write("#%13s%14s\\n" % ('frame', 'n_hbonds'))\n`;
           pythonCode += `        for _i, _v in enumerate(_hb['time_series']):\n`;
           pythonCode += `            _hf.write("%14d%14d\\n" % (_i, _v))\n`;
-          if (mode === "full") {
+          if (mode !== "strict") {
             if (plotKind === "series") {
               pythonCode += `    print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'H-bonds', 'points': [[float(_i), float(_v)] for _i, _v in enumerate(_hb['time_series'])]}], 'xLabel': 'frame', 'yLabel': '# H-bonds'}))\n`;
             } else {
@@ -2807,7 +2807,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
       }
       case "inspect": {
         // Snapshot of the variables visible here + files in the working dir at this point.
-        if (mode === "full") {
+        if (mode !== "strict") {
           pythonCode += `\n# Inspector (${id}): report current variables + files\n`;
           pythonCode += `import os as _os, json as _json\n`;
           pythonCode += `_insp = {}\n`;
