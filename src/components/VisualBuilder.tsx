@@ -71,7 +71,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Loader2, Terminal, AlertTriangle, Square, OctagonX, Copy, Ban } from "lucide-react";
+import { Loader2, Terminal, AlertTriangle, Square, OctagonX, Copy, Ban, Search } from "lucide-react";
 import { toast } from "sonner";
 import { isValidConnection } from "./graph/connectionValidation";
 import { useGraphHistory } from "./graph/useGraphHistory";
@@ -93,6 +93,7 @@ import { XrdNode } from "./nodes/XrdNode";
 import { PlotNode } from "./nodes/PlotNode";
 import { ViewerNode } from "./nodes/ViewerNode";
 import { TrajectoryNode } from "./nodes/TrajectoryNode";
+import { InspectorNode } from "./nodes/InspectorNode";
 // New composite nodes
 import { TransformNode } from "./nodes/TransformNode";
 import { PBCNode } from "./nodes/PBCNode";
@@ -153,6 +154,7 @@ const nodeTypes = {
   topology: TopologyNode,
   trajectory: TrajectoryNode,
   simulate: SimulateNode,
+  inspect: InspectorNode,
   organic: StructureNode,
   // Legacy nodes (kept so saved workflows still load)
   addIons: IonsNode,
@@ -2341,6 +2343,13 @@ export default function VisualBuilder() {
                   return node;
                 })
               );
+            } else if (data.type === "inspect") {
+              const { nodeId, data: inspectData } = data;
+              setNodes((nds) =>
+                nds.map((node) =>
+                  node.id === nodeId ? { ...node, data: { ...node.data, inspect: inspectData } } : node
+                )
+              );
             } else if (data.type === "box") {
               const { nodeId, data: boxData } = data;
               setNodes((nds) =>
@@ -2580,6 +2589,9 @@ export default function VisualBuilder() {
                 </Button>
                 <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("plot")} title="Data Plot">
                   <BarChart className="w-4 h-4 text-slate-500" /> Plot
+                </Button>
+                <Button className="gap-1" variant="ghost" size="sm" onClick={() => addNode("inspect")} title="Inspect variables & files at this point">
+                  <Search className="w-4 h-4 text-slate-500" /> Inspect
                 </Button>
                 <Button
                   className={`gap-1 ${disableSimulation ? "opacity-75 hover:opacity-100" : ""}`}

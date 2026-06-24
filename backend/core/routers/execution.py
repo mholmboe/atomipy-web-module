@@ -239,7 +239,7 @@ async def build_stream(request: BuildRequest):
 
                 _PROTOCOL_PREFIXES = (
                     "__VISUALIZE_", "__BOX_", "__CHARGES_",
-                    "__XRD_DATA_", "__PLOT_", "__NODE_START__",
+                    "__XRD_DATA_", "__PLOT_", "__NODE_START__", "__INSPECT_",
                 )
                 _verbose_log = request.verbose_log
 
@@ -548,6 +548,14 @@ async def build_stream(request: BuildRequest):
                         node_id = parts[0].replace("__CHARGES_", "")
                         deferred_events.append(
                             f"data: {json.dumps({'type': 'charges', 'nodeId': node_id, 'data': json.loads(parts[1])})}\n\n"
+                        )
+                    except: pass
+                elif "__INSPECT_" in stripped:
+                    try:
+                        parts = stripped.split("__:", 1)
+                        node_id = parts[0].replace("__INSPECT_", "")
+                        deferred_events.append(
+                            f"data: {json.dumps({'type': 'inspect', 'nodeId': node_id, 'data': json.loads(parts[1])})}\n\n"
                         )
                     except: pass
                 else:

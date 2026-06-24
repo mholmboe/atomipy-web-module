@@ -854,6 +854,30 @@ export const NODE_HELP: Record<string, NodeHelp> = {
     ],
   },
 
+  inspect: {
+    title: "Inspector",
+    summary:
+      "Debug/peek node: reports the variables visible at this point in the workflow (atom count + type histogram, box, trajectory, topology metadata) and the files written so far in the working directory. Passes the structure through unchanged.",
+    features: [
+      "Variables: atom count, per-type counts, whether charges/elements are set, box dimensions, trajectory path + frame count, topology (.itp/.top/defines).",
+      "Files: live listing of the working directory at this node's execution point, with sizes.",
+      "Pass-through — drop it anywhere mid-graph without altering the structure.",
+    ],
+    quirks: [
+      "Snapshot reflects upstream nodes that have already run; files written by downstream nodes appear only if you place an Inspector after them.",
+      "The working directory is shared across the run, so the file list is cumulative up to this point.",
+    ],
+    before: [
+      "Any upstream node whose state/output you want to inspect.",
+    ],
+    after: [
+      "Continue the graph (pass-through) or leave it as a leaf. All listed files are in the Download Results bundle.",
+    ],
+    tips: [
+      "Place one after Solvent/Forcefield/Simulate to confirm atom counts, the .top/.itp, and that the trajectory/energy files were written.",
+    ],
+  },
+
   viewer: {
     title: "Structure Viewer",
     summary:

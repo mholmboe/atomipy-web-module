@@ -2805,6 +2805,54 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `# Plot Node (${id}) is active downstream\n`;
         break;
       }
+      case "inspect": {
+        // Snapshot of the variables visible here + files in the working dir at this point.
+        if (mode === "full") {
+          pythonCode += `\n# Inspector (${id}): report current variables + files\n`;
+          pythonCode += `import os as _os, json as _json\n`;
+          pythonCode += `_insp = {}\n`;
+          pythonCode += `try:\n`;
+          pythonCode += `    _ia = ${inAtoms}\n`;
+          pythonCode += `    if _ia is not None and len(_ia):\n`;
+          pythonCode += `        from collections import Counter as _Cnt\n`;
+          pythonCode += `        _insp['atoms'] = {'count': len(_ia), 'types': dict(_Cnt(a.get('type') for a in _ia)), 'has_charge': any('charge' in a for a in _ia), 'has_element': any(a.get('element') for a in _ia)}\n`;
+          pythonCode += `    else:\n`;
+          pythonCode += `        _insp['atoms'] = None\n`;
+          pythonCode += `except Exception as _e:\n`;
+          pythonCode += `    _insp['atoms'] = f'error: {_e}'\n`;
+          pythonCode += `try:\n`;
+          pythonCode += `    _ib = ${inBox}\n`;
+          pythonCode += `    _insp['box'] = [float(x) for x in _ib] if _ib is not None else None\n`;
+          pythonCode += `except Exception:\n`;
+          pythonCode += `    _insp['box'] = None\n`;
+          pythonCode += `try:\n`;
+          pythonCode += `    _insp['topology'] = {'has_itp': getattr(${inAtoms}, 'itp', None) is not None, 'top_path': getattr(${inAtoms}, '_top_path', None), 'defines': getattr(${inAtoms}, '_defines', None)}\n`;
+          pythonCode += `except Exception:\n`;
+          pythonCode += `    _insp['topology'] = None\n`;
+          if (inTraj !== undefined) {
+            pythonCode += `try:\n`;
+            pythonCode += `    _tp = ${inTraj}\n`;
+            pythonCode += `    _tr = {'path': _tp, 'exists': bool(isinstance(_tp, str) and _os.path.isfile(_tp))}\n`;
+            pythonCode += `    if _tr['exists'] and str(_tp).lower().endswith('.pdb'):\n`;
+            pythonCode += `        with open(_tp, 'r', encoding='utf-8', errors='replace') as _tf:\n`;
+            pythonCode += `            _tr['frames'] = sum(1 for _l in _tf if _l.startswith('MODEL'))\n`;
+            pythonCode += `    _insp['traj'] = _tr\n`;
+            pythonCode += `except Exception:\n`;
+            pythonCode += `    _insp['traj'] = None\n`;
+          }
+          pythonCode += `try:\n`;
+          pythonCode += `    _insp['files'] = [{'name': _f, 'size': _os.path.getsize(_f)} for _f in sorted(_os.listdir('.')) if _os.path.isfile(_f)]\n`;
+          pythonCode += `except Exception:\n`;
+          pythonCode += `    _insp['files'] = []\n`;
+          pythonCode += `print("__INSPECT_${id}__:" + _json.dumps(_insp))\n`;
+        }
+        // Pass-through so the Inspector can sit mid-graph.
+        pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+        pythonCode += `${blockOutBox} = ${inBox}\n`;
+        pythonCode += carryTopo(blockOutAtoms, inAtoms);
+        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox, traj: inTraj });
+        break;
+      }
       case "viewer": {
         // Generate PDB snapshot for the frontend viewer
         const writeConect = "True";
