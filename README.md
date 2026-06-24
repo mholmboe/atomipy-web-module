@@ -11,7 +11,7 @@ A powerful, node-based visual programming environment for designing, manipulatin
 - **Interactive MD & Energy Minimization (EM) Simulations**:
     - **Two engines — OpenMM and local GROMACS**: the Simulation node runs either **OpenMM** (CPU/GPU) or a local **GROMACS** engine (grompp + mdrun, MINFF/CLAYFF). Each node runs **one stage** (EM, NVT or NPT) and they **chain in any order** (e.g. EM → NPT → NVT), each continuing from the previous structure.
     - **Editable `.mdp` (GROMACS)**: pop out and edit the full GROMACS `.mdp` per stage, or let it auto-generate from the structured fields; point to any local GROMACS install (binary, `GMXRC`, or install dir).
-    - **GPU GROMACS on Google Colab**: one-click export of a self-contained Colab notebook that installs a CUDA GROMACS + atomipy and runs the workflow on a Colab T4.
+    - **GPU GROMACS on Google Colab** — two ways: (1) run the launcher's optional **Step 1c** cell to enable the GROMACS engine *inside* the Colab app (CUDA gmx via micromamba, no kernel restart), or (2) click **"Run on Google Colab (GPU)"** on the node to download a self-contained notebook that installs CUDA GROMACS + atomipy and runs *that* workflow on a Colab T4.
     - **Thermodynamics plot**: stream energy / temperature / pressure / volume / density vs time from `.edr` (GROMACS) or the OpenMM reporter to a Data Plotter.
     - **Simulation Node**: Execute Molecular Dynamics (NVT/NPT) and Energy Minimization (EM) simulations directly in the node workspace.
     - **Dynamic EM Trajectories**: Unlike standard minimizers, EM now runs step-by-step to compile a smooth, real-time relaxation trajectory of your system.

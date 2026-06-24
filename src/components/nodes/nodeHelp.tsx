@@ -653,7 +653,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
     summary:
       "Runs the system with one of two engines: OpenMM (default) or local GROMACS. Energy Minimization, NVT (constant volume), or NPT (constant pressure). Builds the topology from the upstream Forcefield/Solvent/Ions choices, uses PME electrostatics with a cutoff, and writes a trajectory + log.",
     features: [
-      "Engine toggle: OpenMM (auto GPU/CPU, runs anywhere OpenMM is installed) or GROMACS (local) — runs grompp + mdrun on a machine where gmx is installed. Both consume the SAME atomipy topology (minerals + ions + water + organics).",
+      "Engine toggle: OpenMM (auto GPU/CPU, runs anywhere OpenMM is installed) or GROMACS — runs grompp + mdrun wherever gmx is available (a local install, or a free Colab GPU via the launcher's optional Step 1c cell). Both consume the SAME atomipy topology (minerals + ions + water + organics).",
       "Three modes: Energy Minimization, NVT (Langevin), NPT (Langevin + barostat). Each Simulate node runs ONE stage (no implicit EM before MD) for both engines; chain Simulate nodes to sequence EM/NVT/NPT in any order — each continues from the previous one's relaxed structure.",
       "Minimization steps; or MD steps, temperature (K), timestep (fs, ≤4), Langevin friction (1/ps), and pressure (bar) for NPT.",
       "Constraints None / HBonds / AllBonds; LJ cutoff + switch distance; PME for long-range electrostatics. (Friction/constraints/switch are OpenMM-only; the GROMACS path uses MINFF .mdp conventions.)",
@@ -683,7 +683,8 @@ export const NODE_HELP: Record<string, NodeHelp> = {
     tips: [
       "Keep the timestep ≤2 fs with HBonds constraints (≤1 fs with None) to stay stable.",
       "Use POSRES during NVT equilibration to let water relax around a fixed solute.",
-      "Download the generated script to run NVT/NPT on a Colab GPU when blocked here.",
+      "OpenMM: download the generated script to run NVT/NPT on a Colab GPU when blocked here.",
+      "GROMACS: click \"Run on Google Colab (GPU)\" on the node for a one-off run on a free Colab GPU (it downloads a notebook that installs CUDA GROMACS), or run the launcher's Step 1c cell to enable the GROMACS engine inside the Colab app.",
     ],
   },
 

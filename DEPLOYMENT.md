@@ -92,6 +92,7 @@ instance with explicit settings).
 | Python deps | conda envs (`atomipy-core` / `-openff`) | conda (baked into image) | **pip** (`requirements.txt`) |
 | Simulations | OpenMM — **GPU if present**, else CPU | **CPU only** (image ships no OpenCL driver) | **GPU (CUDA)** |
 | Simulation policy (`SIMULATION_MODE`) | `full` | **`em_only`** — EM allowed, NVT/NPT → Colab/local | `full` |
+| GROMACS engine (Simulate node) | local `gmx` — set the GROMACS-path field | **not available** (no `gmx`, no GPU) | **optional** Step 1c (micromamba CUDA `gmx`); clear the path field to use `gmx` on PATH |
 | OpenFF worker | auto-started on :8001 by `restart_dev.sh` | separate Cloud Run service | **optional** Step 1b (micromamba) |
 | Celery + Redis | started by `restart_dev.sh` | not deployed (optional) | not installed |
 | Public URL | `http://localhost:8080` | `https://www.atomipy.io` | a `*.trycloudflare.com` Cloudflare Quick Tunnel URL |
@@ -146,6 +147,11 @@ simulations enabled on the **GPU**, exposed through a free **Cloudflare Quick Tu
   **micromamba** (no kernel restart) and starts the worker on :8001, enabling the
   **Organic Molecule** node. Skip it and that one node is unavailable; everything
   else works.
+- **Step 1c (optional)** — installs a **CUDA-enabled GROMACS** with the same
+  **micromamba** (no kernel restart) into an `atomipy-gromacs` env and puts `gmx`
+  on PATH (inherited by the Step 2 server via `os.environ.copy()`), enabling the
+  **GROMACS** engine on the GPU. After it runs, clear the **GROMACS path** field in
+  the Simulate node so it uses `gmx` on PATH. Skip it to use only the OpenMM engine.
 - **Step 2** — launch the server + Cloudflare Quick Tunnel; just click the
   printed `*.trycloudflare.com` link (no password). The main server's
   `OPENFF_WORKER_URL` defaults to `http://127.0.0.1:8001`, so Step 1b needs no

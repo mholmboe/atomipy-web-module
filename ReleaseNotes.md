@@ -1,3 +1,49 @@
+# Release Notes: atomipy Visual Builder (`atomipy-web-module`) v0.5.0
+
+*Released 2026-06-24 · embeds atomipy 0.97*
+
+This release adds a second simulation engine (**GROMACS**), a **trajectory-analysis**
+toolkit, a **Water-models** library, a files/variable **Inspector**, clearer run-error
+feedback, and two ways to run **GROMACS on a Colab GPU**.
+
+---
+
+## ⚙️ Simulation — now two engines
+* **GROMACS engine** in the Simulate node (grompp + mdrun) alongside OpenMM. Each
+  node runs **one stage** (EM / NVT / NPT) and they **chain in any order**, each
+  continuing from the previous structure. Point it at any local GROMACS (binary,
+  `GMXRC`, or install dir).
+* **Editable `.mdp`** per stage (pop-out editor) or auto-generated from the fields.
+* **Thermodynamics plot**: energy / temperature / pressure / volume / density vs
+  time from `.edr` (GROMACS) or the OpenMM reporter.
+
+## 🟢 GROMACS on a Google Colab GPU (two ways)
+* **In the Colab app** — the launcher's optional **Step 1c** cell installs a CUDA
+  GROMACS via micromamba (no kernel restart) and puts `gmx` on PATH, so the GROMACS
+  Simulate node runs on the GPU. (Clear the node's GROMACS-path field to use `gmx`.)
+* **Headless, per workflow** — the **"Run on Google Colab (GPU)"** button on the
+  node (and **"GROMACS GPU Colab"** on the toolbar) downloads a self-contained
+  notebook that installs CUDA GROMACS + atomipy and runs *that* workflow on a T4.
+
+## 📈 Trajectory analysis nodes
+* **RDF g(r) + running coordination n(r)**, **density profiles** (x/y/z;
+  number/mass/charge), **MSD / self-diffusion** (3D/2D/1D + van Hove distribution),
+  **VACF / power spectrum** (Green–Kubo *D* + vibrational DOS), and **hydrogen-bond**
+  analysis (per-molecule counts; donor/acceptor by type or residue).
+* Results stream to a multi-series **Data Plotter** and export as `.dat`/`.json`.
+
+## 💧 Libraries, Inspector & UX
+* **Water-models library** (SPC/E, TIP3P, TIP4P, TIP5P — hex-ice, grid, and
+  equilibrated boxes); "96 water" removed from the MINFF category.
+* **Inspector node** — reports the variables (atom counts/types, box, trajectory,
+  topology) and files present at any point in the graph.
+* **Run-error feedback** — a failing node turns its border red and shows the error
+  message (only the node that actually failed).
+* **Solvation fixes** — density now scales the water template; overlapping waters are
+  declashed; contiguous residue/atom numbering; unmet target counts raise an error.
+
+---
+
 # Release Notes: atomipy Visual Builder (`atomipy-web-module`) v0.4.0
 
 *Released 2026-06-06 · embeds atomipy 0.96*
