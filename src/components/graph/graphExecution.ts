@@ -1807,7 +1807,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    _gmx_defines = []  # self-contained .top\n`;
           pythonCode += `elif _has_itp or _has_solvent_or_ions:\n`;
           pythonCode += `    _defines = ${definesExpr}\n`;
-          pythonCode += `    _ff_variant = "GMINFF_k500"; _water_model = "spce"; _ion_model = "SPCE_HFE_LM"\n`;
+          pythonCode += `    _ff_variant = "GMINFF_k500"; _water_model = "${waterModel.toLowerCase()}"; _ion_model = "SPCE_HFE_LM"\n`;
           pythonCode += `    for _d in _defines:\n`;
           pythonCode += `        if "CLAYFF" in _d: _ff_variant = "CLAYFF_EXT"\n`;
           pythonCode += `        elif "MINFF" in _d: _ff_variant = _d\n`;
@@ -2007,7 +2007,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `            _gro_path = "${simBase}.gro"\n`;
         pythonCode += `            _defines = ${definesExpr}\n`;
         pythonCode += `            _ff_variant = "GMINFF_k500"\n`;
-        pythonCode += `            _water_model = "spce"\n`;
+        pythonCode += `            _water_model = "${waterModel.toLowerCase()}"\n`;
         pythonCode += `            _ion_model = "SPCE_HFE_LM"\n`;
         pythonCode += `            for _d in _defines:\n`;
         pythonCode += `                if "CLAYFF" in _d: _ff_variant = "CLAYFF_EXT"\n`;
