@@ -187,6 +187,16 @@ and launches the **FastAPI server** (which serves both the UI and the API) with
 > kernel restart) and start the worker. Everything else (build, forcefields,
 > analysis, EM, GPU MD) works without it.
 
+> **Running GROMACS on a GPU?** The launcher above runs the app with **OpenMM**
+> GPU MD and does **not** install GROMACS, so the GROMACS Simulate node won't find
+> `gmx` in that session. For the **GROMACS engine on a GPU**, there's a separate,
+> self-contained path: build your workflow in the app, then click the
+> **"GROMACS GPU Colab"** button on the toolbar (it appears whenever a Simulate
+> node uses the GROMACS engine). It downloads a notebook generated *for that
+> workflow* which installs a **CUDA GROMACS** + atomipy via `condacolab`, runs the
+> simulation on a Colab T4 (auto GPU offload), and zips the results for download.
+> There's no fixed link — the notebook is generated from your specific graph.
+
 ---
 
 ### Local Installation
