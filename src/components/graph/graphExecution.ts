@@ -1787,9 +1787,9 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         // write_dummy_system_top / write_gmx_top), then runs gmx instead of OpenMM.
         const engine = getString(data, "engine", "openmm");
         if (engine === "gromacs") {
-          // GROMACS path (gmx binary, GMXRC, or install dir). Default empty -> 'gmx' on
-          // PATH (works on Colab/standard installs); set the field for a custom install.
-          const gmxSpec = getString(data, "gmxPath", "").trim() || "gmx";
+          // GROMACS path (gmx binary, GMXRC, or install dir). Defaults to 'gmx' on PATH
+          // (works on Colab/standard installs); set the field for a custom install.
+          const gmxSpec = getString(data, "gmxPath", "gmx").trim() || "gmx";
           pythonCode += `\n# Set up and execute LOCAL GROMACS simulation (grompp + mdrun)\n`;
           pythonCode += `# __ATOMIPY_SIM_TYPE__=${simType}\n`;
           pythonCode += `import os as _os\n`;
