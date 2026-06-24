@@ -2875,7 +2875,16 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    _traj_file = ${inTraj}\n`;
           pythonCode += `    _no_water_file = _traj_file.replace('.pdb', '_no_water.pdb')\n`;
           pythonCode += `    if os.path.exists(_no_water_file):\n`;
-          pythonCode += `        _traj_file = _no_water_file\n`;
+          pythonCode += `        # Only use the no-water trajectory if it actually has atoms — for a PURE\n`;
+          pythonCode += `        # WATER system it is empty (everything is water), which would make the\n`;
+          pythonCode += `        # viewer render a blank/atomless trajectory. Fall back to the full file.\n`;
+          pythonCode += `        try:\n`;
+          pythonCode += `            with open(_no_water_file, 'r', encoding='utf-8', errors='replace') as _nwf:\n`;
+          pythonCode += `                _nw_has_atoms = any(_l.startswith(('ATOM', 'HETATM')) for _l in _nwf)\n`;
+          pythonCode += `        except Exception:\n`;
+          pythonCode += `            _nw_has_atoms = False\n`;
+          pythonCode += `        if _nw_has_atoms:\n`;
+          pythonCode += `            _traj_file = _no_water_file\n`;
           pythonCode += `    if os.path.exists(_traj_file):\n`;
           pythonCode += `        # errors='replace': trajectory PDBs (e.g. from gmx trjconv) can carry a\n`;
           pythonCode += `        # stray non-UTF8 byte in a title/remark; never let the viewer crash on it.\n`;
