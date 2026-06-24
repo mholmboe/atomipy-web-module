@@ -183,12 +183,12 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
                 type="text"
                 className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 placeholder="gmx"
-                value={data?.gmxPath ?? "/usr/local/gromacs-2024.2/bin/GMXRC"}
+                value={data?.gmxPath ?? ""}
                 onChange={(e) => updateNodeData(id, { ...data, gmxPath: e.target.value })}
                 onPointerDown={(e) => e.stopPropagation()}
               />
               <p className="text-[9px] text-muted-foreground/60 mt-1 leading-snug">
-                Point to a custom build: the <code>gmx</code> binary, its <code>GMXRC</code>, or the install dir (e.g. for a GPU-enabled GROMACS). Its libraries are added to the loader path automatically. On Google Colab, run the launcher's <strong>Step 1c</strong> cell and clear this field to use <code>gmx</code> on PATH.
+                Empty (default) uses <code>gmx</code> on PATH — works on Colab (after the launcher's <strong>Step 1c</strong> cell) and any standard install. Set this only for a custom build: the <code>gmx</code> binary, its <code>GMXRC</code>, or the install dir; its libraries are added to the loader path automatically.
               </p>
             </div>
           )}
