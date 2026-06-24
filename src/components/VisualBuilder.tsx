@@ -2198,26 +2198,35 @@ export default function VisualBuilder() {
               setCurrentBuildId(null);
               setBuildStatus(data.success ? "Build completed." : "Build failed.");
               setBuildProgress((prev) => (data.success ? 100 : prev));
+              const failedIds: string[] = [];
               setNodeRunStatus((prev) => {
                 const next = { ...prev };
-                const runningId = currentRunningNodeRef.current;
-                if (runningId && next[runningId] === "running") {
-                  next[runningId] = data.success ? "done" : "error";
-                  if (!data.success) {
-                    setNodeRunError((e) => ({
-                      ...e,
-                      [runningId]: nodeErrorTextRef.current[runningId] || "Node failed — see logs / Download Results.",
-                    }));
-                  }
-                }
+                // Mark every still-"running" node failed (execution is sequential, so
+                // there's normally one), plus currentRunningNodeRef as a fallback.
                 Object.keys(next).forEach((nodeId) => {
-                  if (next[nodeId] === "queued") {
-                    // If build was successful, mark remaining as done (likely finished very fast)
+                  if (next[nodeId] === "running") {
+                    next[nodeId] = data.success ? "done" : "error";
+                    if (!data.success) failedIds.push(nodeId);
+                  } else if (next[nodeId] === "queued") {
                     next[nodeId] = data.success ? "done" : "skipped";
                   }
                 });
+                const ref = currentRunningNodeRef.current;
+                if (!data.success && ref && !failedIds.includes(ref)) {
+                  next[ref] = "error";
+                  failedIds.push(ref);
+                }
                 return next;
               });
+              if (!data.success) {
+                setNodeRunError((e) => {
+                  const upd = { ...e };
+                  for (const fid of failedIds) {
+                    upd[fid] = nodeErrorTextRef.current[fid] || "Node failed — see logs / Download Results.";
+                  }
+                  return upd;
+                });
+              }
               currentRunningNodeRef.current = null;
               setDownloadToken(data.token);
               if (data.success) {
@@ -2263,8 +2272,8 @@ export default function VisualBuilder() {
                 const runningId = currentRunningNodeRef.current;
                 if (runningId) {
                   // Remember error-looking lines so a failed node can show the cause.
-                  if (/(\b[A-Za-z]*(Error|Exception):|Fatal error|Simulation failed|Traceback \(most)/.test(logLine)) {
-                    const msg = logLine.replace(/^[#\s]+/, "").slice(0, 240);
+                  if (/(\b[A-Za-z]*(Error|Exception):|Fatal error|FATAL BUILD ERROR|Simulation failed|Traceback \(most)/.test(logLine)) {
+                    const msg = logLine.replace(/^[#\s]+/, "").replace(/^FATAL BUILD ERROR:\s*/, "").slice(0, 240);
                     if (!/Traceback \(most/.test(logLine)) nodeErrorTextRef.current[runningId] = msg;
                     else if (!nodeErrorTextRef.current[runningId]) nodeErrorTextRef.current[runningId] = "Failed — see logs / Download Results.";
                   }
