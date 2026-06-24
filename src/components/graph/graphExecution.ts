@@ -1845,9 +1845,15 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `_gmx.stage_minff('.', defines=${definesExpr})  # define-aware: strips ffbonded lines for types absent under the active FF (e.g. Feo2/Feo3 under CLAYFF)\n`;
           pythonCode += `_gmx_top = _os.path.basename(_top_path)\n`;
           pythonCode += `def _gmx_run(_stage, _struct, **_kw):\n`;
-          pythonCode += `    _st = _gmx.run_local_gmx('.', _gmx_top, _struct, [_stage], defines=_gmx_defines, gmx=_gmx_spec, do_stage_minff=False, on_line=print, **_kw)\n`;
+          pythonCode += `    _lines = []\n`;
+          pythonCode += `    def _cap(_l):\n`;
+          pythonCode += `        _lines.append(_l); print(_l)\n`;
+          pythonCode += `    _st = _gmx.run_local_gmx('.', _gmx_top, _struct, [_stage], defines=_gmx_defines, gmx=_gmx_spec, do_stage_minff=False, on_line=_cap, **_kw)\n`;
           pythonCode += `    if not _st or _st[-1].get('returncode') != 0 or not _st[-1].get('gro'):\n`;
-          pythonCode += `        raise RuntimeError(f"GROMACS {_stage} failed -- see log above.")\n`;
+          pythonCode += `        _txt = "\\n".join(_lines)\n`;
+          pythonCode += `        if any(_p in _txt for _p in ('be settled', 'LINCS WARNING', 'Too many LINCS', 'is NaN', 'Water molecule', 'cannot be settled', 'too many warnings')):\n`;
+          pythonCode += `            raise RuntimeError(f"GROMACS {_stage} could not start: the structure has close contacts / very high forces (e.g. 'water cannot be settled'). A freshly built or solvated box must be energy-minimized first \\u2014 add a Simulate node set to 'Energy Minimization' (Minimize) before this {_stage.upper()} node.")\n`;
+          pythonCode += `        raise RuntimeError(f"GROMACS {_stage} failed \\u2014 see log above.")\n`;
           pythonCode += `    print(f"  {_stage.upper()} finished OK!")\n`;
           pythonCode += `    return _os.path.basename(_st[-1]['gro'])\n`;
           // Run ONLY the selected stage (no implicit EM before NVT/NPT) — like the
