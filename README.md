@@ -9,6 +9,10 @@ A powerful, node-based visual programming environment for designing, manipulatin
 ## 🚀 Key Features
 
 - **Interactive MD & Energy Minimization (EM) Simulations**:
+    - **Two engines — OpenMM and local GROMACS**: the Simulation node runs either **OpenMM** (CPU/GPU) or a local **GROMACS** engine (grompp + mdrun, MINFF/CLAYFF). Each node runs **one stage** (EM, NVT or NPT) and they **chain in any order** (e.g. EM → NPT → NVT), each continuing from the previous structure.
+    - **Editable `.mdp` (GROMACS)**: pop out and edit the full GROMACS `.mdp` per stage, or let it auto-generate from the structured fields; point to any local GROMACS install (binary, `GMXRC`, or install dir).
+    - **GPU GROMACS on Google Colab**: one-click export of a self-contained Colab notebook that installs a CUDA GROMACS + atomipy and runs the workflow on a Colab T4.
+    - **Thermodynamics plot**: stream energy / temperature / pressure / volume / density vs time from `.edr` (GROMACS) or the OpenMM reporter to a Data Plotter.
     - **Simulation Node**: Execute Molecular Dynamics (NVT/NPT) and Energy Minimization (EM) simulations directly in the node workspace.
     - **Dynamic EM Trajectories**: Unlike standard minimizers, EM now runs step-by-step to compile a smooth, real-time relaxation trajectory of your system.
     - **Max Force Norm Logging**: EM table outputs report both Potential Energy and Maximum Euclidean Force Norm vectors in standard `kJ/mol/nm` units.
@@ -30,13 +34,15 @@ A powerful, node-based visual programming environment for designing, manipulatin
     - **Spacing Safeguards**: Early errors for non-positive or abnormal solvate/ion minimum distances.
     - **Ion Thresholds**: Capped maximum ionization count at $10,000$ to prevent out-of-memory overheads.
     - **Path Traversal Shields**: Basename-scoped path parsing blocking folder traversal attempts (`..` or absolute prefixes).
-- **Structure Libraries**: Built-in MINFF mineral presets, a ~517-CIF inorganic crystal library (Avogadro), and a ~428-molecule organic library (amino acids, nucleobases, sugars, …).
+- **Structure Libraries**: Built-in MINFF mineral presets, a ~517-CIF inorganic crystal library (Avogadro), a ~428-molecule organic library (amino acids, nucleobases, sugars, …), parametric lattice builder, and a dedicated **Water-models library** (SPC/E, TIP3P, TIP4P, TIP5P — hexagonal-ice, grid, and equilibrated 1/96/216/864-molecule boxes).
 - **3D Visualization**: Real-time 3D previewing with integrated **3Dmol.js / JSmol** viewers (PNG export, JSmol measurements).
 - **Forcefield Generation**: Inorganic **MINFF / CLAYFF** and a frozen **Dummy FF** for non-MINFF materials; organic **GAFF** and **OpenFF (Sage/Parsley)**.
 - **Advanced Analysis**:
+    - **Trajectory analysis** (single structure *or* ensemble-averaged over a trajectory): **RDF g(r) + running coordination n(r)**, **density profiles** (x/y/z; number/mass/charge), **MSD / self-diffusion** (3D/2D/1D + van Hove distribution), **VACF / power spectrum** (Green–Kubo D + vibrational DOS), and **hydrogen-bond** analysis (per-molecule counts, donor/acceptor by type or residue). Results stream to a multi-series **Data Plotter** and export as `.dat`/`.json`.
     - **XRD Patterns**: Simulate high-performance X-ray diffraction patterns.
     - **BVS/GII Analysis**: Calculate Bond Valence Sums and Global Instability Index.
-    - **Solvation & Ionization**: Automated placement of water and ions with periodic boundary awareness.
+    - **Solvation & Ionization**: Automated placement of water and ions with periodic boundary awareness (density-scaled template, overlap removal).
+    - **Inspector node**: drop it anywhere to report the variables (atom counts/types, box, trajectory, topology) and files present at that point in the workflow.
 - **Format Support**: Import/Export for PDB, GRO, XYZ, and CIF (with symmetry expansion).
 
 ---
