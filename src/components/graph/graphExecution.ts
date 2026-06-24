@@ -1860,8 +1860,10 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           // OpenMM node. Chain EM/NVT/NPT in any order by connecting Simulate nodes;
           // each continues from the previous one's relaxed structure (carried below).
           const stage = simType === "npt" ? "npt" : (simType === "nvt" ? "nvt" : "em");
-          let runKwargs = `nsteps=${isMinimize ? miniSteps : mdSteps}`;
-          if (!isMinimize) runKwargs += `, dt=${timestepFs / 1000.0}, temperature=${temp}, nstxtc=${pdbFreq}`;
+          // nstxtc applies to MD (.xtc) AND EM (.trr via nstxout) so EM also yields a
+          // viewable trajectory; dt/temperature only matter for the dynamics stages.
+          let runKwargs = `nsteps=${isMinimize ? miniSteps : mdSteps}, nstxtc=${pdbFreq}`;
+          if (!isMinimize) runKwargs += `, dt=${timestepFs / 1000.0}, temperature=${temp}`;
           if (isNPT) runKwargs += `, pressure=${pressure}`;
           // Full editable .mdp: if the user supplied one, it's used verbatim (the
           // structured kwargs above are then ignored by run_stage).
@@ -1872,22 +1874,31 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           }
           pythonCode += `_g = _gmx_run('${stage}', _os.path.basename(_gro_path), ${runKwargs})\n`;
           pythonCode += `print("GROMACS simulation finished OK!")\n`;
-          // Convert the stage's .xtc -> multi-frame PDB (same format the OpenMM path
-          // produces) so the existing 3Dmol/JSmol viewer animates it.
+          // Convert the stage's trajectory -> multi-frame PDB (CRYST1 per MODEL so the
+          // box shows in the viewer). MD writes .xtc; steepest-descent EM writes .trr
+          // instead — so try .xtc first, then fall back to .trr.
           pythonCode += `_final_stage = "${stage}"\n`;
           // Wrap-trajectory toggle: trjconv -pbc atom (wrap atoms into the box) when on,
           // -pbc none (leave coordinates as-is) when off. Independent of the .mdp.
           const gmxPbc = wrapTrajectory ? "atom" : "none";
           pythonCode += `_traj = None\n`;
-          pythonCode += `try:\n`;
-          pythonCode += `    _traj = _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${trajFile}", group="System", pbc="${gmxPbc}", gmx=_gmx_spec, on_line=print)\n`;
-          pythonCode += `except Exception as _e:\n`;
-          pythonCode += `    print(f"(trajectory conversion error: {_e})")\n`;
+          pythonCode += `_traj_src = None\n`;
+          pythonCode += `for _ext in ('xtc', 'trr'):\n`;
+          pythonCode += `    _cand = _final_stage + '.' + _ext\n`;
+          pythonCode += `    if not _os.path.exists(_cand):\n`;
+          pythonCode += `        continue\n`;
+          pythonCode += `    try:\n`;
+          pythonCode += `        _traj = _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_cand, out="${trajFile}", group="System", pbc="${gmxPbc}", gmx=_gmx_spec, on_line=print)\n`;
+          pythonCode += `        if _traj:\n`;
+          pythonCode += `            _traj_src = _cand\n`;
+          pythonCode += `            break\n`;
+          pythonCode += `    except Exception as _e:\n`;
+          pythonCode += `        print(f"(trajectory conversion error [{_ext}]: {_e})")\n`;
           pythonCode += `if _traj:\n`;
-          pythonCode += `    print(f"Wrote trajectory ${trajFile}")\n`;
+          pythonCode += `    print(f"Wrote trajectory ${trajFile} (from {_traj_src})")\n`;
           if (excludeWater) {
             pythonCode += `    try:\n`;
-            pythonCode += `        _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_final_stage+'.xtc', out="${simBase}_no_water.pdb", group="non-Water", pbc="${gmxPbc}", gmx=_gmx_spec)\n`;
+            pythonCode += `        _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_traj_src, out="${simBase}_no_water.pdb", group="non-Water", pbc="${gmxPbc}", gmx=_gmx_spec)\n`;
             pythonCode += `    except Exception:\n`;
             pythonCode += `        pass  # 'non-Water' group may be absent (no water) — viewer falls back to the full PDB\n`;
           }
