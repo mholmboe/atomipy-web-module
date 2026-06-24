@@ -94,6 +94,7 @@ import { PlotNode } from "./nodes/PlotNode";
 import { ViewerNode } from "./nodes/ViewerNode";
 import { TrajectoryNode } from "./nodes/TrajectoryNode";
 import { InspectorNode } from "./nodes/InspectorNode";
+import { NodeRunStatusContext } from "./nodes/nodeRunStatus";
 // New composite nodes
 import { TransformNode } from "./nodes/TransformNode";
 import { PBCNode } from "./nodes/PBCNode";
@@ -1022,7 +1023,10 @@ export default function VisualBuilder() {
   const [downloadToken, setDownloadToken] = useState<string | null>(null);
   const [trackedNodeOrder, setTrackedNodeOrder] = useState<string[]>([]);
   const [nodeRunStatus, setNodeRunStatus] = useState<Record<string, RunNodeStatus>>({});
+  const [nodeRunError, setNodeRunError] = useState<Record<string, string>>({});
   const currentRunningNodeRef = useRef<string | null>(null);
+  // Latest error-looking log line per node (used to label the failed node).
+  const nodeErrorTextRef = useRef<Record<string, string>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [isStatusWindowMinimized, setIsStatusWindowMinimized] = useState(() => {
@@ -2131,6 +2135,8 @@ export default function VisualBuilder() {
     setNodeRunStatus(
       Object.fromEntries(trackedOrder.map((nodeId) => [nodeId, "queued"])) as Record<string, RunNodeStatus>,
     );
+    setNodeRunError({});
+    nodeErrorTextRef.current = {};
     setBuildProgress(0);
     setBuildStatus("Build queued...");
     setBuildLogs([]);
@@ -2197,6 +2203,12 @@ export default function VisualBuilder() {
                 const runningId = currentRunningNodeRef.current;
                 if (runningId && next[runningId] === "running") {
                   next[runningId] = data.success ? "done" : "error";
+                  if (!data.success) {
+                    setNodeRunError((e) => ({
+                      ...e,
+                      [runningId]: nodeErrorTextRef.current[runningId] || "Node failed — see logs / Download Results.",
+                    }));
+                  }
                 }
                 Object.keys(next).forEach((nodeId) => {
                   if (next[nodeId] === "queued") {
@@ -2250,6 +2262,12 @@ export default function VisualBuilder() {
                 }
                 const runningId = currentRunningNodeRef.current;
                 if (runningId) {
+                  // Remember error-looking lines so a failed node can show the cause.
+                  if (/(\b[A-Za-z]*(Error|Exception):|Fatal error|Simulation failed|Traceback \(most)/.test(logLine)) {
+                    const msg = logLine.replace(/^[#\s]+/, "").slice(0, 240);
+                    if (!/Traceback \(most/.test(logLine)) nodeErrorTextRef.current[runningId] = msg;
+                    else if (!nodeErrorTextRef.current[runningId]) nodeErrorTextRef.current[runningId] = "Failed — see logs / Download Results.";
+                  }
                   setNodeLogsMap((prev) => ({
                     ...prev,
                     [runningId]: [...(prev[runningId] || []), logLine],
@@ -2415,6 +2433,10 @@ export default function VisualBuilder() {
         const runningId = currentRunningNodeRef.current;
         if (runningId && next[runningId] === "running") {
           next[runningId] = "error";
+          setNodeRunError((e) => ({
+            ...e,
+            [runningId]: nodeErrorTextRef.current[runningId] || (error instanceof Error ? error.message : "Node failed."),
+          }));
         }
         Object.keys(next).forEach((nodeId) => {
           if (next[nodeId] === "queued") next[nodeId] = "skipped";
@@ -2904,6 +2926,7 @@ export default function VisualBuilder() {
           </div>
         )}
         <ReactFlowProvider>
+          <NodeRunStatusContext.Provider value={{ status: nodeRunStatus, errors: nodeRunError }}>
           <ReactFlow
             nodes={nodes.map((n) => {
               const statusStyle = getNodeStatusStyle(nodeRunStatus[n.id]);
@@ -2949,6 +2972,7 @@ export default function VisualBuilder() {
             <Controls />
             <Background gap={20} size={1} color="rgba(0,0,0,0.1)" />
           </ReactFlow>
+          </NodeRunStatusContext.Provider>
         </ReactFlowProvider>
 
         {/* Floating Context Menu */}

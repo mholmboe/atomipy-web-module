@@ -1,7 +1,8 @@
 import React from 'react';
-import { X, LucideIcon } from 'lucide-react';
+import { X, LucideIcon, AlertTriangle } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import { NodeHelpButton } from './nodeHelp';
+import { useNodeRunStatus } from './nodeRunStatus';
 
 interface NodeHeaderProps {
   id: string;
@@ -21,27 +22,42 @@ export const NodeHeader = ({ id, title, Icon, colorClass = "text-primary", class
   // a NODE_HELP entry shows the (?) icon without per-node wiring. An explicit
   // helpKey prop overrides it.
   const resolvedHelpKey = helpKey ?? getNode(id)?.type;
+  const { errors } = useNodeRunStatus();
+  const runError = errors?.[id];
 
   return (
-    <div className={`${className} p-3 border-b border-border flex items-center justify-between pointer-events-auto`}>
-      <div className="flex items-center gap-2">
-        <Icon className={`w-4 h-4 ${colorClass}`} />
-        <h3 className="text-sm font-semibold text-foreground m-0">{title}</h3>
+    <>
+      <div className={`${className} p-3 border-b border-border flex items-center justify-between pointer-events-auto`}>
+        <div className="flex items-center gap-2">
+          <Icon className={`w-4 h-4 ${colorClass}`} />
+          <h3 className="text-sm font-semibold text-foreground m-0">{title}</h3>
+        </div>
+        <div className="flex items-center gap-1">
+          {extraActions}
+          <NodeHelpButton helpKey={resolvedHelpKey} />
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteElements({ nodes: [{ id }] });
+            }}
+            className="p-1 hover:bg-black/10 dark:hover:bg-white/10 rounded-md transition-colors text-muted-foreground hover:text-destructive"
+            title="Delete Node"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
-      <div className="flex items-center gap-1">
-        {extraActions}
-        <NodeHelpButton helpKey={resolvedHelpKey} />
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            deleteElements({ nodes: [{ id }] });
-          }}
-          className="p-1 hover:bg-black/10 dark:hover:bg-white/10 rounded-md transition-colors text-muted-foreground hover:text-destructive"
-          title="Delete Node"
+      {runError && (
+        <div
+          className="bg-red-500/15 border-b border-red-500/40 px-3 py-1.5 flex items-start gap-1.5 pointer-events-auto"
+          title={runError}
         >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </div>
+          <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-px" />
+          <span className="text-[10px] leading-snug text-red-700 dark:text-red-300 line-clamp-3 break-words">
+            {runError}
+          </span>
+        </div>
+      )}
+    </>
   );
 };
