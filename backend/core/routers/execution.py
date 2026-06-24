@@ -31,7 +31,7 @@ import tempfile
 from typing import Optional, Dict
 
 from fastapi import APIRouter, Request, HTTPException, UploadFile, File
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, Response
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -632,6 +632,30 @@ async def download_result(token: str):
     if not os.path.exists(zip_path):
         raise HTTPException(status_code=404, detail="Result expired or not found")
     return FileResponse(zip_path, filename="atomipy_system_bundle.zip")
+
+
+@router.get("/download-result/{token}/file/{filename}")
+async def download_result_file(token: str, filename: str):
+    """Serve a single file out of a result bundle (by basename).
+
+    Used by the viewer to fetch a trajectory out-of-band instead of inlining it in
+    the SSE stream — a large multi-frame PDB inlined in one SSE message is slow over
+    the Colab tunnel.
+    """
+    safe = os.path.basename(filename)
+    zip_path = os.path.join(CACHE_DIR, f"result_{token}.zip")
+    if not os.path.exists(zip_path):
+        raise HTTPException(status_code=404, detail="Result expired or not found")
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            member = next((n for n in zf.namelist() if os.path.basename(n) == safe), None)
+            if member is None:
+                raise HTTPException(status_code=404, detail="File not in result bundle")
+            content = zf.read(member)
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=500, detail="Corrupt result bundle")
+    media = "chemical/x-pdb" if safe.lower().endswith(".pdb") else "application/octet-stream"
+    return Response(content=content, media_type=media)
 
 
 @router.post("/stop-build/{build_id}")
