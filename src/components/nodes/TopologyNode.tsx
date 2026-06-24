@@ -72,7 +72,7 @@ export function TopologyNode({ id, data }: NodeComponentProps<TopologyNodeData>)
           </div>
         )}
 
-        <div className="grid grid-cols-[1fr_46px_44px] gap-1.5 text-[10px] font-semibold text-muted-foreground px-0.5">
+        <div className="grid grid-cols-[1.3fr_1fr_1fr] gap-1.5 text-[10px] font-semibold text-muted-foreground px-0.5">
           <span>Molecule</span>
           <span className="text-center">n</span>
           <span className="text-center">type</span>
@@ -81,7 +81,7 @@ export function TopologyNode({ id, data }: NodeComponentProps<TopologyNodeData>)
         {Array.from({ length: ROWS }).map((_, i) => {
           const d = detected[i];
           return (
-            <div key={i} className="grid grid-cols-[1fr_46px_44px] gap-1.5 items-center">
+            <div key={i} className="grid grid-cols-[1.3fr_1fr_1fr] gap-1.5 items-center">
               <input
                 type="text"
                 placeholder={d?.name ?? "(auto)"}
