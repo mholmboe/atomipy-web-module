@@ -1027,9 +1027,6 @@ export default function VisualBuilder() {
   const currentRunningNodeRef = useRef<string | null>(null);
   // Latest error-looking log line per node (used to label the failed node).
   const nodeErrorTextRef = useRef<Record<string, string>>({});
-  // Viewer trajectories served out-of-band: nodeId -> filename in the result bundle.
-  // Populated from "@FILE:" visualize markers, fetched once the run completes (token).
-  const pendingVizFetchRef = useRef<Record<string, string>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [isStatusWindowMinimized, setIsStatusWindowMinimized] = useState(() => {
@@ -2232,24 +2229,6 @@ export default function VisualBuilder() {
               }
               currentRunningNodeRef.current = null;
               setDownloadToken(data.token);
-              // Fetch any out-of-band viewer trajectories from the result bundle now that
-              // the token exists. The viewer parses them the same way as inlined PDBs.
-              const pendingViz = pendingVizFetchRef.current;
-              pendingVizFetchRef.current = {};
-              if (data.success && data.token && Object.keys(pendingViz).length > 0) {
-                Object.entries(pendingViz).forEach(([vizNodeId, fname]) => {
-                  fetch(`/api/download-result/${data.token}/file/${encodeURIComponent(fname)}`)
-                    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
-                    .then((pdbText) => {
-                      const fc = pdbText.match(/ENDMDL/g)?.length || 0;
-                      setBuildStatus(fc > 1 ? `Loading trajectory into the viewer (${fc} frames)…` : "Loading structure into the viewer…");
-                      setNodes((nds) => nds.map((n) => (n.id === vizNodeId ? { ...n, data: { ...n.data, pdb: pdbText } } : n)));
-                    })
-                    .catch((err) => {
-                      toast.error(`Could not load trajectory into the viewer: ${err instanceof Error ? err.message : String(err)}`);
-                    });
-                });
-              }
               if (data.success) {
                 toast.success("Run successful! Download is ready.", { id: runToastId });
               } else {
@@ -2341,40 +2320,31 @@ export default function VisualBuilder() {
               }
             } else if (data.type === "visualize") {
               const { nodeId, data: pdbData } = data;
-              // Out-of-band trajectory: "@FILE:<name>" means the (large) trajectory was
-              // NOT inlined — fetch it from the result bundle once the run completes.
-              // NOTE: must NOT `return` here — a bare return exits the whole SSE reader
-              // loop, so `complete` would never be processed (run stuck on "Running…").
-              if (typeof pdbData === "string" && pdbData.startsWith("@FILE:")) {
-                pendingVizFetchRef.current[nodeId] = pdbData.slice("@FILE:".length).trim();
-                setBuildStatus("Trajectory will load from the result bundle when the run finishes…");
-              } else {
-                // A large multi-frame trajectory is parsed synchronously by the
-                // 3Dmol viewer, which briefly blocks the main thread. Show a
-                // "Loading…" status and defer the node update one tick so that
-                // status actually paints before the parse blocks.
-                const frameCount = typeof pdbData === "string"
-                  ? (pdbData.match(/ENDMDL/g)?.length || 0)
-                  : 0;
-                setBuildStatus(
-                  frameCount > 1
-                    ? `Loading trajectory into the viewer (${frameCount} frames)…`
-                    : "Loading structure into the viewer…",
+              // A large multi-frame trajectory is parsed synchronously by the
+              // 3Dmol viewer, which briefly blocks the main thread. Show a
+              // "Loading…" status and defer the node update one tick so that
+              // status actually paints before the parse blocks.
+              const frameCount = typeof pdbData === "string"
+                ? (pdbData.match(/ENDMDL/g)?.length || 0)
+                : 0;
+              setBuildStatus(
+                frameCount > 1
+                  ? `Loading trajectory into the viewer (${frameCount} frames)…`
+                  : "Loading structure into the viewer…",
+              );
+              setTimeout(() => {
+                setNodes((nds) =>
+                  nds.map((node) => {
+                    if (node.id === nodeId) {
+                      return {
+                        ...node,
+                        data: { ...node.data, pdb: pdbData },
+                      };
+                    }
+                    return node;
+                  })
                 );
-                setTimeout(() => {
-                  setNodes((nds) =>
-                    nds.map((node) => {
-                      if (node.id === nodeId) {
-                        return {
-                          ...node,
-                          data: { ...node.data, pdb: pdbData },
-                        };
-                      }
-                      return node;
-                    })
-                  );
-                }, 0);
-              }
+              }, 0);
             } else if (data.type === "plot") {
               const { nodeId, data: plotData } = data;
               setNodes((nds) =>
