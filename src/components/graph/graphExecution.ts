@@ -1797,7 +1797,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `_gmx_spec = '${pyEscape(gmxSpec)}'\n`;
           pythonCode += `_gmx_info = _gmx.detect_gmx(_gmx_spec)\n`;
           pythonCode += `if not _gmx_info:\n`;
-          pythonCode += `    raise RuntimeError(f"Local GROMACS engine selected but no usable gmx was found for '{_gmx_spec}'. Set a valid GROMACS path (gmx binary, GMXRC, or install dir) in the Simulate node, or use the OpenMM engine.")\n`;
+          pythonCode += `    raise RuntimeError(f"GROMACS engine selected but no usable gmx was found for '{_gmx_spec}'. Set a valid GROMACS path (gmx binary, GMXRC, or install dir) in the Simulate node, or use the OpenMM engine.")\n`;
           pythonCode += `print(f"[GROMACS] using {_gmx_info['version']} ({_gmx_info['path']})")\n`;
           pythonCode += `_top_path = "${simBase}.top"\n`;
           pythonCode += `_gro_path = "${simBase}.gro"\n`;
