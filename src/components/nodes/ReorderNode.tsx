@@ -22,7 +22,7 @@ export function ReorderNode({ data, isConnectable = true }: ReorderNodeProps) {
   const neworder = data.neworder || "";
 
   return (
-    <Card className="w-[300px] shadow-lg rounded-xl border border-primary/50 bg-card">
+    <Card className="w-[300px] shadow-lg rounded-xl border border-primary/50 bg-card overflow-hidden">
       <Handle type="target" position={Position.Left} isConnectable={isConnectable} className="w-3 h-3 bg-primary/80" />
       <CardHeader className="py-3 px-4 bg-muted/30 border-b">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
