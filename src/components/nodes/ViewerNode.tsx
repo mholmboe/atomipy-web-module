@@ -1036,7 +1036,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       <Handle type="source" position={Position.Right} id="out" className="w-3.5 h-3.5 bg-indigo-500 border-2 border-background z-50" />
       
       <Card
-        className="w-full h-full shadow-2xl transition-all border-indigo-500/50 bg-card/95 backdrop-blur-md overflow-hidden flex flex-col"
+        className="w-full h-full shadow-2xl transition-all border-primary/50 bg-card/95 backdrop-blur-md overflow-hidden flex flex-col"
       >
         <CardHeader className="py-2.5 px-4 bg-indigo-500/10 border-b flex flex-col gap-2 shrink-0">
           {/* Title row */}
