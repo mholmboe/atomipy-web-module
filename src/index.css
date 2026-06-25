@@ -144,13 +144,6 @@
     min-width: var(--builder-node-width) !important;
   }
 
-  /* Consistent node bezel COLOUR: give every node root the same border colour,
-     overriding the per-node (and conditional) border-* utilities. Category identity
-     stays in the coloured header, so the outer bezel is uniform across all nodes. */
-  .react-flow__node > * {
-    border-color: hsl(var(--primary) / 0.5) !important;
-  }
-
   /* Make node selection clearly visible — React Flow's default selected style is
      invisible on these custom card nodes, which made it easy to run a partial
      workflow (or use "Run selected subgraph") without realising a node was
@@ -176,6 +169,15 @@
   .react-flow__node-custom,
   .react-flow__node .bg-card {
     overflow: visible !important;
+  }
+
+  /* Consistent node bezel COLOUR. NB: piggy-backed on the multi-selector rule pattern
+     above because the CSS minifier (lightningcss) silently drops standalone
+     `.react-flow__node:not(...) > div { ... }` rules. Every node root (a div / .bg-card)
+     gets the same border colour; category identity stays in the coloured header. */
+  .react-flow__node > div,
+  .react-flow__node .bg-card {
+    border-color: hsl(var(--primary) / 0.5) !important;
   }
 
   /* Round node header/body backgrounds since the node root has overflow:visible (so
