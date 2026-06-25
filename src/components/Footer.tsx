@@ -22,6 +22,9 @@ const Footer = () => {
             Report a problem
           </a>
         </div>
+        <div className="text-xs text-muted-foreground/60">
+          Privacy-friendly, cookieless analytics — we never store your structures, coordinates, or results.
+        </div>
         <div className="pt-1">
           <a href="https://visitorbadge.io/status?path=atomipy-web-module" target="_blank" rel="noopener noreferrer">
             <img
