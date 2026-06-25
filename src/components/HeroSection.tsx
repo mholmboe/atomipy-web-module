@@ -22,7 +22,7 @@ const HeroSection = () => {
           transition={{ duration: 0.6 }}
           className="text-4xl font-bold tracking-tight text-nav-foreground md:text-5xl"
         >
-          Molecular multicomponent and topology generator
+          Molecular system and topology generator
         </motion.h1>
 
         <motion.p
