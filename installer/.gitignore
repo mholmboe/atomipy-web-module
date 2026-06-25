@@ -3,3 +3,8 @@ app_bundle.tar.gz
 atomipy-*.sh
 atomipy-*.pkg
 atomipy-*.exe
+# constructor's working/build cache
+tmp/
+*.tar.bz2
+build/
+cache/
