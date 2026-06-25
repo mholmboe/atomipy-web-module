@@ -1,0 +1,22 @@
+{
+  "arch": "arm64",
+  "build": "h925e9cb_3",
+  "build_number": 3,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [],
+  "depends": [
+    "__osx >=11.0"
+  ],
+  "fn": "yaml-0.2.5-h925e9cb_3.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "78a0fe9e9c50d2c381e8ee47e3ea437d",
+  "name": "yaml",
+  "platform": "darwin",
+  "sha256": "b03433b13d89f5567e828ea9f1a7d5c5d697bf374c28a4168d71e9464f5dafac",
+  "size": 83386,
+  "subdir": "osx-arm64",
+  "timestamp": 1753484079473,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/yaml-0.2.5-h925e9cb_3.conda",
+  "version": "0.2.5"
+}

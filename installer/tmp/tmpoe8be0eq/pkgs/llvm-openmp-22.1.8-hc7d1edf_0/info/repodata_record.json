@@ -1,0 +1,25 @@
+{
+  "arch": "arm64",
+  "build": "hc7d1edf_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [
+    "intel-openmp <0.0a0",
+    "openmp 22.1.8|22.1.8.*"
+  ],
+  "depends": [
+    "__osx >=11.0"
+  ],
+  "fn": "llvm-openmp-22.1.8-hc7d1edf_0.conda",
+  "license": "Apache-2.0 WITH LLVM-exception",
+  "license_family": "APACHE",
+  "md5": "a9c118f6343fb6301b6f3b4e94c4c562",
+  "name": "llvm-openmp",
+  "platform": "darwin",
+  "sha256": "ccbaad6bbc88f135ab849bc36af5fa6eda36a9ed18ce6f58e3dde3d11784c156",
+  "size": 286313,
+  "subdir": "osx-arm64",
+  "timestamp": 1781736516782,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/llvm-openmp-22.1.8-hc7d1edf_0.conda",
+  "version": "22.1.8"
+}

@@ -1,0 +1,25 @@
+{
+  "build": "pyhd8ed1ab_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "jmespath >=0.7.1,<2.0.0",
+    "python >=3.10",
+    "python-dateutil >=2.1,<3.0.0",
+    "urllib3 >=1.25.4,!=2.2.0,<3"
+  ],
+  "fn": "botocore-1.43.36-pyhd8ed1ab_0.conda",
+  "license": "Apache-2.0",
+  "license_family": "Apache",
+  "md5": "f5e09a21f1ee38e1be4787fea94e6823",
+  "name": "botocore",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "034a19f83d34e70eded5c4baa23cedba5ccd5ef97f37e1d676dd1ab781057873",
+  "size": 8767183,
+  "subdir": "noarch",
+  "timestamp": 1782313417035,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/botocore-1.43.36-pyhd8ed1ab_0.conda",
+  "version": "1.43.36"
+}

@@ -1,0 +1,23 @@
+{
+  "build": "pyhcf101f3_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "python >=3.10",
+    "python"
+  ],
+  "fn": "pyparsing-3.3.2-pyhcf101f3_0.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "3687cc0b82a8b4c17e1f0eb7e47163d5",
+  "name": "pyparsing",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "417fba4783e528ee732afa82999300859b065dc59927344b4859c64aae7182de",
+  "size": 110893,
+  "subdir": "noarch",
+  "timestamp": 1769003998136,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.2-pyhcf101f3_0.conda",
+  "version": "3.3.2"
+}

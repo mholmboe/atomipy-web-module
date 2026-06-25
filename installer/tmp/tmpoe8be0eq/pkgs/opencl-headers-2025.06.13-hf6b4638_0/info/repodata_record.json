@@ -1,0 +1,23 @@
+{
+  "arch": "arm64",
+  "build": "hf6b4638_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [],
+  "depends": [
+    "__osx >=11.0",
+    "libcxx >=19"
+  ],
+  "fn": "opencl-headers-2025.06.13-hf6b4638_0.conda",
+  "license": "Apache-2.0",
+  "license_family": "APACHE",
+  "md5": "0a7a5d256fa6d858d5b496843a161e66",
+  "name": "opencl-headers",
+  "platform": "darwin",
+  "sha256": "0e6737e4aaf2e3dce984fca5575480c32c51608b6435042813054fed320c6dc0",
+  "size": 55910,
+  "subdir": "osx-arm64",
+  "timestamp": 1773845156357,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/opencl-headers-2025.06.13-hf6b4638_0.conda",
+  "version": "2025.06.13"
+}

@@ -1,0 +1,25 @@
+{
+  "arch": "arm64",
+  "build": "py311hc949640_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [],
+  "depends": [
+    "__osx >=11.0",
+    "python >=3.11,<3.12.0a0",
+    "python >=3.11,<3.12.0a0 *_cpython",
+    "python_abi 3.11.* *_cp311"
+  ],
+  "fn": "unicodedata2-17.0.1-py311hc949640_0.conda",
+  "license": "Apache-2.0",
+  "license_family": "Apache",
+  "md5": "a9d9010d246205c63f824b0bcf050acd",
+  "name": "unicodedata2",
+  "platform": "darwin",
+  "sha256": "984d3b0ddb0802c228c520db31d906b5b546b13da3eca1ce35c754d97c012497",
+  "size": 416024,
+  "subdir": "osx-arm64",
+  "timestamp": 1770909604661,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/unicodedata2-17.0.1-py311hc949640_0.conda",
+  "version": "17.0.1"
+}

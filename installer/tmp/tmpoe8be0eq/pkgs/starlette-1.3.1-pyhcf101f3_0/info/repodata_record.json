@@ -1,0 +1,25 @@
+{
+  "build": "pyhcf101f3_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "anyio >=3.6.2,<5",
+    "python >=3.10",
+    "typing_extensions >=4.10.0",
+    "python"
+  ],
+  "fn": "starlette-1.3.1-pyhcf101f3_0.conda",
+  "license": "BSD-3-Clause",
+  "license_family": "BSD",
+  "md5": "bb8e15a6ef1a475545720fa2c29f19c4",
+  "name": "starlette",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "17e3dc37c0ac9754b782e49285a3d8d223d372f7012d64a4f6ae371466cef143",
+  "size": 64264,
+  "subdir": "noarch",
+  "timestamp": 1781447071524,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/starlette-1.3.1-pyhcf101f3_0.conda",
+  "version": "1.3.1"
+}

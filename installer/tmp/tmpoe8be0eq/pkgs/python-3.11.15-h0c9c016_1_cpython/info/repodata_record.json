@@ -1,0 +1,35 @@
+{
+  "arch": "arm64",
+  "build": "h0c9c016_1_cpython",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [
+    "python_abi 3.11.* *_cp311"
+  ],
+  "depends": [
+    "__osx >=11.0",
+    "bzip2 >=1.0.8,<2.0a0",
+    "libexpat >=2.8.1,<3.0a0",
+    "libffi >=3.5.2,<3.6.0a0",
+    "liblzma >=5.8.3,<6.0a0",
+    "libsqlite >=3.53.2,<4.0a0",
+    "libzlib >=1.3.2,<2.0a0",
+    "ncurses >=6.6,<7.0a0",
+    "openssl >=3.5.7,<4.0a0",
+    "readline >=8.3,<9.0a0",
+    "tk >=8.6.13,<8.7.0a0",
+    "tzdata",
+    "pip"
+  ],
+  "fn": "python-3.11.15-h0c9c016_1_cpython.conda",
+  "license": "Python-2.0",
+  "md5": "91607d75cdf9fafc95061e3763582657",
+  "name": "python",
+  "platform": "darwin",
+  "sha256": "a44be5222fe8d3c072ecd22491d37316724b70be6b8e8dabdc1a25e6d293fba8",
+  "size": 15389700,
+  "subdir": "osx-arm64",
+  "timestamp": 1781148926804,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/python-3.11.15-h0c9c016_1_cpython.conda",
+  "version": "3.11.15"
+}

@@ -1,0 +1,23 @@
+{
+  "build": "pyhcf101f3_2",
+  "build_number": 2,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "python >=3.10",
+    "python"
+  ],
+  "fn": "async-timeout-5.0.1-pyhcf101f3_2.conda",
+  "license": "Apache-2.0",
+  "license_family": "APACHE",
+  "md5": "0d0ef7e4a0996b2c4ac2175a12b3bf69",
+  "name": "async-timeout",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "6638b68ab2675d0bed1f73562a4e75a61863b903be1538282cddb56c8e8f75bd",
+  "size": 13559,
+  "subdir": "noarch",
+  "timestamp": 1767290444597,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/async-timeout-5.0.1-pyhcf101f3_2.conda",
+  "version": "5.0.1"
+}

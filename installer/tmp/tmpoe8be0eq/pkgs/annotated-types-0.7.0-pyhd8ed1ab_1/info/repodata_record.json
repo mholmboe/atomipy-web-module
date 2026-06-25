@@ -1,0 +1,23 @@
+{
+  "build": "pyhd8ed1ab_1",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "python >=3.9",
+    "typing-extensions >=4.0.0"
+  ],
+  "fn": "annotated-types-0.7.0-pyhd8ed1ab_1.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "2934f256a8acfe48f6ebb4fce6cde29c",
+  "name": "annotated-types",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "e0ea1ba78fbb64f17062601edda82097fcf815012cf52bb704150a2668110d48",
+  "size": 18074,
+  "subdir": "noarch",
+  "timestamp": 1733247158254,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.7.0-pyhd8ed1ab_1.conda",
+  "version": "0.7.0"
+}

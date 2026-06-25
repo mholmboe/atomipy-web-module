@@ -1,0 +1,23 @@
+{
+  "arch": "arm64",
+  "build": "hc919400_1",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [],
+  "depends": [
+    "__osx >=11.0",
+    "libbrotlicommon 1.2.0 hc919400_1"
+  ],
+  "fn": "libbrotlidec-1.2.0-hc919400_1.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "079e88933963f3f149054eec2c487bc2",
+  "name": "libbrotlidec",
+  "platform": "darwin",
+  "sha256": "2eae444039826db0454b19b52a3390f63bfe24f6b3e63089778dd5a5bf48b6bf",
+  "size": 29452,
+  "subdir": "osx-arm64",
+  "timestamp": 1764017979099,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libbrotlidec-1.2.0-hc919400_1.conda",
+  "version": "1.2.0"
+}

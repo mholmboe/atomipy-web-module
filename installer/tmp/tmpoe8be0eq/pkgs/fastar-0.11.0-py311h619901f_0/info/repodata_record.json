@@ -1,0 +1,27 @@
+{
+  "arch": "arm64",
+  "build": "py311h619901f_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [
+    "__osx >=11.0"
+  ],
+  "depends": [
+    "python",
+    "__osx >=11.0",
+    "python_abi 3.11.* *_cp311",
+    "zstd >=1.5.7,<1.6.0a0"
+  ],
+  "fn": "fastar-0.11.0-py311h619901f_0.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "7316ac6e7b197aa554fec76b9ef19038",
+  "name": "fastar",
+  "platform": "darwin",
+  "sha256": "15db6e8af97c2c43bf627e58b92d9ce2609e04a1324542f914f2df56098e8f1b",
+  "size": 382692,
+  "subdir": "osx-arm64",
+  "timestamp": 1776177847541,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/fastar-0.11.0-py311h619901f_0.conda",
+  "version": "0.11.0"
+}

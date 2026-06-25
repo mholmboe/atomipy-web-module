@@ -1,0 +1,5 @@
+# Build artifacts produced by make_bundle.sh / constructor — regenerated, not committed.
+app_bundle.tar.gz
+atomipy-*.sh
+atomipy-*.pkg
+atomipy-*.exe

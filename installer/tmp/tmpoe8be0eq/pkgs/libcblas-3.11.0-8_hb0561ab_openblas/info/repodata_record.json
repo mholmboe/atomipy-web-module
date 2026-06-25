@@ -1,0 +1,26 @@
+{
+  "arch": "arm64",
+  "build": "8_hb0561ab_openblas",
+  "build_number": 8,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [
+    "blas 2.308   openblas",
+    "liblapack  3.11.0   8*_openblas",
+    "liblapacke 3.11.0   8*_openblas"
+  ],
+  "depends": [
+    "libblas 3.11.0 8_h51639a9_openblas"
+  ],
+  "fn": "libcblas-3.11.0-8_hb0561ab_openblas.conda",
+  "license": "BSD-3-Clause",
+  "license_family": "BSD",
+  "md5": "03a2ef3491da9e5b4d18c03e9f4b3109",
+  "name": "libcblas",
+  "platform": "darwin",
+  "sha256": "f93efcd44bc24f97c2478c7474d3baa6801a057974f330e1d06bedc33e4c778f",
+  "size": 18911,
+  "subdir": "osx-arm64",
+  "timestamp": 1779859147634,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libcblas-3.11.0-8_hb0561ab_openblas.conda",
+  "version": "3.11.0"
+}

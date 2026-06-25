@@ -1,0 +1,28 @@
+{
+  "arch": "arm64",
+  "build": "py311hf7c400d_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [
+    "__osx >=11.0"
+  ],
+  "depends": [
+    "python",
+    "typing-extensions >=4.6.0,!=4.7.0",
+    "__osx >=11.0",
+    "python 3.11.* *_cpython",
+    "python_abi 3.11.* *_cp311"
+  ],
+  "fn": "pydantic-core-2.46.4-py311hf7c400d_0.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "80d6864b30e0697b652a9bd580b2d351",
+  "name": "pydantic-core",
+  "platform": "darwin",
+  "sha256": "194e8872dcda301703c8f1427e480fee6421e3901803ffc863b68eb886372eaf",
+  "size": 1730463,
+  "subdir": "osx-arm64",
+  "timestamp": 1778084304998,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/pydantic-core-2.46.4-py311hf7c400d_0.conda",
+  "version": "2.46.4"
+}

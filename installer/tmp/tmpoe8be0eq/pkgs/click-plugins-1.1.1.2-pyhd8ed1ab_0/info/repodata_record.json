@@ -1,0 +1,23 @@
+{
+  "build": "pyhd8ed1ab_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "click >=4.0",
+    "python >=3.9"
+  ],
+  "fn": "click-plugins-1.1.1.2-pyhd8ed1ab_0.conda",
+  "license": "BSD-3-Clause",
+  "license_family": "BSD",
+  "md5": "e9b05deb91c013e5224672a4ba9cf8d1",
+  "name": "click-plugins",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "ba1ee6e2b2be3da41d70d0d51d1159010de900aa3f33fceaea8c52e9bd30a26e",
+  "size": 12683,
+  "subdir": "noarch",
+  "timestamp": 1750848314962,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/click-plugins-1.1.1.2-pyhd8ed1ab_0.conda",
+  "version": "1.1.1.2"
+}

@@ -1,0 +1,24 @@
+{
+  "arch": "arm64",
+  "build": "hdae7583_19",
+  "build_number": 19,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [
+    "libgfortran 15.2.0"
+  ],
+  "depends": [
+    "libgcc >=15.2.0"
+  ],
+  "fn": "libgfortran5-15.2.0-hdae7583_19.conda",
+  "license": "GPL-3.0-only WITH GCC-exception-3.1",
+  "license_family": "GPL",
+  "md5": "ba36d8c606a6a53fe0b8c12d47267b3d",
+  "name": "libgfortran5",
+  "platform": "darwin",
+  "sha256": "d0a68b7a121d115b80c169e24d1265dcc25a3fe58d107df1bbc430797e226d88",
+  "size": 599691,
+  "subdir": "osx-arm64",
+  "timestamp": 1778273075448,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libgfortran5-15.2.0-hdae7583_19.conda",
+  "version": "15.2.0"
+}

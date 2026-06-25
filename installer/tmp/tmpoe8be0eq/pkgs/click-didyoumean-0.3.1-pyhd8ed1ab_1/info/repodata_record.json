@@ -1,0 +1,23 @@
+{
+  "build": "pyhd8ed1ab_1",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "click >=7",
+    "python >=3.9,<4.0.0"
+  ],
+  "fn": "click-didyoumean-0.3.1-pyhd8ed1ab_1.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "dd87c399586cac9f8bdd8c644b2592a6",
+  "name": "click-didyoumean",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "f3e6540088db593707766aa30abe184463e4842182012ffb81e1cc784dbdc436",
+  "size": 10192,
+  "subdir": "noarch",
+  "timestamp": 1734293176426,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/click-didyoumean-0.3.1-pyhd8ed1ab_1.conda",
+  "version": "0.3.1"
+}

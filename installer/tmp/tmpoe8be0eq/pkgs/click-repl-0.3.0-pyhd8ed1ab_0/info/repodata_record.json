@@ -1,0 +1,25 @@
+{
+  "build": "pyhd8ed1ab_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "click",
+    "prompt_toolkit",
+    "python >=3.6",
+    "six"
+  ],
+  "fn": "click-repl-0.3.0-pyhd8ed1ab_0.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "27eb8f68250666c1a19d1b6ec9d12c4e",
+  "name": "click-repl",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "69c16e0b89e1fb4fc444af4798ef1222b3075d074cbcbe70b9af793668200a14",
+  "size": 15319,
+  "subdir": "noarch",
+  "timestamp": 1694959586805,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/click-repl-0.3.0-pyhd8ed1ab_0.conda",
+  "version": "0.3.0"
+}

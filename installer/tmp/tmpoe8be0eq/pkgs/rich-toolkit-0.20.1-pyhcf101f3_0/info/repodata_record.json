@@ -1,0 +1,26 @@
+{
+  "build": "pyhcf101f3_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "python >=3.10",
+    "rich >=13.7.1",
+    "click >=8.1.7",
+    "typing_extensions >=4.12.2",
+    "python"
+  ],
+  "fn": "rich-toolkit-0.20.1-pyhcf101f3_0.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "e7cc7bf579daf5fa80338c1efe41b62b",
+  "name": "rich-toolkit",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "e29d6b7138aca5e0773462c07bbafd707f8fe9763f95d811ccd4394ac0f262ff",
+  "size": 34331,
+  "subdir": "noarch",
+  "timestamp": 1780659356824,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/rich-toolkit-0.20.1-pyhcf101f3_0.conda",
+  "version": "0.20.1"
+}

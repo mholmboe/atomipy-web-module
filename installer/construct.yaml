@@ -1,0 +1,84 @@
+# conda `constructor` recipe — builds a native, self-contained installer for the
+# atomipy web-module that bundles a conda environment (Python + OpenMM + CPU GROMACS
+# + the FastAPI backend + the built frontend + the vendored atomipy package).
+#
+# Produces, per operating system:
+#   Linux   -> atomipy-<version>-Linux-x86_64.sh
+#   macOS   -> atomipy-<version>-MacOSX-<arch>.pkg  (and .sh)
+#   Windows -> atomipy-<version>-Windows-x86_64.exe
+#
+# Build prerequisites (see ../DISTRIBUTION.md):
+#   1. `conda install -n base -c conda-forge constructor`
+#   2. Build the frontend first so ../dist exists:  `npm ci && npm run build`
+#   3. From this folder:  `constructor .`
+#
+# NOTE: this is a PROTOTYPE — verify the bundled package set on each target OS and
+# test the produced installer before distributing.
+
+name: atomipy
+version: 0.5.1
+company: atomipy.io
+
+# Optional: a license shown during install. Uncomment and point at a real file to include
+# a license page (recommended for public distribution of .pkg/.exe). Left disabled so the
+# prototype builds without one.
+# license_file: ../LICENSE
+
+channels:
+  - conda-forge
+
+# Everything below is resolved as conda packages and baked into the installed env.
+specs:
+  - python=3.11
+  - pip
+  # --- simulation engines (the heavy, hard-to-bundle-otherwise bits) ---
+  - openmm>=8.1            # OpenMM auto-uses CUDA/OpenCL/Metal where available
+  - gromacs               # CPU build from conda-forge -> `gmx` on the env PATH
+  # --- atomipy + analysis runtime ---
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - tqdm
+  - gemmi>=0.7.0
+  - numba>=0.50.0
+  # --- web server ---
+  - fastapi
+  - uvicorn
+  - python-multipart       # FastAPI file uploads
+  - requests
+  # celery/redis are only used by the dev stack; the desktop build runs builds
+  # in-thread, but include the client libs so imports never fail.
+  - celery
+  - redis-py
+
+# constructor's `extra_files` copies individual FILES only (not directories), so the app
+# (dist/ + backend/ + atomipy/ + workers/ + requirements.txt) is shipped as a single
+# archive built by ./make_bundle.sh and unpacked into $PREFIX by post_install.
+# The launcher scripts ARE plain files, so they're copied directly.
+extra_files:
+  - app_bundle.tar.gz
+  - launch_atomipy.sh        # [unix]
+  - launch_atomipy.bat       # [win]
+
+# Runs once after files are unpacked (sets up the launcher / prints next steps).
+post_install: post_install.sh    # [unix]
+post_install: post_install.bat   # [win]
+
+# Per-OS installer artifact(s).
+installer_type: all    # [unix]   # Linux: .sh ; macOS: .pkg + .sh
+installer_type: exe    # [win]
+
+# Don't leave the package cache inside the install (smaller footprint).
+keep_pkgs: false
+
+# Desktop-app behaviour: do NOT touch the user's shell (~/.zshrc / ~/.bashrc) or register a
+# system Python. The app is launched only via launch_atomipy.{sh,bat}. This keeps the
+# footprint to a single folder, so uninstalling = deleting that folder (+ pkgutil --forget
+# on macOS). Remove these if you ever want it to behave like a full conda install.
+initialize_conda: false
+register_python: false
+
+# macOS .pkg installs into the user's home directory by default; the folder is named after
+# `name` above (i.e. ~/atomipy). Uncomment to change the default sub-location.
+# default_location_pkg: atomipy

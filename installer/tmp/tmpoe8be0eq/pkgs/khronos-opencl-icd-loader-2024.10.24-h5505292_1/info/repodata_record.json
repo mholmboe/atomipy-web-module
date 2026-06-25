@@ -1,0 +1,23 @@
+{
+  "arch": "arm64",
+  "build": "h5505292_1",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [],
+  "depends": [
+    "__osx >=11.0",
+    "opencl-headers >=2024.10.24"
+  ],
+  "fn": "khronos-opencl-icd-loader-2024.10.24-h5505292_1.conda",
+  "license": "Apache-2.0",
+  "license_family": "APACHE",
+  "md5": "fb5a6baf5df9abc027955a408c61ac74",
+  "name": "khronos-opencl-icd-loader",
+  "platform": "darwin",
+  "sha256": "74abb94591a42b0986b864cdd1c3b5b2e6e6b6851d5b8d0ecbe038fc14f036be",
+  "size": 35128,
+  "subdir": "osx-arm64",
+  "timestamp": 1732916821283,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/khronos-opencl-icd-loader-2024.10.24-h5505292_1.conda",
+  "version": "2024.10.24"
+}

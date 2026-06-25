@@ -1,0 +1,32 @@
+{
+  "build": "pyhcf101f3_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [
+    "aioquic >=1.2.0",
+    "cryptography >=45",
+    "httpcore >=1.0.0",
+    "httpx >=0.28.0",
+    "h2 >=4.2.0",
+    "idna >=3.10",
+    "trio >=0.30",
+    "wmi >=1.5.1"
+  ],
+  "depends": [
+    "python >=3.10,<4.0.0",
+    "sniffio",
+    "python"
+  ],
+  "fn": "dnspython-2.8.0-pyhcf101f3_0.conda",
+  "license": "ISC",
+  "md5": "d73fdc05f10693b518f52c994d748c19",
+  "name": "dnspython",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "ef1e7b8405997ed3d6e2b6722bd7088d4a8adf215e7c88335582e65651fb4e05",
+  "size": 196500,
+  "subdir": "noarch",
+  "timestamp": 1757292856922,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/dnspython-2.8.0-pyhcf101f3_0.conda",
+  "version": "2.8.0"
+}

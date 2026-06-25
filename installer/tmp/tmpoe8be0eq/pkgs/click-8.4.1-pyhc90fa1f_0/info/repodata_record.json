@@ -1,0 +1,24 @@
+{
+  "build": "pyhc90fa1f_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "__unix",
+    "python",
+    "python >=3.10"
+  ],
+  "fn": "click-8.4.1-pyhc90fa1f_0.conda",
+  "license": "BSD-3-Clause",
+  "license_family": "BSD",
+  "md5": "554304a07e581a85891b15e39ea9f268",
+  "name": "click",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "c253a41cdf898b651a0786cbb76c6d5fc101d0dbbe719f93a124bc4fde5cdd6a",
+  "size": 104999,
+  "subdir": "noarch",
+  "timestamp": 1779900548735,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/click-8.4.1-pyhc90fa1f_0.conda",
+  "version": "8.4.1"
+}

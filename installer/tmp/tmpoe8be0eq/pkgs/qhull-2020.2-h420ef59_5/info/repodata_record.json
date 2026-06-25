@@ -1,0 +1,22 @@
+{
+  "arch": "arm64",
+  "build": "h420ef59_5",
+  "build_number": 5,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [],
+  "depends": [
+    "__osx >=11.0",
+    "libcxx >=16"
+  ],
+  "fn": "qhull-2020.2-h420ef59_5.conda",
+  "license": "LicenseRef-Qhull",
+  "md5": "6483b1f59526e05d7d894e466b5b6924",
+  "name": "qhull",
+  "platform": "darwin",
+  "sha256": "873ac689484262a51fd79bc6103c1a1bedbf524924d7f0088fb80703042805e4",
+  "size": 516376,
+  "subdir": "osx-arm64",
+  "timestamp": 1720814307311,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/qhull-2020.2-h420ef59_5.conda",
+  "version": "2020.2"
+}

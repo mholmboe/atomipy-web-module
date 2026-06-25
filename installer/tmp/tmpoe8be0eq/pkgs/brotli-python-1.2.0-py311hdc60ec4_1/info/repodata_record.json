@@ -1,0 +1,28 @@
+{
+  "arch": "arm64",
+  "build": "py311hdc60ec4_1",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [
+    "libbrotlicommon 1.2.0 hc919400_1"
+  ],
+  "depends": [
+    "__osx >=11.0",
+    "libcxx >=19",
+    "python >=3.11,<3.12.0a0",
+    "python >=3.11,<3.12.0a0 *_cpython",
+    "python_abi 3.11.* *_cp311"
+  ],
+  "fn": "brotli-python-1.2.0-py311hdc60ec4_1.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "150cbf381febcf0a5e470a8d066e1bc0",
+  "name": "brotli-python",
+  "platform": "darwin",
+  "sha256": "617545ec0e97d35ed2ff7852f2581a20c0dda80b366d0c42a43706687f971ba8",
+  "size": 359588,
+  "subdir": "osx-arm64",
+  "timestamp": 1764018467340,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/brotli-python-1.2.0-py311hdc60ec4_1.conda",
+  "version": "1.2.0"
+}

@@ -1,0 +1,23 @@
+{
+  "build": "pyhd8ed1ab_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "async-timeout >=4.0.3",
+    "python >=3.10"
+  ],
+  "fn": "redis-py-8.0.1-pyhd8ed1ab_0.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "55bebda63a5b9f512c2e19f20bf581b9",
+  "name": "redis-py",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "63ac96dccefb16f7328463c0520c26ededbdbb039d36aea5cbc1fcff886bbe35",
+  "size": 321576,
+  "subdir": "noarch",
+  "timestamp": 1782266366040,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/redis-py-8.0.1-pyhd8ed1ab_0.conda",
+  "version": "8.0.1"
+}

@@ -1,0 +1,25 @@
+{
+  "arch": "arm64",
+  "build": "py311he363849_1",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [],
+  "depends": [
+    "python",
+    "__osx >=11.0",
+    "python 3.11.* *_cpython",
+    "python_abi 3.11.* *_cp311"
+  ],
+  "fn": "websockets-16.0-py311he363849_1.conda",
+  "license": "BSD-3-Clause",
+  "license_family": "BSD",
+  "md5": "60c99f87acefd8324d56e9b94a5d7f48",
+  "name": "websockets",
+  "platform": "darwin",
+  "sha256": "8f951328df7cf6878d5f5a6c74a7afc45ffe873aa014c76bb6dbaa71052eea9e",
+  "size": 360680,
+  "subdir": "osx-arm64",
+  "timestamp": 1768087419260,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/websockets-16.0-py311he363849_1.conda",
+  "version": "16.0"
+}

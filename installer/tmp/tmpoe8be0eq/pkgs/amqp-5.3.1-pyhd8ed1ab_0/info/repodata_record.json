@@ -1,0 +1,23 @@
+{
+  "build": "pyhd8ed1ab_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "python >=3.10",
+    "vine >=5.0.0,<6.0.0"
+  ],
+  "fn": "amqp-5.3.1-pyhd8ed1ab_0.conda",
+  "license": "BSD-3-Clause",
+  "license_family": "BSD",
+  "md5": "7b12e35821f20400ac419b830efb03d9",
+  "name": "amqp",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "f0e7009b24894845cb48b1e6902f8c64e61b4a27ff5df4c0438ce83472c288de",
+  "size": 48326,
+  "subdir": "noarch",
+  "timestamp": 1765498579378,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/amqp-5.3.1-pyhd8ed1ab_0.conda",
+  "version": "5.3.1"
+}

@@ -1,0 +1,26 @@
+{
+  "arch": "arm64",
+  "build": "h29bd36a_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [],
+  "depends": [
+    "__osx >=11.0",
+    "fribidi >=1.0.16,<2.0a0",
+    "harfbuzz >=14.2.1",
+    "libfreetype >=2.14.3",
+    "libfreetype6 >=2.14.3"
+  ],
+  "fn": "libraqm-0.10.5-h29bd36a_0.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "4c7999b62691f4ed6e0650832b7b6cff",
+  "name": "libraqm",
+  "platform": "darwin",
+  "sha256": "9a28d495e12638bda33a43c236c4089beef11e09b7a7a5ba52f86e3605264eb1",
+  "size": 27339,
+  "subdir": "osx-arm64",
+  "timestamp": 1780835892821,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libraqm-0.10.5-h29bd36a_0.conda",
+  "version": "0.10.5"
+}

@@ -1,0 +1,23 @@
+{
+  "arch": "arm64",
+  "build": "h81086ad_1",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64/",
+  "constrains": [],
+  "depends": [
+    "__osx >=11.0",
+    "libcxx >=19"
+  ],
+  "fn": "pixman-0.46.4-h81086ad_1.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "17c3d745db6ea72ae2fce17e7338547f",
+  "name": "pixman",
+  "platform": "darwin",
+  "sha256": "29c9b08a9b8b7810f9d4f159aecfd205fce051633169040005c0b7efad4bc718",
+  "size": 248045,
+  "subdir": "osx-arm64",
+  "timestamp": 1754665282033,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/pixman-0.46.4-h81086ad_1.conda",
+  "version": "0.46.4"
+}

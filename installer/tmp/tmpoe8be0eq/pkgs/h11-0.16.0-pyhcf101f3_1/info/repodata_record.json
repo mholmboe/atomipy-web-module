@@ -1,0 +1,24 @@
+{
+  "build": "pyhcf101f3_1",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch/",
+  "constrains": [],
+  "depends": [
+    "python >=3.10",
+    "typing_extensions",
+    "python"
+  ],
+  "fn": "h11-0.16.0-pyhcf101f3_1.conda",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "b8993c19b0c32a2f7b66cbb58ca27069",
+  "name": "h11",
+  "noarch": "python",
+  "package_type": "noarch_python",
+  "sha256": "96cac6573fd35ae151f4d6979bab6fbc90cb6b1fb99054ba19eb075da9822fcb",
+  "size": 39069,
+  "subdir": "noarch",
+  "timestamp": 1767729720872,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/h11-0.16.0-pyhcf101f3_1.conda",
+  "version": "0.16.0"
+}
