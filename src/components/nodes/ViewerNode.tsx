@@ -130,6 +130,7 @@ type ViewerNodeData = {
   showAtomLabels?: boolean;
   labelMode?: "none" | "element" | "charge";
   spin?: boolean;
+  depthCue?: boolean;
   projection?: ViewerProjection;
   stickRadius?: number;
   sphereScale?: number;
@@ -281,6 +282,8 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const showAtomLabels = labelMode !== "none";
   const labelIsCharge = labelMode === "charge";
   const spin = data.spin ?? false;
+  // Depth cue (distance fog/shading). Default OFF so NGL renders flat like 3Dmol/JSmol.
+  const depthCue = data.depthCue ?? false;
   const projection = data.projection ?? "perspective";
   const stickRadius = data.stickRadius ?? 0.15;
   const sphereScale = data.sphereScale ?? 0.25;
@@ -713,7 +716,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     return () => clearInterval(iv);
   }, [renderer, pdb, nodeWidth, nodeHeight, fitNgl]);
 
-  // ─── NGL light params (no reload): background, projection, spin ────────────
+  // ─── NGL light params (no reload): background, projection, spin, depth cue ──
   useEffect(() => {
     if (renderer !== "ngl" || !nglStageRef.current) return;
     const stage = nglStageRef.current;
@@ -721,10 +724,14 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       stage.setParameters({
         backgroundColor: BACKGROUNDS[background],
         cameraType: projection === "orthographic" ? "orthographic" : "perspective",
+        // Distance fog = NGL's depth shading. Off (fogNear=fogFar=100 -> no fade) keeps it
+        // flat like 3Dmol/JSmol; on restores NGL's default depth cue.
+        fogNear: depthCue ? 50 : 100,
+        fogFar: 100,
       });
     } catch { /* ignore */ }
     try { stage.setSpin(spin ? [0, 1, 0] : null, 0.01); } catch { /* ignore */ }
-  }, [renderer, background, projection, spin]);
+  }, [renderer, background, projection, spin, depthCue]);
 
   // ─── Custom Trajectory Animation Loop ─────────────────────────────────────
   useEffect(() => {
@@ -848,6 +855,9 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       lines.push("set perspectiveDepth true");
     }
 
+    // Depth cue (distance shading) — match the NGL/3Dmol "Depth cue" toggle.
+    lines.push(depthCue ? "set zShade on" : "set zShade off");
+
     // Multi-model PDB: Jmol loads each MODEL as a frame. Stop native animation
     // so our React frame browser drives it, and restore the current frame.
     if (isMulti) {
@@ -856,7 +866,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     }
 
     return lines.join("; ");
-  }, [background, computeBonds, hidePeriodicBonds, viewStyle, showHydrogens, showUnitCell, showAtomLabels, labelIsCharge, spin, projection, isMulti, showMiller, millerSig]);
+  }, [background, computeBonds, hidePeriodicBonds, viewStyle, showHydrogens, showUnitCell, showAtomLabels, labelIsCharge, spin, projection, depthCue, isMulti, showMiller, millerSig]);
 
   useEffect(() => {
     if (renderer !== "jsmol") return;
@@ -1169,6 +1179,13 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                     onCheckedChange={(checked) => setViewerOption({ spin: Boolean(checked) })}
                   >
                     Spin
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    className={compactItemClass}
+                    checked={depthCue}
+                    onCheckedChange={(checked) => setViewerOption({ depthCue: Boolean(checked) })}
+                  >
+                    Depth cue (3D shading)
                   </DropdownMenuCheckboxItem>
                   <DropdownMenuSeparator />
                   {(renderer === "3dmol" || renderer === "ngl") && (
