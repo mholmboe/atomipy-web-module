@@ -27,7 +27,7 @@ export const NodeHeader = ({ id, title, Icon, colorClass = "text-primary", class
 
   return (
     <>
-      <div className={`${className} p-3 border-b border-border flex items-center justify-between pointer-events-auto`}>
+      <div className={`${className} rounded-t-xl p-3 border-b border-border flex items-center justify-between pointer-events-auto`}>
         <div className="flex items-center gap-2">
           <Icon className={`w-4 h-4 ${colorClass}`} />
           <h3 className="text-sm font-semibold text-foreground m-0">{title}</h3>
