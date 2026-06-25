@@ -22,6 +22,25 @@
   <script type="text/javascript" src="https://chemapps.stolaf.edu/jmol/jsmol/JSmol.min.js"></script>
   <!-- NGL: GPU impostor-rendered viewer, fast for large MD trajectories (window.NGL) -->
   <script src="https://unpkg.com/ngl@2.3.1/dist/ngl.js"></script>
+
+  <!-- Privacy-friendly visitor analytics (GoatCounter): cookieless, GDPR-friendly,
+       aggregate country-level geography + referrers/pages. It counts page visits only —
+       it never sees structures, coordinates, or result files.
+       SETUP: create a free site at https://www.goatcounter.com (pick a code, e.g. "atomipy"
+       -> dashboard at https://atomipy.goatcounter.com), then set GOATCOUNTER_CODE below.
+       It stays inactive (no requests) until the code is set. -->
+  <script>
+    (function () {
+      var code = "atomipy";   // goatcounter.com site code -> https://atomipy.goatcounter.com
+      if (code && code !== "YOURCODE") {
+        var s = document.createElement("script");
+        s.async = true;
+        s.src = "//gc.zgo.at/count.js";
+        s.setAttribute("data-goatcounter", "https://" + code + ".goatcounter.com/count");
+        document.head.appendChild(s);
+      }
+    })();
+  </script>
 </head>
 
 <body>
