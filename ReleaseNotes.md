@@ -1,3 +1,27 @@
+# Release Notes: atomipy Visual Builder (`atomipy-web-module`) v0.5.1
+
+*Released 2026-06-25 · embeds atomipy 0.97*
+
+A focused viewer release: a third renderer (**NGL**) for smooth large-trajectory
+playback, plus trajectory-rendering fixes.
+
+## 🧊 Viewer
+* **NGL renderer** added alongside 3Dmol and JSmol (toggle at the top of the node).
+  NGL uses **GPU impostor rendering**, so large MD trajectories play smoothly where
+  3Dmol bogs down. Wired to all the shared controls: representations (ball & stick /
+  sticks / spheres / lines), element/charge **labels**, unit cell (thin blue box),
+  hydrogens, spin, projection, **trajectory playback**, style presets, **PNG export**,
+  and reset. Not in NGL: Miller-plane overlay and outline (3Dmol/JSmol).
+* **Whole-molecule trajectories**: the GROMACS viewer trajectory is now wrapped with
+  `-pbc mol` (was `-pbc atom`), so molecules stay whole and bonds no longer stretch
+  across the box during playback.
+* **Sizing/zoom fix**: the viewer canvas now fills the node at any React Flow zoom
+  level (sized to layout pixels, not the zoom-transformed rectangle).
+* The empty-viewer placeholder now includes a short **renderer guide** (which mode is
+  best for what).
+
+---
+
 # Release Notes: atomipy Visual Builder (`atomipy-web-module`) v0.5.0
 
 *Released 2026-06-24 · embeds atomipy 0.97*

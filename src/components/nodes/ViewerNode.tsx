@@ -151,6 +151,74 @@ const JSMOL_BG: Record<string, string> = {
   black: "[0,0,0]",
 };
 
+// NGL bonds atoms by interatomic distance and will draw long "bonds" spanning the
+// periodic box (between atoms sitting on opposite cell faces). Real covalent/ionic
+// bonds are < ~3 Å, so compact the structure's bondStore in place, dropping anything
+// longer. Guarded — NGL internals are version-specific; on mismatch it just skips.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function prunePeriodicBondsNGL(structure: any, cutoff = 3.0) {
+  try {
+    const bs = structure?.bondStore;
+    if (!bs || typeof bs.count !== "number") return;
+    const ap1 = structure.getAtomProxy();
+    const ap2 = structure.getAtomProxy();
+    const c2 = cutoff * cutoff;
+    let n = 0;
+    for (let i = 0; i < bs.count; i++) {
+      ap1.index = bs.atomIndex1[i];
+      ap2.index = bs.atomIndex2[i];
+      const dx = ap1.x - ap2.x, dy = ap1.y - ap2.y, dz = ap1.z - ap2.z;
+      if (dx * dx + dy * dy + dz * dz <= c2) {
+        bs.atomIndex1[n] = bs.atomIndex1[i];
+        bs.atomIndex2[n] = bs.atomIndex2[i];
+        if (bs.bondOrder) bs.bondOrder[n] = bs.bondOrder[i];
+        n++;
+      }
+    }
+    bs.count = n;
+  } catch { /* NGL bondStore API changed — leave bonds as-is */ }
+}
+
+// Draw the unit cell as a custom NGL Shape (12 cylinder edges) so we fully control
+// colour and thickness — NGL's built-in 'unitcell' representation is hard to recolour
+// and thin reliably (it renders thick, default-coloured edges + diagonals).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function addNglUnitcellBox(stage: any, NGL: any, pdb: string, hexColor: string, radius: number) {
+  const cell = parseCryst1(pdb);
+  if (!cell || !NGL?.Shape) return null;
+  const { a, b, c } = cell;
+  const d2r = Math.PI / 180;
+  const al = cell.alpha * d2r, be = cell.beta * d2r, ga = cell.gamma * d2r;
+  // Standard crystallographic cell → Cartesian lattice vectors.
+  const A = [a, 0, 0];
+  const B = [b * Math.cos(ga), b * Math.sin(ga), 0];
+  const cx = c * Math.cos(be);
+  const cy = Math.abs(Math.sin(ga)) > 1e-6 ? c * (Math.cos(al) - Math.cos(be) * Math.cos(ga)) / Math.sin(ga) : 0;
+  const C = [cx, cy, Math.sqrt(Math.max(0, c * c - cx * cx - cy * cy))];
+  const sum = (...vs: number[][]) => vs.reduce((acc, v) => [acc[0] + v[0], acc[1] + v[1], acc[2] + v[2]], [0, 0, 0]);
+  const O = [0, 0, 0];
+  const corners = { O, A, B, C, AB: sum(A, B), AC: sum(A, C), BC: sum(B, C), ABC: sum(A, B, C) };
+  const edges: number[][][] = [
+    [O, A], [O, B], [O, C],
+    [A, corners.AB], [A, corners.AC],
+    [B, corners.AB], [B, corners.BC],
+    [C, corners.AC], [C, corners.BC],
+    [corners.AB, corners.ABC], [corners.AC, corners.ABC], [corners.BC, corners.ABC],
+  ];
+  const rgb = [
+    parseInt(hexColor.slice(1, 3), 16) / 255,
+    parseInt(hexColor.slice(3, 5), 16) / 255,
+    parseInt(hexColor.slice(5, 7), 16) / 255,
+  ];
+  try {
+    const shape = new NGL.Shape("unitcell-box");
+    edges.forEach(([p, q]) => shape.addCylinder(p, q, rgb, radius));
+    const sc = stage.addComponentFromObject(shape);
+    sc.addRepresentation("buffer");
+    return sc;
+  } catch { return null; }
+}
+
 export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNodeData>) {
   const { updateNodeData, deleteElements } = useReactFlow();
 
@@ -259,6 +327,20 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       try { nglTrajRef.current?.setFrame?.(n); } catch { /* trajectory not ready */ }
     }
   }, [renderer]);
+
+  // Size the NGL canvas to the container's LAYOUT box (clientWidth/Height), which is
+  // unaffected by React Flow's zoom transform. NGL's own handleResize() measures the
+  // transform-scaled rect, so when the graph is zoomed out it sizes the canvas too small.
+  const fitNgl = useCallback(() => {
+    const stage = nglStageRef.current;
+    const el = nglContainerRef.current;
+    if (!stage || !el) return;
+    const w = el.clientWidth, h = el.clientHeight;
+    try {
+      if (w > 0 && h > 0 && stage.viewer?.setSize) stage.viewer.setSize(w, h);
+      else stage.handleResize?.();
+    } catch { /* ignore */ }
+  }, []);
 
   const setViewerOption = (patch: Partial<ViewerNodeData>) => {
     updateNodeData(id, { ...data, ...patch });
@@ -511,6 +593,9 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       nglStageRef.current = new window.NGL.Stage(nglContainerRef.current, {
         backgroundColor: BACKGROUNDS[background],
       });
+      // Fit the canvas to the container once layout is flushed (the node may have
+      // just become visible, so clientWidth/Height can be stale at creation).
+      requestAnimationFrame(() => fitNgl());
     }
     const stage = nglStageRef.current;
 
@@ -541,10 +626,51 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       .then((comp: any) => {
         if (cancelled || !comp) { return; }
         nglCompRef.current = comp;
-        comp.addRepresentation(reprType, sele ? { sele } : {});
+        // Drop box-spanning bonds NGL draws across the periodic boundary.
+        prunePeriodicBondsNGL(comp.structure, 3.0);
+
+        // Main representation, honoring the stick/sphere size controls.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const reprParams: any = {};
+        if (sele) reprParams.sele = sele;
+        if (reprType === "ball+stick" || reprType === "licorice") reprParams.radius = stickRadius;
+        if (reprType === "spacefill") reprParams.scale = sphereScale;
+        comp.addRepresentation(reprType, reprParams);
+
         if (showUnitCell) {
-          try { comp.addRepresentation("unitcell", {}); } catch { /* no crystal data */ }
+          // Custom shape box (thin indigo) instead of NGL's 'unitcell' rep, which we
+          // can't reliably recolour/thin (it showed thick orange edges + diagonals).
+          addNglUnitcellBox(stage, window.NGL, pdb, "#6366f1", 0.05);
         }
+
+        // Atom labels (element or charge), matching the 3Dmol/JSmol Labels option.
+        if (showAtomLabels) {
+          try {
+            const labelText: Record<number, string> = {};
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            comp.structure.eachAtom((ap: any) => {
+              if (!showHydrogens && ap.element === "H") return;
+              if (labelIsCharge) {
+                const q = chargeValues[ap.index];
+                if (typeof q === "number" && Number.isFinite(q)) labelText[ap.index] = q.toFixed(3);
+              } else {
+                labelText[ap.index] = ap.element || ap.atomname || "";
+              }
+            });
+            const dark = background === "dark" || background === "black";
+            comp.addRepresentation("label", {
+              sele: showHydrogens ? undefined : "not _H",
+              labelType: "text",
+              labelText,
+              color: dark ? "#e2e8f0" : "#0f172a",
+              showBackground: true,
+              backgroundColor: dark ? "#0f172a" : "#f8fafc",
+              backgroundOpacity: 0.45,
+              scale: 1.2,
+            });
+          } catch { /* label rep unavailable */ }
+        }
+
         if (isMulti) {
           try {
             const trajComp = comp.addTrajectory(undefined, {});
@@ -553,12 +679,39 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
           } catch { /* trajectory unavailable */ }
         }
         comp.autoView();
-        try { stage.handleResize(); } catch { /* ignore */ }
+        // Layout may not be flushed yet (node just shown/resized) — fit now and shortly after.
+        fitNgl();
+        setTimeout(fitNgl, 60);
+        setTimeout(fitNgl, 250);
       })
       .catch(() => { /* parse failed — leave the stage empty */ });
 
     return () => { cancelled = true; };
-  }, [renderer, pdb, viewStyle, showHydrogens, showUnitCell, isMulti]);
+  }, [renderer, pdb, viewStyle, showHydrogens, showUnitCell, isMulti, stickRadius, sphereScale, showAtomLabels, labelIsCharge, chargeValues, fitNgl]);
+
+  // ─── Keep the NGL canvas sized to the node (resize, panel/layout changes) ──
+  useEffect(() => {
+    if (renderer !== "ngl") return;
+    const el = nglContainerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => fitNgl());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [renderer, fitNgl]);
+
+  // Re-fit NGL after it activates / the node resizes. NGL's first handleResize can run
+  // before the flex layout settles its WIDTH, leaving the canvas narrower than the node;
+  // a short kick loop re-fits a few times until the real size is in. (ResizeObserver
+  // above handles later interactive resizes.)
+  useEffect(() => {
+    if (renderer !== "ngl") return;
+    let kicks = 0;
+    const iv = setInterval(() => {
+      fitNgl();
+      if (++kicks >= 10) clearInterval(iv);
+    }, 120);
+    return () => clearInterval(iv);
+  }, [renderer, pdb, nodeWidth, nodeHeight, fitNgl]);
 
   // ─── NGL light params (no reload): background, projection, spin ────────────
   useEffect(() => {
@@ -769,10 +922,10 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     if (renderer === "3dmol" && viewerInstance.current) {
       viewerInstance.current.resize();
       viewerInstance.current.render();
-    } else if (renderer === "ngl" && nglStageRef.current) {
-      try { nglStageRef.current.handleResize(); } catch { /* ignore */ }
+    } else if (renderer === "ngl") {
+      fitNgl();
     }
-  }, [selected, renderer]);
+  }, [selected, renderer, fitNgl]);
 
   const handleResetCamera = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1018,7 +1171,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                     Spin
                   </DropdownMenuCheckboxItem>
                   <DropdownMenuSeparator />
-                  {renderer === "3dmol" && (
+                  {(renderer === "3dmol" || renderer === "ngl") && (
                     <>
                       <DropdownMenuLabel className={compactLabelClass}>Style Presets</DropdownMenuLabel>
                       <DropdownMenuItem className={compactItemClass} onClick={() => setViewerOption({ stickRadius: 0.1, sphereScale: 0.2, lineWidth: 0.9 })}>
@@ -1167,18 +1320,37 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           />
-          {/* NGL container (WebGL canvas) */}
+          {/* NGL container (WebGL canvas). Absolutely filling the (relative) CardContent
+              guarantees it matches the node exactly — `h-full` can under-resolve, leaving
+              NGL at a small default square. `absolute` is itself a positioned ancestor for
+              NGL's own absolute viewport. No stopPropagation (parent has `nodrag`), so the
+              canvas handles rotate / zoom (scroll) / pan. */}
           <div
             ref={nglContainerRef}
-            className={`w-full h-full cursor-move ${renderer !== "ngl" ? "hidden" : ""}`}
-            style={{ position: "relative", overflow: "hidden" }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
+            className={`absolute inset-0 cursor-move ${renderer !== "ngl" ? "hidden" : ""}`}
+            style={{ overflow: "hidden" }}
           />
           {!pdb && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground bg-muted/10 pointer-events-none">
-              <Eye className="w-8 h-8 opacity-20 mb-2" />
-              <p className="text-xs font-medium">Click 'Build' to view structure</p>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground bg-muted/10 pointer-events-none px-6">
+              <Eye className="w-8 h-8 opacity-20 mb-3" />
+              <p className="text-sm font-semibold mb-4">Run the workflow to view the structure here</p>
+              <div className="text-[11px] leading-relaxed max-w-md w-full space-y-1.5">
+                <p className="text-center font-semibold uppercase tracking-wide text-[10px] text-muted-foreground/80 mb-1">
+                  Pick a renderer (toggle, top of node)
+                </p>
+                <p>
+                  <span className="font-bold text-indigo-600">3Dmol</span> — fast styling, element/charge labels, Miller planes & PNG export.
+                  Best for <strong>single structures</strong> and figures.
+                </p>
+                <p>
+                  <span className="font-bold text-indigo-600">JSmol</span> — scripting, measurements and periodic-bond cleanup.
+                  Best for <strong>analysis & measurements</strong>.
+                </p>
+                <p>
+                  <span className="font-bold text-indigo-600">NGL</span> — GPU impostor rendering, smooth playback.
+                  Best for <strong>large systems & MD trajectories</strong>.
+                </p>
+              </div>
             </div>
           )}
 

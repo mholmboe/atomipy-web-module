@@ -1878,9 +1878,11 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           // box shows in the viewer). MD writes .xtc; steepest-descent EM writes .trr
           // instead — so try .xtc first, then fall back to .trr.
           pythonCode += `_final_stage = "${stage}"\n`;
-          // Wrap-trajectory toggle: trjconv -pbc atom (wrap atoms into the box) when on,
-          // -pbc none (leave coordinates as-is) when off. Independent of the .mdp.
-          const gmxPbc = wrapTrajectory ? "atom" : "none";
+          // Wrap-trajectory toggle: trjconv -pbc mol (wrap by molecule, keeping each
+          // molecule WHOLE in the box) when on — this avoids bonds stretching across the
+          // box during playback (atom-wise wrapping splits molecules). -pbc none (leave
+          // coordinates as-is) when off. Independent of the .mdp.
+          const gmxPbc = wrapTrajectory ? "mol" : "none";
           pythonCode += `_traj = None\n`;
           pythonCode += `_traj_src = None\n`;
           pythonCode += `for _ext in ('xtc', 'trr'):\n`;

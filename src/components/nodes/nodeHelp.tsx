@@ -884,11 +884,12 @@ export const NODE_HELP: Record<string, NodeHelp> = {
     summary:
       "Interactive in-browser 3D view of the current structure or trajectory. Switch between the 3Dmol, JSmol, and NGL renderers, restyle atoms/bonds, animate multi-frame trajectories, and export a PNG. Usually a terminal node.",
     features: [
-      "Three renderers: 3Dmol (fast styling, PNG), JSmol (scripting/measurements), and NGL (GPU impostor rendering — fastest for large MD trajectories).",
-      "Representations: ball & stick, sticks, spheres, lines; toggle unit cell, hydrogens, outline, spin, and element/charge labels.",
-      "Perspective or orthographic projection; resizable node.",
-      "Multi-frame trajectory playback with play/pause and a frame slider; PNG export at 1×/2×/4×.",
-      "Miller-plane overlay — enable “Miller plane (hkl)” in the gear menu, then add one or more planes. Each uses the SAME Miller options as the Edit node’s cut — h, k, l, auto level (structure midpoint) or an explicit fractional level, and an offset (Å, with slider) along the normal — plus viewer-only display options (full family, colour, opacity). So a plane set up the same way appears exactly where the Edit cut would fall. Hexagonal crystals (e.g. quartz): tick “4-index (hkil)” (next to “+ add plane”) to enter Miller–Bravais indices — i is shown automatically as −(h+k). (To actually remove atoms, use the Edit node’s “Cut by Miller plane”; the Viewer just draws the plane.)",
+      "Three renderers — switch any time via the toggle at the top of the node:",
+      "• 3Dmol — best for single structures & figures. Has: all representations, element/charge labels, OUTLINE, Miller-plane overlay, style presets (thin/default/bold), unit cell, hydrogens, spin, projection, trajectory playback, PNG (1×/2×/4×). Doesn't have: measurements, fast playback on very large trajectories.",
+      "• JSmol — best for measurements & scripting. Has: all representations, labels, Miller-plane overlay, unit cell, hydrogens, spin, projection, trajectory playback, PNG, MEASUREMENTS/scripting, and 'Hide periodic bonds' (deletes cross-cell bonds > 3 Å). Doesn't have: outline, style presets.",
+      "• NGL — GPU impostor rendering, best for large systems & MD trajectories (smoothest playback). Has: all representations, element/charge labels, style presets, unit cell (thin blue box), hydrogens, spin, projection, trajectory playback, PNG. Doesn't have: Miller-plane overlay, outline. (Cross-PBC bonds are avoided automatically — GROMACS viewer trajectories are wrapped per-molecule with -pbc mol.)",
+      "Shared by all three: representations (ball & stick, sticks, spheres, lines), unit-cell/hydrogens/spin/label toggles, perspective or orthographic projection, multi-frame trajectory playback (play/pause + frame slider), PNG export, and a resizable node.",
+      "Miller-plane overlay (3Dmol & JSmol only) — enable “Miller plane (hkl)” in the gear menu, then add one or more planes. Each uses the SAME Miller options as the Edit node’s cut — h, k, l, auto level (structure midpoint) or an explicit fractional level, and an offset (Å, with slider) along the normal — plus viewer-only display options (full family, colour, opacity). So a plane set up the same way appears exactly where the Edit cut would fall. Hexagonal crystals (e.g. quartz): tick “4-index (hkil)” (next to “+ add plane”) to enter Miller–Bravais indices — i is shown automatically as −(h+k). (To actually remove atoms, use the Edit node’s “Cut by Miller plane”; the Viewer just draws the plane.)",
     ],
     theory: [
       "A Miller (hkl) plane is the set of points satisfying h·x + k·y + l·z = n in fractional coordinates (n = integer plane level). The overlay clips that plane to the cell; the full family is every integer n that crosses the cell, spaced by the interplanar distance d_hkl.",
@@ -900,9 +901,10 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       { label: "Offset → level shift", expr: "Δn = offset / d_hkl" },
     ],
     quirks: [
-      "Renders only after a Build step provides coordinates; otherwise shows a placeholder.",
+      "Renders only after a Build step provides coordinates; otherwise shows a placeholder (with a renderer guide).",
+      "Miller-plane overlay works in 3Dmol & JSmol only (not NGL); outline is 3Dmol-only — these toggles have no effect under NGL.",
+      "Cross-cell bonds: JSmol has a 'Hide periodic bonds' toggle (deletes bonds > 3 Å); 3Dmol doesn't draw them; NGL avoids them because GROMACS viewer trajectories are wrapped per-molecule (-pbc mol).",
       "The Miller overlay needs a unit cell (CRYST1 in the structure) — set a Box upstream if the plane doesn't appear.",
-      "Hide periodic bonds is JSmol-only (deletes cross-cell bonds longer than 3 Å).",
       "Charge labels need a Forcefield node upstream.",
     ],
     before: [
