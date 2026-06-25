@@ -171,12 +171,20 @@
     overflow: visible !important;
   }
 
-  /* Clip first/last child backgrounds inside rounded nodes since parent overflow is visible */
-  .bg-card > div:first-child {
+  /* Round node header/body backgrounds since the node root has overflow:visible (so
+     handles aren't clipped). React Flow's <Handle> is an absolutely-positioned div that
+     may be the first and/or last DOM child, so position-based (:first-child) rounding
+     mis-targets it — round the first/last NON-handle child instead. This keeps every
+     node's header rounded-top / square-bottom regardless of where its handles sit. */
+  /* Header (top corners): first content child, whether or not a handle precedes it. */
+  .bg-card > :not(.react-flow__handle):first-child,
+  .bg-card > .react-flow__handle:first-child + :not(.react-flow__handle) {
     border-top-left-radius: 11px !important;
     border-top-right-radius: 11px !important;
   }
-  .bg-card > div:not(.react-flow__handle):not(:first-child) {
+  /* Body (bottom corners): only the LAST non-handle child (trailing handles ignored),
+     so the header never gets a rounded bottom. */
+  .bg-card > :not(.react-flow__handle):not(:has(~ :not(.react-flow__handle))) {
     border-bottom-left-radius: 11px !important;
     border-bottom-right-radius: 11px !important;
   }

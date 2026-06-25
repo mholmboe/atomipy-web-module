@@ -39,7 +39,7 @@ export function ReplicateNode({ id, data = {} }: NodeComponentProps<ReplicateNod
   const sameZ = data.sameMoleculeZ ?? legacyKeep;
 
   return (
-    <div className="bg-card w-[220px] shadow-lg rounded-xl border border-secondary/50 overflow-hidden font-sans select-none">
+    <div className="bg-card w-[220px] shadow-lg rounded-xl border border-purple-500/50 overflow-hidden font-sans select-none">
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
       
