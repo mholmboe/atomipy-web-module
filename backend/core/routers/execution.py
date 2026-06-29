@@ -23,8 +23,10 @@ def _compat_array(*args, **kwargs):
 np.array = _compat_array
 import queue
 import time
+import signal
 import zipfile
 import threading
+import subprocess
 import contextlib
 import traceback
 import tempfile
@@ -92,8 +94,84 @@ import ctypes
 # ---------------------------------------------------------------------------
 # Active-build registry — maps build_id → thread for stop/abort support
 # ---------------------------------------------------------------------------
-_active_builds: dict[str, threading.Thread] = {}
+# build_id -> the sandboxed subprocess (subprocess.Popen) running that build.
+_active_builds: dict = {}
 _active_builds_lock = threading.Lock()
+
+
+# Environment variable names matching these (case-insensitive substrings) are never
+# passed to the sandboxed build process — they are credentials/secrets the untrusted
+# generated script has no business reading.
+_SECRET_ENV_SUBSTRINGS = (
+    "SECRET", "TOKEN", "PASSWORD", "PASSWD", "CREDENTIAL", "PRIVATE_KEY",
+    "API_KEY", "APIKEY", "ACCESS_KEY", "_AUTH", "SESSION",
+)
+_SECRET_ENV_KEYS = {
+    "GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_API_KEY",
+    "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+    "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+}
+
+
+def _sandbox_env() -> dict:
+    """A copy of the environment with credentials/secrets removed (and stdio forced
+    unbuffered) for the sandboxed build subprocess.
+
+    Conda / OpenMM / GROMACS variables are preserved so simulations still work. The
+    complementary control for cloud instance-metadata access (169.254.169.254) is
+    network-egress restriction at the infra layer (Cloud Run egress settings).
+    """
+    env = {}
+    for k, v in os.environ.items():
+        ku = k.upper()
+        if k in _SECRET_ENV_KEYS or any(s in ku for s in _SECRET_ENV_SUBSTRINGS):
+            continue
+        env[k] = v
+    env["PYTHONUNBUFFERED"] = "1"
+    return env
+
+
+def _set_rlimits():
+    """preexec_fn for the sandboxed build: apply optional resource limits.
+
+    All limits are opt-in via env (default 0 = unlimited) so normal builds aren't
+    constrained; enable them on shared/public instances. Wall-clock runaway is
+    already bounded by BUILD_TIMEOUT and the process-group kill.
+    """
+    try:
+        import resource
+    except Exception:
+        return
+
+    def _set(which, mb=0, secs=0):
+        try:
+            if secs > 0:
+                resource.setrlimit(which, (secs, secs + 10))
+            elif mb > 0:
+                b = mb * 1024 * 1024
+                resource.setrlimit(which, (b, b))
+        except Exception:
+            pass
+
+    _set(resource.RLIMIT_CPU, secs=int(os.environ.get("BUILD_RLIMIT_CPU_SECONDS", "0") or 0))
+    _set(resource.RLIMIT_AS, mb=int(os.environ.get("BUILD_RLIMIT_AS_MB", "0") or 0))
+    _set(resource.RLIMIT_FSIZE, mb=int(os.environ.get("BUILD_RLIMIT_FSIZE_MB", "0") or 0))
+
+
+def _terminate_proc(proc) -> str:
+    """Kill the sandboxed build process and its whole process group (children too)."""
+    if proc is None:
+        return "no_proc"
+    if proc.poll() is not None:
+        return "already_done"
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            return "kill_failed"
+    return "ok"
 
 
 def _kill_thread(thread: threading.Thread) -> str:
@@ -244,270 +322,61 @@ async def build_stream(request: BuildRequest):
             yield SSE.build_id(build_id)
 
             log_queue = queue.Queue()
+            log_file_path = os.path.join(work_dir, "execution.log")
+            log_file = open(log_file_path, "w", encoding="utf-8")
 
-            def run_build_in_process():
-                old_cwd = os.getcwd()
-                log_file_path = os.path.join(work_dir, "execution.log")
-                log_file = open(log_file_path, "w", encoding="utf-8")
+            _PROTOCOL_PREFIXES = (
+                "__VISUALIZE_", "__BOX_", "__CHARGES_",
+                "__XRD_DATA_", "__PLOT_", "__NODE_START__", "__INSPECT_",
+            )
+            _verbose_log = request.verbose_log
 
-                _PROTOCOL_PREFIXES = (
-                    "__VISUALIZE_", "__BOX_", "__CHARGES_",
-                    "__XRD_DATA_", "__PLOT_", "__NODE_START__", "__INSPECT_",
-                )
-                _verbose_log = request.verbose_log
+            # Run the (untrusted) generated script in a SEPARATE, sandboxed process:
+            # a scrubbed environment (no secrets), its own process group (so the whole
+            # process tree can be killed cleanly), and optional resource limits. The
+            # script never shares this server's interpreter or memory. See
+            # build_runner.py / build_runtime.py.
+            runner_path = os.path.abspath(
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build_runner.py")
+            )
+            popen_kwargs = dict(
+                cwd=work_dir,
+                env=_sandbox_env(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                start_new_session=True,  # own process group -> killpg cleans up children (gmx, ...)
+            )
+            if os.name == "posix":
+                popen_kwargs["preexec_fn"] = _set_rlimits
+            proc = subprocess.Popen([sys.executable, runner_path], **popen_kwargs)
 
-                class QueueWriter:
-                    def __init__(self, q, f):
-                        self.q = q
-                        self.f = f
-                    def write(self, s: str) -> int:
-                        if s:
-                            self.q.put(s)
-                            if _verbose_log or not any(p in s for p in _PROTOCOL_PREFIXES):
-                                self.f.write(s)
-                                self.f.flush()
-                        return len(s)
-                    def flush(self):
-                        self.f.flush()
-
-                writer = QueueWriter(log_queue, log_file)
-                try:
-                    os.chdir(work_dir)
-                    gc.collect()
-                    with contextlib.redirect_stdout(writer), contextlib.redirect_stderr(writer):
-                        def ap_plot(node_id, x, y, title="", xlabel="", ylabel=""):
-                            data = {
-                                "x": x.tolist() if hasattr(x, 'tolist') else list(x),
-                                "y": y.tolist() if hasattr(y, 'tolist') else list(y),
-                                "title": title,
-                                "xlabel": xlabel,
-                                "ylabel": ylabel
-                            }
-                            print(f"__PLOT_{node_id}__:{json.dumps(data)}")
-
-                        import requests as _requests
-                        import shutil as _shutil
-
-                        class SystemList(list):
-                            def __init__(self, atoms, itp=None, box=None):
-                                super().__init__(atoms)
-                                self.itp = itp
-                                self.box = box
-
-                        def wrap_atomipy_function(func_name):
-                            orig_func = getattr(ap, func_name, None)
-                            if orig_func is None:
-                                return
-                            
-                            def wrapped(*args, **kwargs):
-                                system_list = None
-                                new_args = list(args)
-                                for i, arg in enumerate(args):
-                                    if isinstance(arg, SystemList):
-                                        system_list = arg
-                                        new_args[i] = list(arg)
-                                        break
-                                new_kwargs = dict(kwargs)
-                                for k, v in kwargs.items():
-                                    if isinstance(v, SystemList):
-                                        system_list = v
-                                        new_kwargs[k] = list(v)
-                                
-                                res = orig_func(*new_args, **new_kwargs)
-                                if system_list is not None:
-                                    itp = system_list.itp
-                                    box = system_list.box
-                                    if isinstance(res, tuple):
-                                        res_atoms = res[0]
-                                        res_box = res[1] if len(res) > 1 else box
-                                        wrapped_atoms = SystemList(res_atoms, itp=itp, box=res_box)
-                                        return (wrapped_atoms,) + res[1:]
-                                    elif isinstance(res, list):
-                                        return SystemList(res, itp=itp, box=box)
-                                return res
-                            setattr(ap, func_name, wrapped)
-
-                        for func_name in [
-                            'solvate', 'ionize', 'translate', 'rotate', 'scale', 'bend', 'center',
-                            'slice', 'remove', 'fuse_atoms', 'assign_resname', 'molecule', 'wrap',
-                            'replicate_system', 'update'
-                        ]:
-                            wrap_atomipy_function(func_name)
-
-                        def _materialize_ff_files(paths):
-                            """Write worker-returned FF files into the build dir.
-
-                            The OpenFF worker is a separate Cloud Run service with no
-                            shared filesystem, so it returns file *contents*; write them
-                            locally, preserving basenames so the .top's #include of the
-                            .itp resolves. Falls back to copying local paths when the
-                            worker shares /tmp (local dev). Returns local {top,gro,itp}."""
-                            local = {}
-                            for key in ("top", "gro", "itp"):
-                                src = paths.get(key)
-                                content = paths.get(f"{key}_content")
-                                base = os.path.basename(src) if src else f"organic_GMX.{key}"
-                                dest = os.path.join(os.getcwd(), base)
-                                if content is not None:
-                                    with open(dest, "w", encoding="utf-8") as fh:
-                                        fh.write(content)
-                                    local[key] = dest
-                                elif src and os.path.exists(src):
-                                    try:
-                                        _shutil.copy(src, dest)
-                                        local[key] = dest
-                                    except Exception:
-                                        local[key] = src
-                            return local
-
-                        def parametrize_organic_gaff(smiles, version='gaff-2.11', charge_method='bcc', basename='organic'):
-                            """
-                            Parametrize an organic molecule via ACPYPE on the OpenFF worker.
-                            ``basename`` becomes the GROMACS moleculetype/residue name so
-                            distinct organics in one system don't collide. Returns
-                            (SystemList, box_vectors).
-                            """
-                            worker_url = os.environ.get("OPENFF_WORKER_URL", "http://127.0.0.1:8001")
-                            v = version.lower()
-                            if 'sage' in v or 'openff' in v:
-                                resp = _requests.post(
-                                    f"{worker_url}/parametrize/sage",
-                                    params={"smiles": smiles},
-                                    timeout=120,
-                                )
-                            elif 'opls' in v:
-                                resp = _requests.post(
-                                    f"{worker_url}/parametrize/oplsaa",
-                                    params={"smiles": smiles},
-                                    timeout=120,
-                                )
-                            else:
-                                resp = _requests.post(
-                                    f"{worker_url}/parametrize/gaff",
-                                    params={"smiles": smiles, "version": version, "charge_method": charge_method, "basename": basename},
-                                    timeout=180,
-                                )
-                            resp.raise_for_status()
-                            paths = resp.json()
-
-                            local = _materialize_ff_files(paths)
-                            atoms, itp = ap.import_gaff_top(local.get("top") or paths.get("top"))
-                            ap.import_gro_coords(local.get("gro") or paths.get("gro"), atoms)
-                            box = paths.get("box", [50.0, 50.0, 50.0])
-                            return SystemList(atoms, itp=itp, box=box), box
-
-                        def parametrize_organic_file(filepath, version='gaff-2.11', charge_method='bcc', basename='organic'):
-                            """
-                            Parametrize an uploaded structure file via the OpenFF worker.
-                            ``basename`` becomes the GROMACS moleculetype/residue name.
-                            Returns (SystemList, box_vectors).
-                            """
-                            worker_url = os.environ.get("OPENFF_WORKER_URL", "http://127.0.0.1:8001")
-                            with open(filepath, 'rb') as fh:
-                                resp = _requests.post(
-                                    f"{worker_url}/parametrize/gaff-file",
-                                    files={"file": (os.path.basename(filepath), fh)},
-                                    params={"version": version, "charge_method": charge_method, "basename": basename},
-                                    timeout=180,
-                                )
-                            resp.raise_for_status()
-                            paths = resp.json()
-
-                            local = _materialize_ff_files(paths)
-                            atoms, itp = ap.import_gaff_top(local.get("top") or paths.get("top"))
-                            ap.import_gro_coords(local.get("gro") or paths.get("gro"), atoms)
-                            box = paths.get("box", [50.0, 50.0, 50.0])
-                            return SystemList(atoms, itp=itp, box=box), box
-
-                        def mix_systems(*components, box=None):
-                            """
-                            N-way topology merge for mixed mineral + organic systems.
-                            Each component may be:
-                              - A SystemList (organic/mixed)
-                              - A plain atomipy atoms list (mineral, solvent, etc.)
-                            Returns a SystemList.
-                            """
-                            comp_dicts = []
-                            for c in components:
-                                if isinstance(c, SystemList):
-                                    comp_dicts.append({'atoms': list(c), 'itp': c.itp, 'box': c.box})
-                                elif isinstance(c, dict) and 'atoms' in c:
-                                    comp_dicts.append(c)
-                                elif isinstance(c, list):
-                                    # Use explicit None check — `box or [...]` fails when box is a numpy array
-                                    b = box if box is not None else [50.0, 50.0, 50.0]
-                                    comp_dicts.append({'atoms': c, 'itp': None, 'box': b})
-                                else:
-                                    raise TypeError(f"mix_systems: unrecognized component type {type(c)}")
-                            # Normalise box to plain list so merge_top never receives a numpy array
-                            import numpy as _np
-                            _out_box = box.tolist() if isinstance(box, _np.ndarray) else box
-                            atoms_merged, itp_merged, box_merged = ap.merge_top(*comp_dicts, output_box=_out_box)
-                            
-                            # Merge _source_itp references to preserve all organic itps
-                            merged_itp = dict(itp_merged)
-                            source_idx = 1
-                            
-                            def _collect_sources(itp_dict):
-                                nonlocal source_idx
-                                if not itp_dict: return
-                                
-                                # Check top-level
-                                if itp_dict.get('_source_itp'):
-                                    merged_itp[f'_source_itp_{source_idx}'] = itp_dict['_source_itp']
-                                    source_idx += 1
-                                    
-                                # Collect any already-merged _source_itp_N keys
-                                for k, v in itp_dict.items():
-                                    if k.startswith('_source_itp_'):
-                                        merged_itp[f'_source_itp_{source_idx}'] = v
-                                        source_idx += 1
-                                        
-                                # Recurse into original itps
-                                if itp_dict.get('_original_itps'):
-                                    for orig in itp_dict['_original_itps']:
-                                        _collect_sources(orig)
-
-                            for c in comp_dicts:
-                                _collect_sources(c.get('itp'))
-                               
-                            return SystemList(atoms_merged, itp=merged_itp, box=box_merged)
-
-                        setattr(ap, 'parametrize_organic_gaff', parametrize_organic_gaff)
-                        setattr(ap, 'parametrize_organic_file', parametrize_organic_file)
-                        setattr(ap, 'mix_systems', mix_systems)
-
-
-
-                        exec_globals = {
-                            "__name__": "__main__",
-                            "ap": ap,
-                            "os": os,
-                            "sys": sys,
-                            "json": json,
-                            "ap_plot": ap_plot,
-                        }
-                        exec(script_code, exec_globals)
-
-                    log_queue.put("__FINISH__:0")
-                except Exception as e:
-                    script_lines = [f"{i+1:03d}: {line}" for i, line in enumerate(script_code.splitlines())]
-                    err_msg = "\nGENERATED SCRIPT:\n" + "\n".join(script_lines) + "\n"
-                    err_msg += f"\nFATAL BUILD ERROR: {str(e)}\n{traceback.format_exc()}\n"
-                    writer.write(err_msg)
-                    # Also write a separate error.log for convenient reading!
-                    with open(os.path.join(work_dir, "error.log"), "w", encoding="utf-8") as err_f:
-                        err_f.write(err_msg)
-                    log_queue.put("__FINISH__:1")
-                finally:
-                    log_file.close()
-                    os.chdir(old_cwd)
-                    gc.collect()
-
-            thread = threading.Thread(target=run_build_in_process, daemon=True)
             with _active_builds_lock:
-                _active_builds[build_id] = thread
-            thread.start()
+                _active_builds[build_id] = proc
+
+            def _pump_output():
+                # Mirror the sandboxed build's stdout/stderr into the SSE queue, and
+                # tee non-protocol lines into execution.log (same filtering as before).
+                try:
+                    for line in proc.stdout:
+                        log_queue.put(line)
+                        if _verbose_log or not any(p in line for p in _PROTOCOL_PREFIXES):
+                            log_file.write(line)
+                            log_file.flush()
+                finally:
+                    try:
+                        rc = proc.wait()
+                    except Exception:
+                        rc = 1
+                    try:
+                        log_file.close()
+                    except Exception:
+                        pass
+                    log_queue.put(f"__FINISH__:{0 if rc == 0 else 1}")
+
+            reader = threading.Thread(target=_pump_output, daemon=True)
+            reader.start()
 
             curr_line = ""
             success = False
@@ -608,6 +477,12 @@ async def build_stream(request: BuildRequest):
                     yield SSE.log(" ")
                     continue
 
+            # Make sure the sandboxed process (and its group) is gone and the reader
+            # has flushed/closed execution.log before we package the results. On a
+            # normal finish the process has already exited; on timeout this kills it.
+            _terminate_proc(proc)
+            reader.join(timeout=5)
+
             if has_plot_data:
                 yield SSE.log("Plot data ready.")
 
@@ -649,20 +524,20 @@ async def download_result(token: str):
 
 @router.post("/stop-build/{build_id}")
 async def stop_build(build_id: str):
-    """Abort a running build.  Sends SystemExit to the worker thread so that
-    both pure-Python code and OpenMM simulations (at next reporter callback)
-    are interrupted.  The client should also abort its SSE stream reader."""
+    """Abort a running build by killing the sandboxed subprocess and its whole
+    process group (so OpenMM/GROMACS children die too). The client should also
+    abort its SSE stream reader."""
     with _active_builds_lock:
-        thread = _active_builds.get(build_id)
+        proc = _active_builds.get(build_id)
 
-    if thread is None:
+    if proc is None:
         return {"status": "not_found"}
-    if not thread.is_alive():
+    if proc.poll() is not None:
         with _active_builds_lock:
             _active_builds.pop(build_id, None)
         return {"status": "already_done"}
 
-    status = _kill_thread(thread)
+    status = _terminate_proc(proc)
     if status == "ok":
         # Give it a moment, then clean up the registry
         import asyncio
