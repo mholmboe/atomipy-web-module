@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Handle, Position, useReactFlow, useEdges, useNodes } from "@xyflow/react";
 import { Box, RefreshCw } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
@@ -71,6 +71,62 @@ function fmt(v: number) {
   return parseFloat(v.toFixed(4));
 }
 
+// --- Volume & density readout -----------------------------------
+// Standard atomic weights (g/mol) for the elements common in MD/mineral systems.
+// Used to estimate the system mass (hence density) from an upstream run-time PDB.
+const ATOMIC_MASS: Record<string, number> = {
+  H: 1.008, He: 4.0026, Li: 6.94, Be: 9.0122, B: 10.81, C: 12.011, N: 14.007,
+  O: 15.999, F: 18.998, Ne: 20.18, Na: 22.99, Mg: 24.305, Al: 26.982, Si: 28.085,
+  P: 30.974, S: 32.06, Cl: 35.45, Ar: 39.948, K: 39.098, Ca: 40.078, Sc: 44.956,
+  Ti: 47.867, V: 50.942, Cr: 51.996, Mn: 54.938, Fe: 55.845, Co: 58.933, Ni: 58.693,
+  Cu: 63.546, Zn: 65.38, Ga: 69.723, Ge: 72.63, As: 74.922, Se: 78.971, Br: 79.904,
+  Kr: 83.798, Rb: 85.468, Sr: 87.62, Y: 88.906, Zr: 91.224, Nb: 92.906, Mo: 95.95,
+  Ag: 107.868, Cd: 112.414, In: 114.818, Sn: 118.71, Sb: 121.76, Te: 127.6, I: 126.904,
+  Xe: 131.293, Cs: 132.905, Ba: 137.327, La: 138.905, Ce: 140.116, W: 183.84,
+  Pt: 195.084, Au: 196.967, Hg: 200.592, Pb: 207.2, Bi: 208.98, U: 238.029,
+};
+
+function elementMass(token: string): number | undefined {
+  if (!token) return undefined;
+  const norm = token.length >= 2 ? token[0].toUpperCase() + token[1].toLowerCase() : token.toUpperCase();
+  if (ATOMIC_MASS[norm] !== undefined) return ATOMIC_MASS[norm];
+  // Fall back to the leading single letter (e.g. atom name "OW" -> O, "HW1" -> H)
+  return ATOMIC_MASS[norm[0]];
+}
+
+// Sum the atomic masses of the FIRST model in a PDB string (g/mol) + atom count.
+// Prefers the element column (77-78); falls back to inferring from the atom name.
+function parseAtomsFromPdb(pdb: string): { mass: number; count: number; unknown: number } {
+  let mass = 0, count = 0, unknown = 0;
+  for (const line of pdb.split("\n")) {
+    const rec = line.substring(0, 6).trim();
+    if (rec === "ENDMDL") break;                 // only the first frame
+    if (rec !== "ATOM" && rec !== "HETATM") continue;
+    let el = line.substring(76, 78).trim();
+    if (!el) el = (line.substring(12, 16).trim().match(/[A-Za-z]{1,2}/)?.[0]) ?? "";
+    const m = elementMass(el);
+    if (m === undefined) { unknown++; } else { mass += m; }
+    count++;
+  }
+  return { mass, count, unknown };
+}
+
+// Parse the last CRYST1 line of a PDB into orthogonal box dims (lx, ly, lz).
+function cryst1ToBoxDim(pdb: string): { lx: number; ly: number; lz: number } | null {
+  const lines = pdb.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (!line.startsWith("CRYST1")) continue;
+    const a = parseFloat(line.substring(6, 15)), b = parseFloat(line.substring(15, 24)), c = parseFloat(line.substring(24, 33));
+    const al = parseFloat(line.substring(33, 40)) || 90, be = parseFloat(line.substring(40, 47)) || 90, ga = parseFloat(line.substring(47, 54)) || 90;
+    if ([a, b, c].every(Number.isFinite)) return cellToBoxDim(a, b, c, al, be, ga);
+  }
+  return null;
+}
+
+// Density of a molar mass M (g/mol) of atoms occupying V (Å³): rho = M / (N_A * V * 1e-24).
+const DENSITY_FACTOR = 0.6022140760; // = N_A * 1e-24 ; rho[g/cm^3] = M / (DENSITY_FACTOR * V[Å^3])
+
 // ----------------------------------------------------------------
 
 export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
@@ -78,6 +134,59 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
   const edges = useEdges();
   const nodes = useNodes(); // Re-run effect when any node changes
   const mode = data.inputMode ?? "cell";
+
+  // ------- Volume + density readout --------
+  // Walk upstream for a run-time PDB (the only place actual atoms/masses exist) so we
+  // can report the system density. `nodes` in the deps makes this recompute whenever
+  // upstream data changes; the box dims come from `data`, so density updates live as
+  // the box is resized (mass is constant, volume changes).
+  const systemMass = useMemo(() => {
+    const empty = { mass: 0, count: 0, unknown: 0, pdbDims: null as null | { lx: number; ly: number; lz: number } };
+    // The atoms that fill this box are produced across the pipeline — the structure
+    // upstream AND the solvent/ions added downstream — so search the whole connected
+    // component (edges in either direction) and use the richest run-time PDB (the one
+    // with the most atoms = the fullest built system).
+    const visited = new Set<string>([id]);
+    const stack = [id];
+    let best: { mass: number; count: number; unknown: number; pdbDims: typeof empty.pdbDims } | null = null;
+    while (stack.length) {
+      const nodeId = stack.pop()!;
+      const node = getNode(nodeId);
+      if (node) {
+        const nd = (node.data ?? {}) as Record<string, unknown>;
+        if (typeof nd.pdb === "string" && nd.pdb.trim()) {
+          const parsed = parseAtomsFromPdb(nd.pdb);
+          if (parsed.count > 0 && (!best || parsed.count > best.count)) {
+            best = { ...parsed, pdbDims: cryst1ToBoxDim(nd.pdb) };
+          }
+        }
+      }
+      for (const e of edges) {
+        const next = e.source === nodeId ? e.target : e.target === nodeId ? e.source : null;
+        if (next && !visited.has(next)) { visited.add(next); stack.push(next); }
+      }
+    }
+    return best ?? empty;
+  }, [edges, nodes, id, getNode]);
+
+  const volumeDims = (() => {
+    const finite = (v: number | undefined): v is number => typeof v === "number" && Number.isFinite(v);
+    if (mode === "fit") return systemMass.pdbDims; // fit box only known at run time (via the PDB)
+    if (mode === "cell") {
+      if (!finite(data.a) || !finite(data.b) || !finite(data.c)) return null;
+      return cellToBoxDim(data.a, data.b, data.c, data.alpha ?? 90, data.beta ?? 90, data.gamma ?? 90);
+    }
+    if (!finite(data.lx) || !finite(data.ly) || !finite(data.lz)) return null;
+    return { lx: data.lx, ly: data.ly, lz: data.lz };
+  })();
+  const volumeA3 = volumeDims ? Math.abs(volumeDims.lx * volumeDims.ly * volumeDims.lz) : null;
+  const density =
+    volumeA3 && systemMass.count > 0 && systemMass.mass > 0
+      ? systemMass.mass / (DENSITY_FACTOR * volumeA3)
+      : null;
+  const volumeStr = volumeA3 != null
+    ? `${volumeA3 >= 1e6 ? volumeA3.toExponential(3) : volumeA3.toLocaleString(undefined, { maximumFractionDigits: 1 })}`
+    : null;
 
   // ------- Auto-seed from upstream structure/replicate/scale --------
   useEffect(() => {
@@ -537,6 +646,30 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
             <span>Box</span>
           </button>
         </div>
+        )}
+
+        {/* Volume (always, when box dims are known) + density (when upstream atoms exist) */}
+        {(volumeStr != null || density != null) && (
+          <div className="rounded-lg p-2 border border-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-950/20 text-center">
+            {volumeStr != null && (
+              <div className="text-[11px] font-mono text-foreground/80">
+                <span className="text-indigo-500/70 font-bold">Volume</span>{" "}
+                {volumeStr} Å³
+                <span className="text-foreground/50"> ({fmt((volumeA3 as number) / 1000)} nm³)</span>
+              </div>
+            )}
+            {density != null ? (
+              <div className="text-[11px] font-mono text-foreground/80">
+                <span className="text-indigo-500/70 font-bold">Density</span>{" "}
+                {density.toFixed(3)} g/cm³
+                <span className="text-foreground/50"> ({systemMass.count} atoms{systemMass.unknown ? ", approx" : ""})</span>
+              </div>
+            ) : volumeStr != null ? (
+              <div className="text-[9px] text-muted-foreground/60 leading-snug mt-0.5">
+                Density shows once the system has atoms (run the build to populate).
+              </div>
+            ) : null}
+          </div>
         )}
 
       </div>
