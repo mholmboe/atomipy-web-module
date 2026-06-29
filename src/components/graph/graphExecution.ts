@@ -2635,6 +2635,25 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    print("Wrote structure statistics to ${statsLog}")\n`;
           pythonCode += `except Exception as _e:\n`;
           pythonCode += `    print(f"Structure stats failed: {_e}")\n`;
+        } else if (option === "bvs") {
+          // Bond-valence-sum / Global Instability Index. analyze_bvs returns a dict and
+          // writes the per-atom CSV to csv_path; we write a short summary to bvsLogFile.
+          const bvsLog = pyEscape(getString(data, "bvsLogFile", "bvs_summary.log"));
+          const writeCsv = getBoolean(data, "writeCsv", true);
+          const csvFile = pyEscape(getString(data, "csvFile", "bvs_results.csv"));
+          const topN = getNumber(data, "topN", 10);
+          const csvArg = writeCsv ? `, csv_path='${csvFile}'` : "";
+          pythonCode += `\n# Bond-valence-sum (BVS / GII) analysis -> ${bvsLog}${writeCsv ? ` + ${csvFile}` : ""}\n`;
+          pythonCode += `try:\n`;
+          pythonCode += `    _bvs = ap.analyze_bvs(${inAtoms}, ${inBox}, top_n=${topN}${csvArg})\n`;
+          pythonCode += `    with open('${bvsLog}', 'w') as _bf:\n`;
+          pythonCode += `        _bf.write("# atomipy Bond Valence Sum summary\\nGII = %s\\nGII (no H) = %s\\nformal charge = %s\\n" % (_bvs.get('gii'), _bvs.get('gii_no_h'), _bvs.get('formal_charge')))\n`;
+          pythonCode += `        _bf.write("\\nTop worst-fit atoms (index element bvs delta):\\n")\n`;
+          pythonCode += `        for _w in (_bvs.get('top_worst') or []):\n`;
+          pythonCode += `            _bf.write("  %s %s bvs=%.3f delta=%.3f\\n" % (_w.get('index'), _w.get('element'), float(_w.get('bvs', 0)), float(_w.get('delta', 0))))\n`;
+          pythonCode += `    print("BVS: GII=%.4f -> ${bvsLog}${writeCsv ? ` + ${csvFile}` : ""}" % (_bvs.get('gii') or 0.0))\n`;
+          pythonCode += `except Exception as _e:\n`;
+          pythonCode += `    print("BVS analysis failed: %s" % _e)\n`;
         }
 
         pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
@@ -2666,19 +2685,31 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         break;
       }
       case "bvs": {
+        // analyze_bvs(atoms, Box, ..., csv_path=None, top_n=10) -> dict with
+        // {results, summary, gii, gii_no_h, formal_charge, top_worst}. It writes the
+        // per-atom CSV to csv_path; we write a short text summary to bvsLogFile.
         const bvsLog = pyEscape(getString(data, "bvsLogFile", "bvs_summary.log"));
+        const writeCsv = getBoolean(data, "writeCsv", true);
         const csvFile = pyEscape(getString(data, "csvFile", "bvs_results.csv"));
+        const topN = getNumber(data, "topN", 10);
+        const csvArg = writeCsv ? `, csv_path='${csvFile}'` : "";
+        const plotTarget = edges.find((e) => e.source === id && nodes.find((nn) => nn.id === e.target)?.type === "plot")?.target ?? id;
 
-        pythonCode += `\n# Bond Valence Sum (BVS) Analysis\n`;
-        pythonCode += `bvs_data = ap.analyze_bvs(${inAtoms}, ${inBox}, log_file='${bvsLog}', csv_file='${csvFile}')\n`;
-        pythonCode += `if bvs_data and len(bvs_data) > 0:\n`;
-        pythonCode += `    import json\n`;
-        pythonCode += `    indices = [int(a.get('index', 1)) for a in bvs_data[:50]]\n`;
-        pythonCode += `    vals = [float(a.get('bvs_val', 0.0)) for a in bvs_data[:50]]\n`;
-        pythonCode += `    plot_payload = {'x': indices, 'y': vals}\n`;
-        if (mode === "full") {
-          pythonCode += `    print("__PLOT_DATA__:${id}:" + json.dumps(plot_payload))\n`;
+        pythonCode += `\n# Bond Valence Sum (BVS / GII) analysis -> ${bvsLog}${writeCsv ? ` + ${csvFile}` : ""}\n`;
+        pythonCode += `try:\n`;
+        pythonCode += `    _bvs = ap.analyze_bvs(${inAtoms}, ${inBox}, top_n=${topN}${csvArg})\n`;
+        pythonCode += `    _bres = _bvs.get('results') or []\n`;
+        pythonCode += `    with open('${bvsLog}', 'w') as _bf:\n`;
+        pythonCode += `        _bf.write("# atomipy Bond Valence Sum summary\\nGII = %s\\nGII (no H) = %s\\nformal charge = %s\\n" % (_bvs.get('gii'), _bvs.get('gii_no_h'), _bvs.get('formal_charge')))\n`;
+        pythonCode += `        _bf.write("\\nTop worst-fit atoms (index element bvs delta):\\n")\n`;
+        pythonCode += `        for _w in (_bvs.get('top_worst') or []):\n`;
+        pythonCode += `            _bf.write("  %s %s bvs=%.3f delta=%.3f\\n" % (_w.get('index'), _w.get('element'), float(_w.get('bvs', 0)), float(_w.get('delta', 0))))\n`;
+        pythonCode += `    print("BVS: GII=%.4f, %d atoms -> ${bvsLog}${writeCsv ? ` + ${csvFile}` : ""}" % (_bvs.get('gii') or 0.0, len(_bres)))\n`;
+        if (mode !== "strict") {
+          pythonCode += `    print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'BVS', 'points': [[float(_r.get('index', _i)), float(_r.get('bvs', 0.0))] for _i, _r in enumerate(_bres)]}], 'xLabel': 'atom index', 'yLabel': 'bond valence sum'}))\n`;
         }
+        pythonCode += `except Exception as _e:\n`;
+        pythonCode += `    print("BVS analysis failed: %s" % _e)\n`;
 
         pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
         pythonCode += `${blockOutBox} = ${inBox}\n`;
@@ -2686,9 +2717,42 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         break;
       }
       case "bondAngle": {
+        // bond_angle / bond_angle_dihedral return (atoms, Bond_index, Angle_index[, Dihedral_index, Pairlist]);
+        // the returned atoms carry neigh/bonds/coordination forward to downstream nodes.
         const rmaxH = getNumber(data, "rmaxH", 1.2);
-        const rmaxM = getNumber(data, "rmaxM", 2.2);
-        pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
+        const rmaxM = getNumber(data, "rmaxM", 2.45);
+        const sameEl = getBoolean(data, "sameElementBonds", false) ? "True" : "False";
+        const sameMol = getBoolean(data, "sameMoleculeOnly", true) ? "True" : "False";
+        const calcDih = getBoolean(data, "calcDihedrals", false);
+        const nbrEl = getString(data, "neighborElement", "").trim();
+        const nbrArg = nbrEl ? `, neighbor_element='${pyEscape(nbrEl)}'` : "";
+        const dm = getString(data, "dmMethod", "auto");
+        const dmArg = dm && dm !== "auto" ? `, dm_method='${pyEscape(dm)}'` : "";
+        const logFile = pyEscape(getString(data, "logFile", "bonded_terms.log"));
+        const fn = calcDih ? "bond_angle_dihedral" : "bond_angle";
+
+        pythonCode += `\n# Bonds / angles${calcDih ? " / dihedrals" : ""} (${fn}, rmaxH=${rmaxH}, rmaxM=${rmaxM})\n`;
+        pythonCode += `try:\n`;
+        pythonCode += `    _ba = ap.${fn}(${inAtoms}, ${inBox}, rmaxH=${rmaxH}, rmaxM=${rmaxM}, same_element_bonds=${sameEl}, same_molecule_only=${sameMol}${nbrArg}${dmArg})\n`;
+        pythonCode += `    ${blockOutAtoms} = _ba[0]\n`;
+        pythonCode += `    _bonds = _ba[1] if len(_ba) > 1 and _ba[1] is not None else []\n`;
+        pythonCode += `    _angles = _ba[2] if len(_ba) > 2 and _ba[2] is not None else []\n`;
+        pythonCode += `    _nb = len(_bonds); _na = len(_angles)\n`;
+        if (calcDih) pythonCode += `    _nd = len(_ba[3]) if len(_ba) > 3 and _ba[3] is not None else 0\n`;
+        pythonCode += `    _mb = (sum(float(_r[2]) for _r in _bonds) / _nb) if _nb else 0.0\n`;
+        pythonCode += `    _ma = (sum(float(_r[3]) for _r in _angles) / _na) if _na else 0.0\n`;
+        pythonCode += `    print("Bonds/Angles: %d bonds (mean %.3f A), %d angles (mean %.2f deg)${calcDih ? ", %d dihedrals" : ""} -> ${logFile}" % (_nb, _mb, _na, _ma${calcDih ? ", _nd" : ""}))\n`;
+        pythonCode += `    with open('${logFile}', 'w') as _lf:\n`;
+        pythonCode += `        _lf.write("# atomipy bonded terms: %d bonds (mean %.4f A), %d angles (mean %.3f deg)${calcDih ? ", %d dihedrals" : ""}\\n" % (_nb, _mb, _na, _ma${calcDih ? ", _nd" : ""}))\n`;
+        pythonCode += `        _lf.write("\\n# bonds: i j distance_A\\n")\n`;
+        pythonCode += `        for _r in _bonds:\n`;
+        pythonCode += `            _lf.write("%d %d %.4f\\n" % (int(_r[0]), int(_r[1]), float(_r[2])))\n`;
+        pythonCode += `        _lf.write("\\n# angles: i j k angle_deg\\n")\n`;
+        pythonCode += `        for _r in _angles:\n`;
+        pythonCode += `            _lf.write("%d %d %d %.3f\\n" % (int(_r[0]), int(_r[1]), int(_r[2]), float(_r[3])))\n`;
+        pythonCode += `except Exception as _e:\n`;
+        pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
+        pythonCode += `    print("Bonds/Angles failed: %s" % _e)\n`;
         pythonCode += `${blockOutBox} = ${inBox}\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
