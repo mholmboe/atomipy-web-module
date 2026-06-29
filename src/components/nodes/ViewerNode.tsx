@@ -249,7 +249,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   // auto-loading stale PDB data when the user merely switches renderers.
   const pdbLoadedRef = useRef<{ renderer: ViewerRenderer; pdb: string } | null>(null);
 
-  const renderer = data.renderer ?? "3dmol";
+  const renderer = data.renderer ?? "ngl";
   const pdb = data.pdb || "";
   const computeBonds = data.computeBonds ?? true;
   const hidePeriodicBonds = data.hidePeriodicBonds ?? false;
@@ -1058,6 +1058,13 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
             {/* Compact renderer toggle, centered between the title and the actions */}
             <div className="flex rounded-md overflow-hidden border border-border text-[9px] font-bold shrink-0">
               <button
+                onClick={() => setViewerOption({ renderer: "ngl" })}
+                title="NGL — GPU-accelerated, fastest for large trajectories (default)"
+                className={`px-2 py-0.5 transition-all ${renderer === "ngl" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
+              >
+                NGL
+              </button>
+              <button
                 onClick={() => setViewerOption({ renderer: "3dmol" })}
                 className={`px-2 py-0.5 transition-all ${renderer === "3dmol" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
               >
@@ -1068,13 +1075,6 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                 className={`px-2 py-0.5 transition-all ${renderer === "jsmol" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
               >
                 JSmol
-              </button>
-              <button
-                onClick={() => setViewerOption({ renderer: "ngl" })}
-                title="NGL — GPU-accelerated, fastest for large trajectories"
-                className={`px-2 py-0.5 transition-all ${renderer === "ngl" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
-              >
-                NGL
               </button>
             </div>
             <div className="flex gap-1">
@@ -1356,16 +1356,16 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                   Pick a renderer (toggle, top of node)
                 </p>
                 <p>
+                  <span className="font-bold text-indigo-600">NGL</span> — GPU impostor rendering, smooth playback.
+                  Best for <strong>large systems & MD trajectories</strong> <em>(default)</em>.
+                </p>
+                <p>
                   <span className="font-bold text-indigo-600">3Dmol</span> — fast styling, element/charge labels, Miller planes & PNG export.
                   Best for <strong>single structures</strong> and figures.
                 </p>
                 <p>
                   <span className="font-bold text-indigo-600">JSmol</span> — scripting, measurements and periodic-bond cleanup.
                   Best for <strong>analysis & measurements</strong>.
-                </p>
-                <p>
-                  <span className="font-bold text-indigo-600">NGL</span> — GPU impostor rendering, smooth playback.
-                  Best for <strong>large systems & MD trajectories</strong>.
                 </p>
               </div>
             </div>
