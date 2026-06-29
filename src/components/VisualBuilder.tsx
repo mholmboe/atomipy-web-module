@@ -1172,6 +1172,24 @@ export default function VisualBuilder() {
     [setMenu]
   );
 
+  // React Flow fires a SEPARATE event when you right-click a multi-node selection
+  // (onSelectionContextMenu) instead of onNodeContextMenu — without this handler the
+  // menu never opens for shift-selected sets. Anchor the same menu at the cursor; it
+  // shows the selection-aware items ("Run selected nodes", "Duplicate selection").
+  const onSelectionContextMenu = useCallback(
+    (event: React.MouseEvent, selNodes: Node[]) => {
+      event.preventDefault();
+      if (!reactFlowWrapper.current) return;
+      const rect = reactFlowWrapper.current.getBoundingClientRect();
+      setMenu({
+        id: selNodes[0]?.id ?? "",
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      });
+    },
+    [setMenu]
+  );
+
   const onPaneClick = useCallback(() => setMenu(null), [setMenu]);
 
   const handleDuplicateNode = useCallback((nodeId: string) => {
@@ -2962,6 +2980,7 @@ export default function VisualBuilder() {
             onEdgesChange={(changes) => setEdges((eds) => applyEdgeChanges(changes, eds))}
             onConnect={onConnect}
             onNodeContextMenu={onNodeContextMenu}
+            onSelectionContextMenu={onSelectionContextMenu}
             onPaneClick={onPaneClick}
             onMoveStart={onPaneClick}
             isValidConnection={isValidConnection}
@@ -3010,6 +3029,19 @@ export default function VisualBuilder() {
               <Play className="w-3.5 h-3.5" />
               <span>Run up to this node</span>
             </button>
+
+            {nodes.filter((n) => n.selected).length > 1 && (
+              <button
+                onClick={() => {
+                  handleCompileAndRun();   // no target -> runs STRICTLY the selected nodes
+                  setMenu(null);
+                }}
+                className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all duration-150 text-left w-full font-medium"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>Run selected nodes ({nodes.filter((n) => n.selected).length})</span>
+              </button>
+            )}
 
             <button
               onClick={() => handleDuplicateNode(menu.id)}
