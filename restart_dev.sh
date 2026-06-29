@@ -12,6 +12,12 @@ CORE_URL="http://127.0.0.1:${CORE_PORT}"
 OPENFF_URL="http://127.0.0.1:${OPENFF_PORT}"
 FRONTEND_URL="http://127.0.0.1:${FRONTEND_PORT}"
 
+# Default local GROMACS for the GROMACS engine. Points the Simulate node's default
+# 'gmx' at this install (via atomipy's ATOMIPY_GMX_PATH resolution) instead of the
+# Homebrew gmx on PATH. Override by exporting ATOMIPY_GMX_PATH before running this
+# script. Accepts a GMXRC script, a gmx binary, or an install dir.
+ATOMIPY_GMX_PATH="${ATOMIPY_GMX_PATH:-/usr/local/gromacs-2024.2/bin/GMXRC}"
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "Missing required command: $1"
@@ -168,6 +174,7 @@ main() {
   export OPENFF_WORKER_URL="${OPENFF_URL}"
   nohup conda run --cwd backend/core -n atomipy-core \
     env PYTHONPATH="${PYTHONPATH}" PYTHONIOENCODING=utf-8 OPENFF_WORKER_URL="${OPENFF_URL}" \
+    ATOMIPY_GMX_PATH="${ATOMIPY_GMX_PATH}" \
     uvicorn main:app --reload \
       --reload-dir "${ROOT_DIR}/backend/core" --reload-dir "${ROOT_DIR}/atomipy" \
       --port "${CORE_PORT}" >"${core_log}" 2>&1 &
@@ -177,6 +184,7 @@ main() {
   export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
   nohup conda run --cwd backend/core -n atomipy-core \
     env PYTHONPATH="${PYTHONPATH}" PYTHONIOENCODING=utf-8 OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES \
+    ATOMIPY_GMX_PATH="${ATOMIPY_GMX_PATH}" \
     celery -A celery_app.app worker --loglevel=info >"${celery_log}" 2>&1 &
   local celery_pid=$!
 
