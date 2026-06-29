@@ -578,7 +578,8 @@ const getBoolean = (data: NodeDataMap, key: string, fallback: boolean) => {
   return typeof value === "boolean" ? value : fallback;
 };
 
-const pyEscape = (value: string) => value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+const pyEscape = (value: string) =>
+  value.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r/g, "\\r").replace(/\n/g, "\\n");
 
 type PythonScriptMode = "full" | "minimal" | "strict";
 type ScriptSection = { nodeType: string; nodeId: string; code: string };

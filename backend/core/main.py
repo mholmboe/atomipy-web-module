@@ -8,10 +8,25 @@ from routers import forcefield, execution
 
 app = FastAPI(title="Atomipy Core Backend")
 
+# CORS: an explicit origin allowlist instead of "*". The production deploy serves the
+# frontend and /api from the SAME origin (so CORS is not even consulted), and local dev
+# uses Vite's /api proxy (also same-origin) — so tightening this does not affect normal
+# use, but it stops arbitrary third-party sites from driving the API from a victim's
+# browser. Override via the ALLOWED_ORIGINS env var (comma-separated). Credentials are
+# off because the API uses no cookies/auth ("*"+credentials is invalid anyway).
+_DEFAULT_ORIGINS = (
+    "https://atomipy.io,https://www.atomipy.io,https://topology.atomipy.io,"
+    "http://localhost:8080,http://127.0.0.1:8080,"
+    "http://localhost:8000,http://127.0.0.1:8000"
+)
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get("ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(",") if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -58,9 +73,14 @@ if os.path.isdir(FRONTEND_DIST):
 
     # Catch-all registered LAST so the API routers and /health win. Serves real
     # files (assets, etc.) and falls back to index.html for SPA client routes.
+    _DIST_ROOT = os.path.realpath(FRONTEND_DIST)
+
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
-        candidate = os.path.join(FRONTEND_DIST, full_path)
-        if full_path and os.path.isfile(candidate):
-            return FileResponse(candidate)
+        # Confine to the dist root: realpath-resolve the request and verify it stays
+        # inside _DIST_ROOT, so "/../../etc/passwd" (or encoded "..%2f") can't escape.
+        if full_path:
+            candidate = os.path.realpath(os.path.join(FRONTEND_DIST, full_path))
+            if (candidate == _DIST_ROOT or candidate.startswith(_DIST_ROOT + os.sep)) and os.path.isfile(candidate):
+                return FileResponse(candidate)
         return FileResponse(_INDEX_HTML)

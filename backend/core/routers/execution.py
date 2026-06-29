@@ -51,6 +51,19 @@ UPLOADS_DIR = os.path.join(OUTPUTS_DIR, "uploads")
 PRESETS_DIR = os.path.join(OUTPUTS_DIR, "presets")
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+
+def _safe_join(base: str, *user_parts: str) -> str:
+    """Join user-supplied path parts under ``base``, refusing anything that escapes it.
+
+    Allows legitimate subfolders (e.g. ``zeolites/FAU.pdb``) but blocks ``../`` traversal
+    and absolute paths, so a request can never read/write outside the intended directory.
+    """
+    base_real = os.path.realpath(base)
+    candidate = os.path.realpath(os.path.join(base_real, *user_parts))
+    if candidate != base_real and not candidate.startswith(base_real + os.sep):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    return candidate
 os.makedirs(PRESETS_DIR, exist_ok=True)
 
 
@@ -667,6 +680,7 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="No selected file")
     
     stem, ext = os.path.splitext(file.filename)
+    stem = os.path.basename(stem)  # strip any path components from the client filename
     ext = ext.lower().lstrip(".")
     # Structure formats (pdb/xyz/gro/cif/mmcif/mcif/poscar/contcar/pqr/json/jsonl)
     # are read by ap.import_auto(); mol/mol2/sdf are routed to the organic/GAFF path.
@@ -732,7 +746,7 @@ async def organic_parametrize(request: Request):
                 )
         elif input_mode == "file" and upload_path:
             # upload_path is relative to work_dir: "uploads/session/filename.ext"
-            full_path = os.path.join(OUTPUTS_DIR, upload_path)
+            full_path = _safe_join(OUTPUTS_DIR, upload_path)
             if not os.path.exists(full_path):
                 raise HTTPException(status_code=404,
                                     detail=f"Uploaded file not found: {upload_path}")
@@ -911,13 +925,13 @@ async def inorganic_scan(request: Request):
 
     # Resolve the structure path.
     if source == "upload" and upload_path:
-        path = os.path.join(OUTPUTS_DIR, upload_path)
+        path = _safe_join(OUTPUTS_DIR, upload_path)
     elif source == "crystal":
         crystals = os.path.join(os.path.dirname(ap.__file__), "structures", "crystals")
-        path = os.path.join(crystals, file_name)
+        path = _safe_join(crystals, file_name)
     else:
         uc_conf = os.path.join(os.path.dirname(ap.__file__), "structures", "minerals", "UC_conf")
-        path = os.path.join(uc_conf, file_name)
+        path = _safe_join(uc_conf, file_name)
     if not file_name and not upload_path:
         raise HTTPException(status_code=400, detail="No structure selected to scan.")
     if not os.path.exists(path):

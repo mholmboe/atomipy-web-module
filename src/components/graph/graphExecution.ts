@@ -24,7 +24,11 @@ export const sanitizeFileName = (name: string) =>
     .replace(/^_+|_+$/g, "")
     .toLowerCase() || "workflow";
 
-export const pyEscape = (value: string) => value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+// Escape a string for safe embedding inside a single-quoted Python literal: backslash and
+// quote (so it can't break out of the literal / inject code) plus CR/LF (a raw newline would
+// otherwise produce an unterminated-string SyntaxError in the generated script).
+export const pyEscape = (value: string) =>
+  value.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r/g, "\\r").replace(/\n/g, "\\n");
 
 export const getString = (data: NodeDataMap, key: string, fallback = ""): string => {
   const v = data[key];
@@ -690,7 +694,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           const atomArgs = gatheredStates.map((s) => s.atoms).join(", ");
           const reorder = getBoolean(data, "reorderMolids", true);
           const customMolid = getNumber(data, "molid", undefined);
-          const customResname = getString(data, "resname", "");
+          const customResname = pyEscape(getString(data, "resname", ""));
 
           pythonCode += `\n# Smart Branch Joining (Organic/Mixed SystemList vs Mineral/Solvent/Ions)\n`;
           pythonCode += `_organic_branches = []\n`;
@@ -1028,7 +1032,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         break;
       }
       case "reorder": {
-        const byMode = getString(data, "byMode", "index");
+        const byMode = pyEscape(getString(data, "byMode", "index"));
         const rawNeworder = getString(data, "neworder", "").trim();
         const tokens = rawNeworder.split(/[;,]+/).map((t) => t.trim()).filter((t) => t.length > 0);
         if (tokens.length === 0) {
@@ -1422,7 +1426,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           const defaultResname = getString(data, "defaultResname", "MIN").trim();
           pythonCode += `${blockOutAtoms} = ap.assign_resname(${inAtoms}, default_resname='${pyEscape(defaultResname)}')\n`;
         } else if (editMode === "reorder") {
-          const byMode = getString(data, "byMode", "index");
+          const byMode = pyEscape(getString(data, "byMode", "index"));
           const neworder = getString(data, "neworder", "").trim();
           let listExpr = "[]";
           if (neworder) {
@@ -2593,7 +2597,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    json.dump(closest_data, _cf)\n`;
 
         } else if (option === "mindist") {
-          const groupBy = getString(data, "mindistGroupBy", "molid");
+          const groupBy = pyEscape(getString(data, "mindistGroupBy", "molid"));
           const nPairs = getNumber(data, "mindistNPairs", 10);
           const cutoff = getNumber(data, "mindistCutoff", 0);
           const outputBase = pyEscape(getString(data, "mindistOutputBase", "mindist_results"));
