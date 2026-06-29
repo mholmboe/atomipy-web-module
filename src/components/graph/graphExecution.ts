@@ -2625,6 +2625,16 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
 
           pythonCode += `\n# Surface/Cavity occupancy analysis\n`;
           pythonCode += `occupancy_data = ap.occupancy(${inAtoms}, ${inBox}, ion_type='${ionType}', rcut=${rCut}, output_base='${outputBase}')\n`;
+        } else if (option === "stats") {
+          // Structure statistics report: atom types, coordination, charges, bonds/angles.
+          // get_structure_stats computes bonds internally and writes the report to log_file.
+          const statsLog = pyEscape(getString(data, "statsLogFile", "output.log"));
+          pythonCode += `\n# Structure statistics report -> ${statsLog}\n`;
+          pythonCode += `try:\n`;
+          pythonCode += `    ap.get_structure_stats(${inAtoms}, ${inBox}, log_file='${statsLog}')\n`;
+          pythonCode += `    print("Wrote structure statistics to ${statsLog}")\n`;
+          pythonCode += `except Exception as _e:\n`;
+          pythonCode += `    print(f"Structure stats failed: {_e}")\n`;
         }
 
         pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
