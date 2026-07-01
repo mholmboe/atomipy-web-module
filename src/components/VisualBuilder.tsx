@@ -2380,6 +2380,16 @@ export default function VisualBuilder() {
                   return node;
                 })
               );
+            } else if (data.type === "xrd") {
+              // XRD diffraction pattern -> XrdNode renders data.xrdPlot.points.
+              const { nodeId, points } = data;
+              setNodes((nds) =>
+                nds.map((node) =>
+                  node.id === nodeId
+                    ? { ...node, data: { ...node.data, xrdPlot: { points } } }
+                    : node
+                )
+              );
             } else if (data.type === "charges") {
               const { nodeId, data: chargeData } = data;
               setNodes((nds) =>
@@ -2477,6 +2487,11 @@ export default function VisualBuilder() {
       });
       currentRunningNodeRef.current = null;
       toast.error("Workflow error: " + (error instanceof Error ? error.message : String(error)), { id: runToastId });
+    } finally {
+      // Guarantee the UI leaves the "building" state on every exit path — a normal
+      // finish, an error, an abort, or a stream that closes without a `complete` event.
+      setIsBuilding(false);
+      setCurrentBuildId(null);
     }
   };
 

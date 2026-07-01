@@ -2583,7 +2583,10 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `cn_data = ap.coordination_number(${inAtoms}, ${inBox}, cutoff=${rCut}, atom_types=['${typeA}']${typeBArg})\n`;
           pythonCode += `with open('${outputBase}.json', 'w') as _cf:\n`;
           pythonCode += `    json.dump({'coordination_numbers': cn_data}, _cf)\n`;
-          pythonCode += `print(f"CN: mean={sum(cn_data)/len(cn_data):.2f}, min={min(cn_data)}, max={max(cn_data)}")\n`;
+          pythonCode += `if cn_data:\n`;
+          pythonCode += `    print("CN: mean=%.2f, min=%d, max=%d over %d atoms -> ${outputBase}.json" % (sum(cn_data)/len(cn_data), min(cn_data), max(cn_data), len(cn_data)))\n`;
+          pythonCode += `else:\n`;
+          pythonCode += `    print("CN: no atoms matched type '${typeA}'${typeB ? ` / neighbor '${pyEscape(typeB)}'` : ""} (check the atom-type names)")\n`;
 
         } else if (option === "closest") {
           const typeA = pyEscape(getString(data, "atomTypeA", "Na"));
@@ -2623,12 +2626,26 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           }
 
         } else if (option === "occupancy") {
-          const ionType = pyEscape(getString(data, "ionType", "Na"));
-          const rCut = getNumber(data, "rCut", 3.0);
+          // Per-site occupancy = 1 / (number of atoms within rmax). ap.occupancy_atom
+          // (there is no ap.occupancy) returns (atoms, occupancy_list).
+          const rmax = getNumber(data, "occupancyRmax", 1.0);
           const outputBase = pyEscape(getString(data, "occupancyOutputBase", "occupancy_results"));
+          const outMode = getString(data, "occupancyOutputMode", "json");
 
-          pythonCode += `\n# Surface/Cavity occupancy analysis\n`;
-          pythonCode += `occupancy_data = ap.occupancy(${inAtoms}, ${inBox}, ion_type='${ionType}', rcut=${rCut}, output_base='${outputBase}')\n`;
+          pythonCode += `\n# Per-site occupancy (1 / atoms within rmax=${rmax} A)\n`;
+          pythonCode += `_occ_atoms, _occ = ap.occupancy_atom(${inAtoms}, ${inBox}, rmax=${rmax})\n`;
+          pythonCode += `_occ = [float(_x) for _x in _occ]\n`;
+          pythonCode += `print("Occupancy: %d sites, mean=%.3f (min %.3f, max %.3f) -> ${outputBase}" % (len(_occ), (sum(_occ)/len(_occ) if _occ else 0.0), (min(_occ) if _occ else 0.0), (max(_occ) if _occ else 0.0)))\n`;
+          if (outMode === "json" || outMode === "both") {
+            pythonCode += `with open('${outputBase}.json', 'w') as _of:\n`;
+            pythonCode += `    json.dump({'occupancy': _occ}, _of)\n`;
+          }
+          if (outMode === "dat" || outMode === "both") {
+            pythonCode += `with open('${outputBase}.dat', 'w') as _of:\n`;
+            pythonCode += `    _of.write("#%13s\\n" % 'occupancy')\n`;
+            pythonCode += `    for _v in _occ:\n`;
+            pythonCode += `        _of.write("%14.6g\\n" % _v)\n`;
+          }
         } else if (option === "stats") {
           // Structure statistics report: atom types, coordination, charges, bonds/angles.
           // get_structure_stats computes bonds internally and writes the report to log_file.
@@ -2675,12 +2692,15 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `    counts = {t: sum(1 for a in ${inAtoms} if a['type'] == t) for t in types}\n`;
         pythonCode += `    for t, c in counts.items():\n`;
         pythonCode += `        _sf.write(f"Type {t}: {c}\\n")\n`;
-        pythonCode += `    # Generate JSON structure count metadata for downstream plotting\n`;
+        pythonCode += `    # Composition counts for a connected Data Plotter (numeric x = type index)\n`;
         pythonCode += `    import json\n`;
-        pythonCode += `    plot_payload = {'x': list(counts.keys()), 'y': list(counts.values())}\n`;
-        
-        if (mode === "full") {
-          pythonCode += `    print("__PLOT_DATA__:${id}:" + json.dumps(plot_payload))\n`;
+        pythonCode += `    plot_payload = {'series': [{'name': 'atom count', 'points': [[float(_i), float(_c)] for _i, _c in enumerate(counts.values())]}], 'xLabel': 'atom type (index)', 'yLabel': 'count'}\n`;
+
+        if (mode !== "strict") {
+          // Route to a connected plot node (else the stats node's own id). Use the
+          // __PLOT_<id>__: marker the backend/PlotNode actually parse (not __PLOT_DATA__).
+          const plotTarget = edges.find((e) => e.source === id && nodes.find((nn) => nn.id === e.target)?.type === "plot")?.target ?? id;
+          pythonCode += `    print("__PLOT_${plotTarget}__:" + json.dumps(plot_payload))\n`;
         }
 
         pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
@@ -2773,9 +2793,12 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `    for twotheta, intensity in xrd_pattern:\n`;
         pythonCode += `        _xrd.write(f"{twotheta:.4f} {intensity:.4f}\\n")\n`;
         pythonCode += `import json\n`;
-        pythonCode += `plot_payload = {'x': [float(p[0]) for p in xrd_pattern], 'y': [float(p[1]) for p in xrd_pattern]}\n`;
-        if (mode === "full") {
-          pythonCode += `print("__PLOT_DATA__:${id}:" + json.dumps(plot_payload))\n`;
+        // XrdNode renders from data.xrdPlot.points ([[2theta, I], ...]). Emit the
+        // dedicated __XRD_DATA_<id>__: marker (the backend turns it into a type:'xrd'
+        // SSE event); guard on !strict so it fires in the executed (minimal) script.
+        pythonCode += `_xrd_points = [[float(p[0]), float(p[1])] for p in xrd_pattern]\n`;
+        if (mode !== "strict") {
+          pythonCode += `print("__XRD_DATA_${id}__:" + json.dumps({'points': _xrd_points}))\n`;
         }
 
         pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;

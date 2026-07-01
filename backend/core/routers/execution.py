@@ -69,6 +69,29 @@ def _safe_join(base: str, *user_parts: str) -> str:
 os.makedirs(PRESETS_DIR, exist_ok=True)
 
 
+def _prune_result_cache(max_age_seconds=None):
+    """Delete result_*.zip bundles older than the TTL so CACHE_DIR doesn't grow unbounded.
+
+    The only reader is /download-result, which the client hits right after a build, so an
+    hour is ample. Best-effort — never raises into the caller. Called at each build start.
+    """
+    if max_age_seconds is None:
+        max_age_seconds = int(os.environ.get("RESULT_CACHE_TTL_SECONDS", "3600"))
+    try:
+        now = time.time()
+        for name in os.listdir(CACHE_DIR):
+            if not (name.startswith("result_") and name.endswith(".zip")):
+                continue
+            path = os.path.join(CACHE_DIR, name)
+            try:
+                if now - os.path.getmtime(path) > max_age_seconds:
+                    os.remove(path)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
 def simulation_mode() -> str:
     """Server simulation policy: 'full', 'em_only', or 'disabled'.
 
@@ -315,6 +338,7 @@ async def build_stream(request: BuildRequest):
                     with open(os.path.join(work_dir, safe_name), "w", encoding="utf-8") as af:
                         af.write(content)
                 
+            _prune_result_cache()   # evict stale result bundles so CACHE_DIR stays bounded
             yield SSE.status('Build initializing...')
 
             # Assign a short build ID so the client can request a stop later
