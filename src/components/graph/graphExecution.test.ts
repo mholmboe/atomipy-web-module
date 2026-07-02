@@ -460,6 +460,26 @@ describe('graphExecution — review-fix regressions', () => {
     expect(code).not.toContain('__XRD_DATA_');
   });
 
+  it('OpenMM simulate: dcd format adds a DCDReporter, xtc adds an XTCReporter', () => {
+    const dcd = generatePythonCode(
+      [struct, { id: 'sim', type: 'simulate', position: { x: 100, y: 0 }, data: { engine: 'openmm', simType: 'nvt', trajFormat: 'dcd' } }],
+      [edgeTo('sim')], 'minimal');
+    expect(dcd).toContain('app.DCDReporter(');
+    expect(dcd).toContain('.dcd');
+    const xtc = generatePythonCode(
+      [struct, { id: 'sim', type: 'simulate', position: { x: 100, y: 0 }, data: { engine: 'openmm', simType: 'nvt', trajFormat: 'xtc' } }],
+      [edgeTo('sim')], 'minimal');
+    expect(xtc).toContain('app.XTCReporter(');
+  });
+
+  it('GROMACS simulate: xtc/trr format converts via _gmx.trjconv', () => {
+    const code = generatePythonCode(
+      [struct, { id: 'sim', type: 'simulate', position: { x: 100, y: 0 }, data: { engine: 'gromacs', simType: 'nvt', trajFormat: 'trr' } }],
+      [edgeTo('sim')], 'minimal');
+    expect(code).toContain('_gmx.trjconv(');
+    expect(code).toContain('.trr');
+  });
+
   it('uploaded .xtc trajectory + topology flows into analysis via import_traj(top=)', () => {
     const nodes: Node[] = [
       { id: 'tr', type: 'trajectory', position: { x: 0, y: 0 },

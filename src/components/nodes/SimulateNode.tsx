@@ -83,6 +83,7 @@ type SimulateNodeData = {
   posres?: boolean;
   posresFC?: number;
   wrapTrajectory?: boolean;
+  trajFormat?: string;   // download trajectory format: openmm pdb/dcd/xtc, gromacs pdb/xtc/trr
   excludeWater?: boolean;
 };
 
@@ -109,6 +110,7 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
   const posres = data?.posres ?? false;
   const posresFC = data?.posresFC ?? 1000;
   const wrapTrajectory = data?.wrapTrajectory ?? true;
+  const trajFormat = data?.trajFormat ?? "pdb";
   const excludeWater = data?.excludeWater ?? true;
 
   const engine: Engine = data?.engine ?? "openmm";
@@ -251,6 +253,33 @@ Defaults to <code>gmx</code> on PATH — works on Colab (after the launcher's <s
             <option value="nvt">NVT (constant volume)</option>
             <option value="npt">NPT (constant pressure)</option>
           </select>
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground block mb-1">Trajectory format</label>
+          <select
+            className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
+            value={trajFormat}
+            onChange={(e) => updateNodeData(id, { ...data, trajFormat: e.target.value })}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <option value="pdb">PDB (multi-frame)</option>
+            {isGromacs ? (
+              <>
+                <option value="xtc">XTC (GROMACS compressed)</option>
+                <option value="trr">TRR (GROMACS full precision)</option>
+              </>
+            ) : (
+              <>
+                <option value="dcd">DCD (CHARMM/NAMD)</option>
+                <option value="xtc">XTC (GROMACS compressed)</option>
+              </>
+            )}
+          </select>
+          <p className="text-[10px] text-muted-foreground/70 leading-snug mt-1">
+            A multi-frame PDB is always written for the viewer &amp; analysis; a non-PDB choice
+            adds that file to the download bundle.
+          </p>
         </div>
 
         {mdBlockedHere && (

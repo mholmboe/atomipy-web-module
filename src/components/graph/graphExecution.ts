@@ -1749,6 +1749,10 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         _simTypeCount[_simLabel] = (_simTypeCount[_simLabel] || 0) + 1;
         const simBase = `${_simLabel}_${_simTypeCount[_simLabel]}`;
         const trajFile = `${simBase}.pdb`;
+        // Download trajectory format: OpenMM -> pdb/dcd/xtc, GROMACS -> pdb/xtc/trr. A
+        // multi-frame PDB is ALWAYS written for the viewer/analysis; a non-pdb choice adds
+        // that file to the result bundle (dcd via OpenMM reporter, xtc/trr via gmx trjconv).
+        const trajFormat = getString(data, "trajFormat", "pdb").toLowerCase();
         const excludeWater = getBoolean(data, "excludeWater", true);
         const pdbFreq = getNumber(data, "pdbFreq", getNumber(data, "dcdFreq", 1000));
         const logFreq = getNumber(data, "logFreq", 1000);
@@ -1904,6 +1908,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `        print(f"(trajectory conversion error [{_ext}]: {_e})")\n`;
           pythonCode += `if _traj:\n`;
           pythonCode += `    print(f"Wrote trajectory ${trajFile} (from {_traj_src})")\n`;
+          if (trajFormat === "xtc" || trajFormat === "trr") {
+            // Also emit the trajectory in the user's chosen binary format (download artifact).
+            pythonCode += `    try:\n`;
+            pythonCode += `        _fmt_out = _gmx.trjconv('.', tpr=_final_stage+'.tpr', src=_traj_src, out="${simBase}.${trajFormat}", group="System", pbc="${gmxPbc}", gmx=_gmx_spec)\n`;
+            pythonCode += `        if _fmt_out: print("Also wrote ${trajFormat.toUpperCase()} trajectory ${simBase}.${trajFormat}")\n`;
+            pythonCode += `    except Exception as _fe:\n`;
+            pythonCode += `        print(f"(${trajFormat} conversion failed: {_fe})")\n`;
+          }
           if (excludeWater) {
             pythonCode += `    try:\n`;
             pythonCode += `        _gmx.trjconv_to_pdb('.', tpr=_final_stage+'.tpr', xtc=_traj_src, out="${simBase}_no_water.pdb", group="non-Water", pbc="${gmxPbc}", gmx=_gmx_spec)\n`;
@@ -2258,6 +2270,17 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `        print(f"  Initial potential energy: {_md_init_pe:,.1f} kJ/mol — system looks stable, starting MD...")\n`;
         pythonCode += `        print(f"Executing ${simType.toUpperCase()} MD (${mdSteps} steps)...")\n`;
         pythonCode += `        simulation.reporters.append(DynamicBoxPDBReporter('${trajFile}', max(1, ${pdbFreq}), write_no_water=${excludeWater ? "True" : "False"}))\n`;
+        if (trajFormat === "dcd") {
+          // Additional DCD trajectory (download artifact) alongside the viewer PDB.
+          pythonCode += `        simulation.reporters.append(app.DCDReporter('${simBase}.dcd', max(1, ${pdbFreq}), enforcePeriodicBox=True))\n`;
+          pythonCode += `        print("Also writing DCD trajectory: ${simBase}.dcd")\n`;
+        } else if (trajFormat === "xtc") {
+          pythonCode += `        try:\n`;
+          pythonCode += `            simulation.reporters.append(app.XTCReporter('${simBase}.xtc', max(1, ${pdbFreq}), enforcePeriodicBox=True))\n`;
+          pythonCode += `            print("Also writing XTC trajectory: ${simBase}.xtc")\n`;
+          pythonCode += `        except Exception as _xe:\n`;
+          pythonCode += `            print(f"(XTC reporter unavailable, PDB still written: {_xe})")\n`;
+        }
         pythonCode += `        import sys as _sys\n`;
         pythonCode += `        class CleanHeaderStream:\n`;
         pythonCode += `            def __init__(self, stream):\n`;
