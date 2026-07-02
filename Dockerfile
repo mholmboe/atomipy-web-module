@@ -46,10 +46,16 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     rm -rf /var/lib/apt/lists/*
 USER $MAMBA_USER
 
-# Create the atomipy-core environment (openmm, fastapi, atomipy deps, ...)
+# Create the atomipy-core environment (openmm, fastapi, atomipy deps, ...). This env
+# includes conda-forge `xdrfile` (libxdrfile), so the deployed app can read GROMACS
+# .xtc/.trr trajectories: atomipy.xdrfile auto-discovers the shared lib under the env's
+# lib dir (no ATOMIPY_XDRFILE needed). .dcd is handled by atomipy's pure-Python reader.
 COPY --chown=$MAMBA_USER:$MAMBA_USER envs/atomipy-core.yml /tmp/env.yml
 RUN micromamba install -y -n base -f /tmp/env.yml && \
     micromamba clean --all --yes
+# Belt-and-suspenders: expose the env's lib dir so the loader (and any child process)
+# can also find libxdrfile by SONAME, not only by the prefix glob.
+ENV LD_LIBRARY_PATH=/opt/conda/lib:${LD_LIBRARY_PATH}
 
 WORKDIR /app
 

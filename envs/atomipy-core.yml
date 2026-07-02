@@ -14,6 +14,7 @@ dependencies:
   - tqdm
   - gemmi>=0.7.0
   - numba>=0.50.0
+  - xdrfile=1.1.4           # libxdrfile: read GROMACS .xtc/.trr (atomipy.xdrfile finds it in <prefix>/lib)
   # web server / task queue
   - fastapi
   - uvicorn
