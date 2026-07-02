@@ -480,6 +480,15 @@ describe('graphExecution — review-fix regressions', () => {
     expect(code).toContain('.trr');
   });
 
+  it('trajectory extract mode saves a single (clamped) frame as the structure', () => {
+    const code = generatePythonCode(
+      [{ id: 'tr', type: 'trajectory', position: { x: 0, y: 0 },
+         data: { mode: 'import', trajPath: 'uploads/default_session/t.dcd', trajName: 't.dcd', extractMode: true, frameIndex: 5 } }],
+      [], 'minimal');
+    expect(code).toContain('_uframes[_fi]');           // one frame becomes the structure
+    expect(code).toContain('min(max(0, 5)');           // frame index clamped to range
+  });
+
   it('uploaded .xtc trajectory + topology flows into analysis via import_traj(top=)', () => {
     const nodes: Node[] = [
       { id: 'tr', type: 'trajectory', position: { x: 0, y: 0 },

@@ -2934,18 +2934,23 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const trajFile = inTraj !== undefined ? inTraj : `'trajectory.pdb'`;
 
         if (extractMode) {
-          pythonCode += `\n# Extract single coordinate frame from simulation trajectory\n`;
+          // Save one frame of the trajectory as THE structure to pass forward. Uses
+          // import_traj (frame list) so it's robust for any trajectory format, with the
+          // index clamped to the available range.
+          pythonCode += `\n# Extract a single frame from the trajectory -> structure output\n`;
           pythonCode += `try:\n`;
-          pythonCode += `    print(f"Extracting frame {${frameIndex}} from trajectory {${trajFile}}...")\n`;
-          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.import_auto(${trajFile})\n`;
-          pythonCode += `    # Select individual snapshot coordinate set (each frame has len(atoms) items)\n`;
-          pythonCode += `    num_atoms_per_frame = len(ap.import_auto(${inAtoms})[0]) if ${inAtoms} else 0\n`;
-          pythonCode += `    if num_atoms_per_frame > 0 and len(${blockOutAtoms}) >= (num_atoms_per_frame * (${frameIndex} + 1)):\n`;
-          pythonCode += `        ${blockOutAtoms} = ${blockOutAtoms}[num_atoms_per_frame * ${frameIndex} : num_atoms_per_frame * (${frameIndex} + 1)]\n`;
+          pythonCode += `    _tframes = ap.import_traj(${trajFile}${inTop ? `, top=${inTop}` : ""})\n`;
+          pythonCode += `    if _tframes:\n`;
+          pythonCode += `        _fi = min(max(0, ${frameIndex}), len(_tframes) - 1)\n`;
+          pythonCode += `        ${blockOutAtoms}, ${blockOutBox} = _tframes[_fi]\n`;
+          pythonCode += `        print(f"Extracted frame {_fi + 1}/{len(_tframes)} from ${trajFile} ({len(${blockOutAtoms})} atoms)")\n`;
+          pythonCode += `    else:\n`;
+          pythonCode += `        ${blockOutAtoms}, ${blockOutBox} = ${inAtoms}, ${inBox}\n`;
+          pythonCode += `        print("No trajectory frames found — passing the current structure through")\n`;
           pythonCode += `except Exception as extract_err:\n`;
-          pythonCode += `    print(f"Frame extraction failed, fallback to standard coordinates: {extract_err}")\n`;
-          pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
-          pythonCode += `    ${blockOutBox} = ${inBox}\n`;
+          pythonCode += `    print(f"Frame extraction failed, using current structure: {extract_err}")\n`;
+          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ${inAtoms}, ${inBox}\n`;
+          // single frame -> a plain structure (no trajectory threaded downstream)
           stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         } else {
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;

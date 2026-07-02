@@ -249,7 +249,10 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   // auto-loading stale PDB data when the user merely switches renderers.
   const pdbLoadedRef = useRef<{ renderer: ViewerRenderer; pdb: string } | null>(null);
 
-  const renderer = data.renderer ?? "ngl";
+  // JSmol was retired from the toggle (benchmarks: ~20x slower to load and ~10-40x slower
+  // playback than NGL/3Dmol, unusable for large trajectories). Any saved 'jsmol' node falls
+  // back to NGL. The JSmol render path is kept below but unreachable via the UI.
+  const renderer = (data.renderer === "jsmol" ? "ngl" : data.renderer) ?? "ngl";
   const pdb = data.pdb || "";
   const computeBonds = data.computeBonds ?? true;
   const hidePeriodicBonds = data.hidePeriodicBonds ?? false;
@@ -1066,15 +1069,10 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
               </button>
               <button
                 onClick={() => setViewerOption({ renderer: "3dmol" })}
+                title="3Dmol — WebGL; Miller planes, element/charge labels, PNG export"
                 className={`px-2 py-0.5 transition-all ${renderer === "3dmol" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
               >
                 3Dmol
-              </button>
-              <button
-                onClick={() => setViewerOption({ renderer: "jsmol" })}
-                className={`px-2 py-0.5 transition-all ${renderer === "jsmol" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
-              >
-                JSmol
               </button>
             </div>
             <div className="flex gap-1">
@@ -1362,10 +1360,6 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                 <p>
                   <span className="font-bold text-indigo-600">3Dmol</span> — fast styling, element/charge labels, Miller planes & PNG export.
                   Best for <strong>single structures</strong> and figures.
-                </p>
-                <p>
-                  <span className="font-bold text-indigo-600">JSmol</span> — scripting, measurements and periodic-bond cleanup.
-                  Best for <strong>analysis & measurements</strong>.
                 </p>
               </div>
             </div>
