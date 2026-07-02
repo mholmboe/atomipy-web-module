@@ -3107,6 +3107,9 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `            \n`;
           pythonCode += `            if len(_models) < _n_full:\n`;
           pythonCode += `                print(f"Preparing trajectory for the viewer ({len(_models)} of {_n_full} frames; full {_n_full}-frame trajectory is in the download)...", flush=True)\n`;
+          pythonCode += `                # Point the viewer at the FULL trajectory file in the bundle so NGL can\n`;
+          pythonCode += `                # stream every frame directly (no in-browser inlining cap).\n`;
+          pythonCode += `                print("__TRAJFILE_${id}__:" + json.dumps({'file': os.path.basename(_traj_file), 'ext': 'pdb', 'nframes': _n_full, 'shown': len(_models)}))\n`;
           pythonCode += `            else:\n`;
           pythonCode += `                print(f"Preparing trajectory for the viewer ({len(_models)} frames)...", flush=True)\n`;
           pythonCode += `            _vis_pdb_str = '\\\\\\\\n'.join('\\\\\\\\n'.join(_m) for _m in _models)\n`;

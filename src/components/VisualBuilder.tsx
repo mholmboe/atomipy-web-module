@@ -2248,6 +2248,16 @@ export default function VisualBuilder() {
               }
               currentRunningNodeRef.current = null;
               setDownloadToken(data.token);
+              // Stamp the result token onto any viewer that announced a full trajectory
+              // file, so it can stream it from /api/result-file/<token>/<file>.
+              if (data.success && data.token) {
+                const _tok = data.token as string;
+                setNodes((nds) => nds.map((node) =>
+                  node.type === "viewer" && (node.data as { trajFile?: unknown })?.trajFile
+                    ? { ...node, data: { ...node.data, resultToken: _tok } }
+                    : node
+                ));
+              }
               if (data.success) {
                 toast.success("Run successful! Download is ready.", { id: runToastId });
               } else {
@@ -2379,6 +2389,17 @@ export default function VisualBuilder() {
                   }
                   return node;
                 })
+              );
+            } else if (data.type === "trajfile") {
+              // The full trajectory file is in the result bundle; record it so the viewer
+              // can offer to stream every frame (set alongside resultToken on 'complete').
+              const { nodeId, file, ext, nframes, shown } = data;
+              setNodes((nds) =>
+                nds.map((node) =>
+                  node.id === nodeId
+                    ? { ...node, data: { ...node.data, trajFile: { file, ext, nframes, shown } } }
+                    : node
+                )
               );
             } else if (data.type === "xrd") {
               // XRD diffraction pattern -> XrdNode renders data.xrdPlot.points.

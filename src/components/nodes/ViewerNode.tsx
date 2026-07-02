@@ -105,6 +105,9 @@ type ViewerNodeData = {
   renderer?: ViewerRenderer;
   pdb?: string;
   charges?: number[];
+  // Full trajectory available in the result bundle (streamed into NGL on demand, no cap)
+  trajFile?: { file: string; ext: string; nframes: number; shown: number };
+  resultToken?: string;
   title?: string;
   width?: number;
   height?: number;
@@ -310,6 +313,13 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     return Math.max(1, count);
   }, [pdb]);
   const isMulti = numFrames > 1;
+
+  // When the FULL trajectory is streamed into NGL from the bundle, the real frame count is
+  // trajFile.nframes (> the inlined/capped numFrames). effectiveFrames drives the slider/play.
+  const [fullFrameCount, setFullFrameCount] = React.useState<number | null>(null);
+  const [fullTrajBusy, setFullTrajBusy] = React.useState(false);
+  const effectiveFrames = fullFrameCount ?? numFrames;
+  useEffect(() => { setFullFrameCount(null); }, [pdb]);   // reset on a new build/trajectory
 
   // Keep a ref of the current frame so the JSmol load effect can restore it
   // without re-running once per frame during playback.
@@ -695,6 +705,47 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     return () => { cancelled = true; };
   }, [renderer, pdb, viewStyle, showHydrogens, showUnitCell, isMulti, stickRadius, sphereScale, showAtomLabels, labelIsCharge, chargeValues, fitNgl]);
 
+  // Stream the FULL trajectory file straight from the result bundle into NGL — NGL parses
+  // frames itself (holding only coordinates), so it shows EVERY frame without the inline
+  // memory cap. Replaces the current NGL content; the slider/play then span all frames.
+  const loadFullTrajectory = useCallback(async () => {
+    const tf = data.trajFile;
+    const token = data.resultToken;
+    const stage = nglStageRef.current;
+    if (!tf?.file || !token || renderer !== "ngl" || !stage || !window.NGL) return;
+    setFullTrajBusy(true);
+    const url = `/api/result-file/${encodeURIComponent(token)}/${encodeURIComponent(tf.file)}`;
+    try {
+      try { stage.removeAllComponents(); } catch { /* ignore */ }
+      nglCompRef.current = null;
+      nglTrajRef.current = null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const comp: any = await stage.loadFile(url, { ext: tf.ext || "pdb", asTrajectory: true });
+      if (!comp) throw new Error("load failed");
+      nglCompRef.current = comp;
+      try { prunePeriodicBondsNGL(comp.structure, 3.0); } catch { /* ignore */ }
+      const reprType = viewStyle === "sphere" ? "spacefill"
+        : viewStyle === "stick" ? "licorice"
+        : viewStyle === "line" ? "line" : "ball+stick";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const reprParams: any = {};
+      if (!showHydrogens) reprParams.sele = "not _H";
+      if (reprType === "spacefill") reprParams.scale = sphereScale;
+      else if (reprType === "ball+stick" || reprType === "licorice") reprParams.radius = stickRadius;
+      comp.addRepresentation(reprType, reprParams);
+      const trajComp = comp.addTrajectory(undefined, {});
+      nglTrajRef.current = trajComp?.trajectory ?? null;
+      comp.autoView();
+      fitNgl(); setTimeout(fitNgl, 100);
+      setCurrentFrame(0);
+      setFullFrameCount(tf.nframes);   // slider/play now span every frame
+    } catch {
+      /* stream/parse failed — keep the capped preview */
+    } finally {
+      setFullTrajBusy(false);
+    }
+  }, [data.trajFile, data.resultToken, renderer, viewStyle, showHydrogens, sphereScale, stickRadius, fitNgl]);
+
   // ─── Keep the NGL canvas sized to the node (resize, panel/layout changes) ──
   useEffect(() => {
     if (renderer !== "ngl") return;
@@ -744,14 +795,14 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     if (isPlaying) {
       interval = setInterval(() => {
         setCurrentFrame((prev) => {
-          const next = (prev + 1) % numFrames;
+          const next = (prev + 1) % effectiveFrames;
           gotoFrame(next);
           return next;
         });
       }, 100); // ~10 fps playback
     }
     return () => clearInterval(interval);
-  }, [isPlaying, isMulti, numFrames, renderer, gotoFrame]);
+  }, [isPlaying, isMulti, effectiveFrames, renderer, gotoFrame]);
 
   const handleFrameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const frame = parseInt(e.target.value) || 0;
@@ -1373,7 +1424,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
             >
               <button 
                 onClick={() => {
-                  const next = (currentFrame - 1 + numFrames) % numFrames;
+                  const next = (currentFrame - 1 + effectiveFrames) % effectiveFrames;
                   setCurrentFrame(next);
                   gotoFrame(next);
                 }}
@@ -1393,7 +1444,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
               
               <button 
                 onClick={() => {
-                  const next = (currentFrame + 1) % numFrames;
+                  const next = (currentFrame + 1) % effectiveFrames;
                   setCurrentFrame(next);
                   gotoFrame(next);
                 }}
@@ -1405,17 +1456,30 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
 
               <div className="flex items-center gap-2 px-2 border-l border-border ml-1">
                 <span className="text-[10px] font-mono text-muted-foreground w-8 text-right">{currentFrame + 1}</span>
-                <input 
-                  type="range" 
-                  min={0} 
-                  max={numFrames - 1} 
+                <input
+                  type="range"
+                  min={0}
+                  max={effectiveFrames - 1}
                   value={currentFrame}
                   onChange={handleFrameChange}
                   className="w-24 accent-indigo-500 cursor-pointer h-1.5 bg-muted rounded-lg appearance-none"
                 />
-                <span className="text-[10px] font-mono text-muted-foreground w-8">{numFrames}</span>
+                <span className="text-[10px] font-mono text-muted-foreground w-8">{effectiveFrames}</span>
               </div>
 
+              {/* NGL only: stream every frame from the bundle (the preview above is capped). */}
+              {renderer === "ngl" && data.trajFile && data.resultToken && fullFrameCount === null &&
+                data.trajFile.shown < data.trajFile.nframes && (
+                <button
+                  type="button"
+                  onClick={loadFullTrajectory}
+                  disabled={fullTrajBusy}
+                  title={`Stream the full ${data.trajFile.nframes}-frame trajectory from the result bundle`}
+                  className="nodrag ml-1 px-2 py-0.5 text-[10px] font-semibold rounded-md bg-indigo-500/15 text-indigo-600 hover:bg-indigo-500/25 disabled:opacity-50"
+                >
+                  {fullTrajBusy ? "Loading…" : `Load all ${data.trajFile.nframes} frames`}
+                </button>
+              )}
 
             </div>
           )}

@@ -350,7 +350,7 @@ async def build_stream(request: BuildRequest):
             log_file = open(log_file_path, "w", encoding="utf-8")
 
             _PROTOCOL_PREFIXES = (
-                "__VISUALIZE_", "__BOX_", "__CHARGES_",
+                "__VISUALIZE_", "__BOX_", "__CHARGES_", "__TRAJFILE_",
                 "__XRD_DATA_", "__PLOT_", "__NODE_START__", "__INSPECT_",
             )
             _verbose_log = request.verbose_log
@@ -424,6 +424,14 @@ async def build_stream(request: BuildRequest):
                         node_id = parts[0].replace("__VISUALIZE_", "")
                         pdb_data = parts[1].replace("\\n", "\n")
                         return SSE.visualize(node_id, pdb_data)
+                    except: pass
+                elif "__TRAJFILE_" in stripped:
+                    # The full trajectory file is in the result bundle; tell the viewer so
+                    # it can stream ALL frames from /api/result-file (no in-browser cap).
+                    try:
+                        parts = stripped.split("__:", 1)
+                        node_id = parts[0].replace("__TRAJFILE_", "")
+                        return f"data: {json.dumps({'type': 'trajfile', 'nodeId': node_id, **json.loads(parts[1])})}\n\n"
                     except: pass
                 elif "__BOX_" in stripped:
                     try:
@@ -544,6 +552,35 @@ async def download_result(token: str):
     if not os.path.exists(zip_path):
         raise HTTPException(status_code=404, detail="Result expired or not found")
     return FileResponse(zip_path, filename="atomipy_system_bundle.zip")
+
+
+@router.get("/result-file/{token}/{filename}")
+async def result_file(token: str, filename: str):
+    """Serve ONE file from a result bundle (so the viewer can stream a full trajectory
+    directly instead of inlining it). Confined: the token must be a UUID and only the
+    basename of the requested file is matched against the archive entries."""
+    from fastapi.responses import Response
+    try:
+        uuid.UUID(token)
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid token")
+    name = os.path.basename(filename)
+    zip_path = os.path.join(CACHE_DIR, f"result_{token}.zip")
+    if not os.path.exists(zip_path):
+        raise HTTPException(status_code=404, detail="Result expired or not found")
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            match = next((n for n in zf.namelist() if os.path.basename(n) == name), None)
+            if match is None:
+                raise HTTPException(status_code=404, detail="File not in bundle")
+            data = zf.read(match)
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=500, detail="Corrupt result bundle")
+    # Text trajectory/structure formats -> text/plain; binary (xtc/trr/dcd) -> octet-stream.
+    _ext = name.rsplit(".", 1)[-1].lower()
+    ctype = "text/plain" if _ext in ("pdb", "gro", "xyz", "pqr", "cif", "mol2", "sdf") else "application/octet-stream"
+    return Response(content=data, media_type=ctype,
+                    headers={"Content-Disposition": f'inline; filename="{name}"'})
 
 
 @router.post("/stop-build/{build_id}")
