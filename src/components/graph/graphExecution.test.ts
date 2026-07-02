@@ -412,3 +412,51 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain("ap.get_mol_sequence_typed(");
   });
 });
+
+describe('graphExecution — review-fix regressions', () => {
+  const struct: Node = {
+    id: 's', type: 'structure', position: { x: 0, y: 0 },
+    data: { source: 'upload', filename: 'x.pdb', path: 'uploads/default_session/x.pdb' },
+  };
+  const edgeTo = (target: string): Edge => ({ id: `e-${target}`, source: 's', target, targetHandle: 'in' });
+
+  it('analysis "occupancy" mode calls ap.occupancy_atom (not the non-existent ap.occupancy)', () => {
+    const nodes: Node[] = [struct,
+      { id: 'a', type: 'analysis', position: { x: 100, y: 0 },
+        data: { mode: 'occupancy', occupancyRmax: 1.5, occupancyOutputBase: 'occ' } }];
+    const code = generatePythonCode(nodes, [edgeTo('a')], 'minimal');
+    expect(code).toContain('ap.occupancy_atom(');
+    expect(code).toContain('rmax=1.5');
+    expect(code).not.toMatch(/ap\.occupancy\(/);   // the crashing call must be gone
+  });
+
+  it('analysis "cn" mode guards against an empty result (no ZeroDivisionError)', () => {
+    const nodes: Node[] = [struct,
+      { id: 'a', type: 'analysis', position: { x: 100, y: 0 },
+        data: { mode: 'cn', atomTypeA: 'OW', cutoff: 3.4, cnOutputBase: 'cn' } }];
+    const code = generatePythonCode(nodes, [edgeTo('a')], 'minimal');
+    expect(code).toContain('ap.coordination_number(');
+    expect(code).toContain('if cn_data:');                 // empty-list guard present
+    expect(code).not.toMatch(/mean=\{sum\(cn_data\)\/len\(cn_data\)/);  // old unguarded f-string gone
+  });
+
+  it('xrd node emits the __XRD_DATA_ marker at runtime (not the broken __PLOT_DATA__)', () => {
+    const nodes: Node[] = [struct, { id: 'x', type: 'xrd', position: { x: 100, y: 0 }, data: {} }];
+    const code = generatePythonCode(nodes, [edgeTo('x')], 'minimal');
+    expect(code).toContain('__XRD_DATA_x__:');
+    expect(code).not.toContain('__PLOT_DATA__');
+  });
+
+  it('stats node emits a parseable __PLOT_ marker at runtime (not the broken __PLOT_DATA__)', () => {
+    const nodes: Node[] = [struct, { id: 'st', type: 'stats', position: { x: 100, y: 0 }, data: {} }];
+    const code = generatePythonCode(nodes, [edgeTo('st')], 'minimal');
+    expect(code).toMatch(/__PLOT_[^_]/);        // __PLOT_<target>__ , not __PLOT_DATA__
+    expect(code).not.toContain('__PLOT_DATA__');
+  });
+
+  it('these markers are omitted from the strict script', () => {
+    const nodes: Node[] = [struct, { id: 'x', type: 'xrd', position: { x: 100, y: 0 }, data: {} }];
+    const code = generatePythonCode(nodes, [edgeTo('x')], 'strict');
+    expect(code).not.toContain('__XRD_DATA_');
+  });
+});

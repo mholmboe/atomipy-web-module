@@ -19,6 +19,9 @@ vi.mock("@xyflow/react", () => {
     useReactFlow: () => ({
       updateNodeData: reactFlowMocks.updateNodeData,
       deleteElements: reactFlowMocks.deleteElements,
+      // NodeHeader reads getNode(id)?.type to resolve its help key; provide it so the
+      // shared header renders in isolation (added when NodeHeader gained help/run-status).
+      getNode: () => ({ type: "forcefield" }),
     }),
   };
 });
