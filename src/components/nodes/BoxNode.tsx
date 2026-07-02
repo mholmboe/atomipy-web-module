@@ -127,6 +127,31 @@ function cryst1ToBoxDim(pdb: string): { lx: number; ly: number; lz: number } | n
 // Density of a molar mass M (g/mol) of atoms occupying V (Å³): rho = M / (N_A * V * 1e-24).
 const DENSITY_FACTOR = 0.6022140760; // = N_A * 1e-24 ; rho[g/cm^3] = M / (DENSITY_FACTOR * V[Å^3])
 
+// Molar masses (g/mol) for a composition-based density ESTIMATE before a build — from a
+// Solvent count or a Topology molecule list, when no run-time PDB exists yet. Water models
+// are all ~18.015 (H2O); monatomic ions by element. Anything we can't resolve (multi-atom
+// mineral/organic residues, where we don't know atoms-per-molecule) returns null.
+const WATER_MOLAR_MASS = 18.01528;
+const ION_MOLAR_MASS: Record<string, number> = {
+  H: 1.008, Li: 6.94, C: 12.011, N: 14.007, O: 15.999, F: 18.998, Na: 22.98977, Mg: 24.305,
+  Al: 26.982, P: 30.974, S: 32.06, Cl: 35.453, K: 39.0983, Ca: 40.078, Fe: 55.845, Zn: 65.38,
+  Br: 79.904, Rb: 85.468, Sr: 87.62, I: 126.904, Cs: 132.905, Ba: 137.327,
+};
+function moleculeMolarMass(name: string, type?: string): { mass: number; atoms: number } | null {
+  const t = (type || "").toLowerCase();
+  const n = (name || "").trim();
+  if (t === "water" || /^(sol|wat|hoh|spc|tip|opc)/i.test(n)) return { mass: WATER_MOLAR_MASS, atoms: 3 };
+  if (t === "ion" || t === "" || t === "atom") {
+    const el = n.replace(/[^A-Za-z]/g, "");
+    if (el) {
+      const norm = el.length >= 2 ? el[0].toUpperCase() + el[1].toLowerCase() : el.toUpperCase();
+      const m = ION_MOLAR_MASS[norm] ?? ION_MOLAR_MASS[el.toUpperCase()] ?? ION_MOLAR_MASS[el[0].toUpperCase()];
+      if (m != null) return { mass: m, atoms: 1 };
+    }
+  }
+  return null;
+}
+
 // ----------------------------------------------------------------
 
 export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
@@ -141,14 +166,17 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
   // upstream data changes; the box dims come from `data`, so density updates live as
   // the box is resized (mass is constant, volume changes).
   const systemMass = useMemo(() => {
-    const empty = { mass: 0, count: 0, unknown: 0, pdbDims: null as null | { lx: number; ly: number; lz: number } };
+    const empty = { mass: 0, count: 0, unknown: 0, estimated: false, pdbDims: null as null | { lx: number; ly: number; lz: number } };
     // The atoms that fill this box are produced across the pipeline — the structure
     // upstream AND the solvent/ions added downstream — so search the whole connected
-    // component (edges in either direction) and use the richest run-time PDB (the one
-    // with the most atoms = the fullest built system).
+    // component (edges in either direction). Prefer the richest run-time PDB (exact, after
+    // a build); if none exists yet, fall back to a composition ESTIMATE from a Topology
+    // molecule list or a fixed-count Solvent node so density shows before/without a build.
     const visited = new Set<string>([id]);
     const stack = [id];
     let best: { mass: number; count: number; unknown: number; pdbDims: typeof empty.pdbDims } | null = null;
+    let topo: { mass: number; atoms: number; unresolved: number } | null = null;
+    let solvent: { mass: number; atoms: number } | null = null;
     while (stack.length) {
       const nodeId = stack.pop()!;
       const node = getNode(nodeId);
@@ -160,13 +188,38 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
             best = { ...parsed, pdbDims: cryst1ToBoxDim(nd.pdb) };
           }
         }
+        if (node.type === "topology" && !topo) {
+          const detected = Array.isArray(nd.detectedMolecules) ? nd.detectedMolecules as Array<{ name: string; count: number; type: string }> : [];
+          const manual = Array.isArray(nd.molecules) ? nd.molecules as Array<{ name?: string; count?: string }> : [];
+          const rows = detected.length
+            ? detected.map((r) => ({ name: r.name, count: Number(r.count) || 0, type: r.type as string | undefined }))
+            : manual.map((r) => ({ name: r.name || "", count: Number(r.count) || 0, type: undefined as string | undefined }));
+          let mass = 0, atoms = 0, unresolved = 0, any = false;
+          for (const r of rows) {
+            if (!r.count) continue;
+            any = true;
+            const mm = moleculeMolarMass(r.name, r.type);
+            if (!mm) unresolved++;
+            else { mass += r.count * mm.mass; atoms += r.count * mm.atoms; }
+          }
+          if (any && mass > 0) topo = { mass, atoms, unresolved };
+        }
+        if (node.type === "solvent" && !solvent) {
+          const mode = (nd.maxSolventMode as string) ?? "max";
+          const n = mode === "count" ? Number(nd.maxSolventCount) || 0 : 0;   // fixed-count is known pre-run
+          if (n > 0) solvent = { mass: n * WATER_MOLAR_MASS, atoms: n * 3 };
+        }
       }
       for (const e of edges) {
         const next = e.source === nodeId ? e.target : e.target === nodeId ? e.source : null;
         if (next && !visited.has(next)) { visited.add(next); stack.push(next); }
       }
     }
-    return best ?? empty;
+    if (best) return { mass: best.mass, count: best.count, unknown: best.unknown, estimated: false, pdbDims: best.pdbDims };
+    // Topology composition is complete only if every molecule resolved (else it undercounts).
+    if (topo && topo.unresolved === 0) return { mass: topo.mass, count: topo.atoms, unknown: 0, estimated: true, pdbDims: null };
+    if (solvent) return { mass: solvent.mass, count: solvent.atoms, unknown: 0, estimated: true, pdbDims: null };
+    return empty;
   }, [edges, nodes, id, getNode]);
 
   const volumeDims = (() => {
@@ -315,9 +368,9 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
 
       const passthroughTypes = new Set([
         "position", "rotate", "wrap", "addIons", "ions", "bondAngle", "bvs", "slice", "insert",
-        "substitute", "fuse", "resname", "molecule", "merge", "add", "transform", "pbc", "edit", 
-        "chemistry", "solvent", "analysis", "forcefield", "bend", "atomProps", "coordFrame", 
-        "xrd", "viewer", "trajectory", "export", "simulate"
+        "substitute", "fuse", "resname", "molecule", "merge", "add", "transform", "pbc", "edit",
+        "chemistry", "solvent", "analysis", "forcefield", "bend", "atomProps", "coordFrame",
+        "xrd", "viewer", "trajectory", "export", "simulate", "topology", "stats"
       ]);
       if (passthroughTypes.has(node.type ?? "")) {
         const up = getPrimary(node.id);
@@ -661,12 +714,14 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
             {density != null ? (
               <div className="text-[11px] font-mono text-foreground/80">
                 <span className="text-indigo-500/70 font-bold">Density</span>{" "}
-                {density.toFixed(3)} g/cm³
-                <span className="text-foreground/50"> ({systemMass.count} atoms{systemMass.unknown ? ", approx" : ""})</span>
+                {systemMass.estimated ? "≈ " : ""}{density.toFixed(3)} g/cm³
+                <span className="text-foreground/50">
+                  {" "}({systemMass.count} atoms{systemMass.unknown ? ", approx" : ""}{systemMass.estimated ? ", est. from composition" : ""})
+                </span>
               </div>
             ) : volumeStr != null ? (
               <div className="text-[9px] text-muted-foreground/60 leading-snug mt-0.5">
-                Density shows once the system has atoms (run the build to populate).
+                Density shows once the system has atoms (add a Solvent/Topology node or run the build).
               </div>
             ) : null}
           </div>

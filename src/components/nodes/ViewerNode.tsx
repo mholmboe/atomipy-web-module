@@ -252,10 +252,9 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   // auto-loading stale PDB data when the user merely switches renderers.
   const pdbLoadedRef = useRef<{ renderer: ViewerRenderer; pdb: string } | null>(null);
 
-  // JSmol was retired from the toggle (benchmarks: ~20x slower to load and ~10-40x slower
-  // playback than NGL/3Dmol, unusable for large trajectories). Any saved 'jsmol' node falls
-  // back to NGL. The JSmol render path is kept below but unreachable via the UI.
-  const renderer = (data.renderer === "jsmol" ? "ngl" : data.renderer) ?? "ngl";
+  // JSmol is kept for single structures but not offered for trajectories (benchmarks:
+  // ~20x slower load, ~10-40x slower playback than NGL). Effective renderer resolved after
+  // numFrames is known (see below); a saved jsmol viewer on a trajectory auto-uses NGL.
   const pdb = data.pdb || "";
   const computeBonds = data.computeBonds ?? true;
   const hidePeriodicBonds = data.hidePeriodicBonds ?? false;
@@ -313,6 +312,9 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     return Math.max(1, count);
   }, [pdb]);
   const isMulti = numFrames > 1;
+
+  // JSmol is fine for single structures but slow for trajectories -> force NGL there.
+  const renderer: ViewerRenderer = (data.renderer === "jsmol" && isMulti) ? "ngl" : (data.renderer ?? "ngl");
 
   // When the FULL trajectory is streamed into NGL from the bundle, the real frame count is
   // trajFile.nframes (> the inlined/capped numFrames). effectiveFrames drives the slider/play.
@@ -1125,6 +1127,15 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
               >
                 3Dmol
               </button>
+              {!isMulti && (
+                <button
+                  onClick={() => setViewerOption({ renderer: "jsmol" })}
+                  title="JSmol — scripting & measurements; best for single structures (slow for trajectories)"
+                  className={`px-2 py-0.5 transition-all ${renderer === "jsmol" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
+                >
+                  JSmol
+                </button>
+              )}
             </div>
             <div className="flex gap-1">
               <DropdownMenu>
@@ -1411,6 +1422,10 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                 <p>
                   <span className="font-bold text-indigo-600">3Dmol</span> — fast styling, element/charge labels, Miller planes & PNG export.
                   Best for <strong>single structures</strong> and figures.
+                </p>
+                <p>
+                  <span className="font-bold text-indigo-600">JSmol</span> — scripting & measurements.
+                  For <strong>single structures</strong> (not offered for trajectories — slow).
                 </p>
               </div>
             </div>
