@@ -349,7 +349,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
     pythonCode += `open('build_errors.log', 'w', encoding='utf-8').close()\n`;
   }
 
-  const stateVars = new Map<string, { atoms: string; box: string; traj?: string }>();
+  const stateVars = new Map<string, { atoms: string; box: string; traj?: string; top?: string }>();
 
   // Unique GROMACS moleculetype/residue name per organic MOLECULE so distinct
   // organics never collide. A molecule may span a structure(SMILES/file) node AND
@@ -445,6 +445,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
     let inAtoms = "None";
     let inBox = "None";
     let inTraj: string | undefined = undefined;
+    let inTop: string | undefined = undefined;   // companion topology for xtc/trr/dcd frames
 
     const isMultiInputNode = n.type === "merge" || n.type === "add";
 
@@ -457,6 +458,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         inAtoms = validParents[0].atoms;
         inBox = validParents[0].box;
         inTraj = validParents[0].traj;
+        inTop = validParents[0].top;
       } else if (validParents.length > 1) {
         const atomVars = validParents.map((p) => p.atoms).join(", ");
         pythonCode += `\n# Auto-joining multiple standard inputs\n`;
@@ -477,7 +479,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `print("__NODE_START__:${opIdEscaped}:${index}")\n`;
         pythonCode += `print("__NODE_STATUS__:${opIdEscaped}:success")\n`;
       }
-      stateVars.set(id, { atoms: inAtoms, box: inBox, traj: inTraj });
+      stateVars.set(id, { atoms: inAtoms, box: inBox, traj: inTraj, top: inTop });
       return;
     }
 
@@ -2379,9 +2381,11 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         // Route plot data to a connected Data Plotter node (else fall back to own id).
         const plotTarget = edges.find((e) => e.source === id && nodes.find((nn) => nn.id === e.target)?.type === "plot")?.target ?? id;
         // Frames: ensemble (trajectory) when available, else the single structure.
+        // Pass top= for name-less binary trajectories (xtc/trr/dcd) so typed analysis works.
+        const importTrajCall = `ap.import_traj(${inTraj}${inTop ? `, top=${inTop}` : ""})`;
         const framesSetup =
           inTraj !== undefined
-            ? `try:\n    _frames = ap.import_traj(${inTraj})\nexcept Exception:\n    _frames = []\nif not _frames:\n    _frames = [(${inAtoms}, ${inBox})]\n`
+            ? `try:\n    _frames = ${importTrajCall}\nexcept Exception:\n    _frames = []\nif not _frames:\n    _frames = [(${inAtoms}, ${inBox})]\n`
             : `_frames = [(${inAtoms}, ${inBox})]\n`;
 
         if (option === "rdf") {
@@ -2871,9 +2875,40 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         break;
       }
       case "trajectory": {
-        const trajFile = inTraj !== undefined ? inTraj : `'trajectory.pdb'`;
+        const trajMode = getString(data, "mode", "export");
+        const uploadedTraj = getString(data, "trajPath", "").trim();
+        const uploadedTop = getString(data, "topPath", "").trim();
         const frameIndex = getNumber(data, "frameIndex", 0);
         const extractMode = getBoolean(data, "extractMode", false);
+
+        // Import mode with an uploaded trajectory (pdb/gro/xtc/trr/dcd). xtc/trr/dcd carry
+        // no atom names, so a companion topology (top) supplies them. Expose the trajectory
+        // (+top) so a downstream Analysis node runs over ALL frames; also emit the first
+        // (or extracted) frame as this node's structure output.
+        if (trajMode === "import" && uploadedTraj) {
+          const trajLit = `'${pyEscape(uploadedTraj)}'`;
+          const topLit = uploadedTop ? `'${pyEscape(uploadedTop)}'` : "None";
+          pythonCode += `\n# Import uploaded trajectory (${uploadedTraj})\n`;
+          pythonCode += `try:\n`;
+          pythonCode += `    _uframes = ap.import_traj(${trajLit}, top=${topLit})\n`;
+          pythonCode += `    print(f"Imported trajectory ${uploadedTraj}: {len(_uframes)} frame(s)")\n`;
+          if (extractMode) {
+            pythonCode += `    _fi = min(max(0, ${frameIndex}), len(_uframes) - 1) if _uframes else 0\n`;
+            pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = (_uframes[_fi] if _uframes else ([], None))\n`;
+          } else {
+            pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = (_uframes[0] if _uframes else ([], None))\n`;
+          }
+          pythonCode += `except Exception as _e:\n`;
+          pythonCode += `    print(f"Trajectory import failed: {_e}")\n`;
+          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = [], None\n`;
+          // extract mode -> single frame (no ensemble); else keep the trajectory for analysis.
+          stateVars.set(id, extractMode
+            ? { atoms: blockOutAtoms, box: blockOutBox }
+            : { atoms: blockOutAtoms, box: blockOutBox, traj: trajLit, top: uploadedTop ? topLit : undefined });
+          break;
+        }
+
+        const trajFile = inTraj !== undefined ? inTraj : `'trajectory.pdb'`;
 
         if (extractMode) {
           pythonCode += `\n# Extract single coordinate frame from simulation trajectory\n`;
@@ -2888,11 +2923,13 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    print(f"Frame extraction failed, fallback to standard coordinates: {extract_err}")\n`;
           pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `    ${blockOutBox} = ${inBox}\n`;
+          stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         } else {
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
+          // pass the upstream trajectory (+top) through so analysis after this node still sees it
+          stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox, traj: inTraj, top: inTop });
         }
-        stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
       }
       case "organic": {

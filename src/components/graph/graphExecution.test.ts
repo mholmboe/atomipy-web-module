@@ -459,4 +459,18 @@ describe('graphExecution — review-fix regressions', () => {
     const code = generatePythonCode(nodes, [edgeTo('x')], 'strict');
     expect(code).not.toContain('__XRD_DATA_');
   });
+
+  it('uploaded .xtc trajectory + topology flows into analysis via import_traj(top=)', () => {
+    const nodes: Node[] = [
+      { id: 'tr', type: 'trajectory', position: { x: 0, y: 0 },
+        data: { mode: 'import', trajPath: 'uploads/default_session/t.xtc', trajName: 't.xtc',
+                topPath: 'uploads/default_session/c.gro', topName: 'c.gro' } },
+      { id: 'an', type: 'analysis', position: { x: 100, y: 0 }, data: { mode: 'msd', atomTypeA: 'OW' } },
+    ];
+    const edges: Edge[] = [{ id: 'e', source: 'tr', target: 'an', targetHandle: 'in' }];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    // both the trajectory node's own load and the downstream analysis pass top=
+    expect(code).toContain("ap.import_traj('uploads/default_session/t.xtc', top='uploads/default_session/c.gro')");
+    expect(code).toContain('ap.msd(_frames');   // analysis runs over the imported frames
+  });
 });

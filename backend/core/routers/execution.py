@@ -586,6 +586,8 @@ async def upload_file(file: UploadFile = File(...)):
     allowed_exts = {
         "pdb", "xyz", "gro", "cif", "mmcif", "mcif", "poscar", "contcar", "pqr",
         "mol", "mol2", "sdf", "json", "jsonl",
+        # trajectory formats (read by ap.import_traj; xtc/trr via libxdrfile/gmx, dcd via mdtraj)
+        "xtc", "trr", "dcd",
     }
     if ext not in allowed_exts:
         raise HTTPException(status_code=400, detail=f"Unsupported extension '.{ext}'")

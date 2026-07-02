@@ -18,10 +18,22 @@ export const ALLOWED_STRUCTURE_EXTENSIONS = [
 
 export const STRUCTURE_FILE_ACCEPT = ALLOWED_STRUCTURE_EXTENSIONS.map((ext) => `.${ext}`).join(",");
 
+// Trajectory formats accepted by ap.import_traj: multi-frame pdb/gro, GROMACS xtc/trr,
+// and dcd (the last via the optional mdtraj backend).
+export const ALLOWED_TRAJECTORY_EXTENSIONS = ["pdb", "gro", "xtc", "trr", "dcd"] as const;
+export const TRAJECTORY_FILE_ACCEPT = ALLOWED_TRAJECTORY_EXTENSIONS.map((ext) => `.${ext}`).join(",");
+
 const structureExtension = (filename: string) => filename.split(".").pop()?.toLowerCase() || "";
 
 export const isSupportedStructureFile = (filename: string): boolean =>
   ALLOWED_STRUCTURE_EXTENSIONS.includes(structureExtension(filename) as (typeof ALLOWED_STRUCTURE_EXTENSIONS)[number]);
+
+export const isSupportedTrajectoryFile = (filename: string): boolean =>
+  ALLOWED_TRAJECTORY_EXTENSIONS.includes(structureExtension(filename) as (typeof ALLOWED_TRAJECTORY_EXTENSIONS)[number]);
+
+// xtc/trr/dcd carry no atom names, so they need a companion topology (a structure file).
+export const trajectoryNeedsTopology = (filename: string): boolean =>
+  ["xtc", "trr", "dcd"].includes(structureExtension(filename));
 
 const readUploadError = async (response: Response): Promise<string> => {
   try {
@@ -36,11 +48,7 @@ const readUploadError = async (response: Response): Promise<string> => {
   return response.statusText || `Upload failed with status ${response.status}`;
 };
 
-export const uploadStructureFile = async (file: File): Promise<StructureUploadResult> => {
-  if (!isSupportedStructureFile(file.name)) {
-    throw new Error("Unsupported file format.");
-  }
-
+const postUpload = async (file: File): Promise<StructureUploadResult> => {
   const formData = new FormData();
   formData.append("file", file);
 
@@ -63,4 +71,18 @@ export const uploadStructureFile = async (file: File): Promise<StructureUploadRe
     originalName: result.originalName || file.name,
     path: result.path,
   };
+};
+
+export const uploadStructureFile = async (file: File): Promise<StructureUploadResult> => {
+  if (!isSupportedStructureFile(file.name)) {
+    throw new Error("Unsupported file format.");
+  }
+  return postUpload(file);
+};
+
+export const uploadTrajectoryFile = async (file: File): Promise<StructureUploadResult> => {
+  if (!isSupportedTrajectoryFile(file.name)) {
+    throw new Error("Unsupported trajectory format (use pdb/gro/xtc/trr/dcd).");
+  }
+  return postUpload(file);
 };
