@@ -2161,6 +2161,9 @@ export default function VisualBuilder() {
     setBuildLogs([]);
     setNodeLogsMap({});
     setDownloadToken(null);
+    // Clear any prior interactive-plot data so a new run starts from a blank chart;
+    // live points (and the final dataset) then stream in fresh.
+    setNodes((nds) => nds.map((n) => (n.type === "plot" ? { ...n, data: { ...n.data, plotData: undefined } } : n)));
     setIsBuilding(true);
     setShowStatusWindow(true);
     currentRunningNodeRef.current = null;
@@ -2388,6 +2391,35 @@ export default function VisualBuilder() {
                     };
                   }
                   return node;
+                })
+              );
+            } else if (data.type === "plotpoint") {
+              // Live/incremental thermo: append the incoming point(s) to the plot node's
+              // series as the simulation runs. The end-of-run 'plot' event later replaces
+              // this with the full, authoritative dataset.
+              const { nodeId, x, series: incoming, xLabel } = data as {
+                nodeId: string; x: number; series: { name: string; y: number }[]; xLabel?: string;
+              };
+              setNodes((nds) =>
+                nds.map((node) => {
+                  if (node.id !== nodeId) return node;
+                  const prev = (node.data.plotData ?? {}) as {
+                    series?: { name: string; points: [number, number][] }[];
+                    xLabel?: string; yLabel?: string; sourceFile?: string;
+                  };
+                  const pointsByName = new Map<string, [number, number][]>();
+                  const order: string[] = [];
+                  (prev.series ?? []).forEach((s) => { pointsByName.set(s.name, [...s.points]); order.push(s.name); });
+                  for (const p of incoming ?? []) {
+                    if (!pointsByName.has(p.name)) { pointsByName.set(p.name, []); order.push(p.name); }
+                    pointsByName.get(p.name)!.push([x, p.y]);
+                  }
+                  const series = order.map((name) => ({ name, points: pointsByName.get(name)! }));
+                  const yLabel = prev.yLabel ?? (series.length === 1 ? series[0].name : "value");
+                  return {
+                    ...node,
+                    data: { ...node.data, plotData: { series, xLabel: prev.xLabel ?? xLabel, yLabel, sourceFile: prev.sourceFile ?? "live" } },
+                  };
                 })
               );
             } else if (data.type === "trajfile") {

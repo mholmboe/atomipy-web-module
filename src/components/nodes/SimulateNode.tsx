@@ -62,7 +62,8 @@ type SimulateNodeData = {
   engine?: Engine;
   gmxPath?: string;
   mdpText?: string;
-  thermoPlot?: string;
+  thermoPlot?: string;      // legacy single-select (kept for backward compat with saved workflows)
+  thermoPlots?: string[];   // multi-select: one plotted series per selected quantity
   forcefieldMode?: ForcefieldMode;
   prmFile?: PrmFile;
   simType?: SimulationType;
@@ -105,8 +106,26 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
   const pressure = data?.pressure ?? 1.0;
   const frictionCoeff = data?.frictionCoeff ?? 1.0;
   const switchDistance = data?.switchDistance ?? 10.0;
-  const writePdb = data?.writePdb ?? data?.writeDcd ?? false;
   const pdbFreq = data?.pdbFreq ?? data?.dcdFreq ?? 1000;
+  // Thermo quantities to plot. New workflows use thermoPlots[]; fall back to the
+  // legacy single thermoPlot string ("off" => none) so old saved graphs still work.
+  const thermoSel: string[] = Array.isArray(data?.thermoPlots)
+    ? data!.thermoPlots!
+    : (data?.thermoPlot && data.thermoPlot !== "off" ? [data.thermoPlot] : []);
+  const THERMO_OPTIONS: { key: string; label: string }[] = [
+    { key: "potential", label: "Potential energy" },
+    { key: "total", label: "Total energy" },
+    { key: "temperature", label: "Temperature" },
+    { key: "pressure", label: "Pressure (GROMACS only)" },
+    { key: "volume", label: "Volume" },
+    { key: "density", label: "Density" },
+  ];
+  const toggleThermo = (key: string) => {
+    const next = thermoSel.includes(key)
+      ? thermoSel.filter((k) => k !== key)
+      : [...thermoSel, key];
+    updateNodeData(id, { ...data, thermoPlots: next, thermoPlot: undefined });
+  };
   const posres = data?.posres ?? false;
   const posresFC = data?.posresFC ?? 1000;
   const wrapTrajectory = data?.wrapTrajectory ?? true;
@@ -543,16 +562,6 @@ Defaults to <code>gmx</code> on PATH — works on Colab (after the launcher's <s
             </>
             )}
 
-            <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
-              Write PDB trajectory
-              <input
-                type="checkbox"
-                className="nodrag"
-                checked={writePdb}
-                onChange={(e) => updateNodeData(id, { ...data, writePdb: e.target.checked })}
-                onPointerDown={(e) => e.stopPropagation()}
-              />
-            </label>
             {/* Wrap is a trjconv/post-processing step (GROMACS: -pbc atom vs none),
                 independent of the .mdp — keep it visible even with a custom .mdp. */}
             <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
@@ -578,23 +587,28 @@ Defaults to <code>gmx</code> on PATH — works on Colab (after the launcher's <s
             {/* Thermo time-series -> connect a Data Plotter. Engine energy output
                 (GROMACS .edr / OpenMM StateDataReporter), independent of the .mdp. */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground block mb-1" title="Parses the run's energy output and sends it to a connected Data Plotter node">
-                Plot thermodynamics (→ Data Plotter)
+              <label className="text-xs font-semibold text-muted-foreground block mb-1" title="Parses the run's energy output (GROMACS .edr / OpenMM StateDataReporter) and sends the selected quantities to a connected Data Plotter node. Each checked quantity becomes one series on the plot.">
+                Plot data{thermoSel.length > 0 ? ` (${thermoSel.length})` : ""}
               </label>
-              <select
-                className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
-                value={data?.thermoPlot ?? "off"}
-                onChange={(e) => updateNodeData(id, { ...data, thermoPlot: e.target.value })}
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                <option value="off">Off</option>
-                <option value="potential">Potential energy</option>
-                <option value="total">Total energy</option>
-                <option value="temperature">Temperature</option>
-                <option value="pressure">Pressure (GROMACS only)</option>
-                <option value="volume">Volume</option>
-                <option value="density">Density</option>
-              </select>
+              <div className="nodrag grid grid-cols-2 gap-x-2 gap-y-0.5 bg-muted border border-border rounded-md px-2 py-1">
+                {THERMO_OPTIONS.map((opt) => (
+                  <label key={opt.key} className="nodrag flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="nodrag"
+                      checked={thermoSel.includes(opt.key)}
+                      onChange={() => toggleThermo(opt.key)}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    />
+                    <span className="truncate" title={opt.label}>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+              {thermoSel.length > 1 && (
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5 leading-tight">
+                  All checked quantities share one Y axis — mixing units (e.g. energy + temperature) can flatten the smaller series.
+                </p>
+              )}
             </div>
             {!mdpActive && (
             <div>
@@ -610,9 +624,9 @@ Defaults to <code>gmx</code> on PATH — works on Colab (after the launcher's <s
               />
             </div>
             )}
-            {!mdpActive && writePdb && (
+            {!mdpActive && (
               <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-1">PDB frequency (steps)</label>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1" title="How often a frame is saved to the trajectory (nstxtc for GROMACS, reporter interval for OpenMM). Applies to the PDB and any DCD/XTC/TRR format.">Trajectory save frequency (steps)</label>
                 <input
                   type="number"
                   min={1}

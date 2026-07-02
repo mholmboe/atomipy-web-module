@@ -1742,7 +1742,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const mineralKangle = writeAngles ? Number(mineralFF === "clayff" ? clayffAngles : minffVariant) : 0;
         const waterModel = findUpstreamWaterModel(id, upstreamFF);
         const ionSet = findUpstreamIonSet(id, upstreamFF);
-        const logFile = pyEscape(getString(data, "logFile", "output.log"));
+        const logFile = pyEscape(getString(data, "logFile", "energy.log"));
         // Semantic, per-type output basename: EM_1, NVT_1, NPT_1, EM_2, … in
         // execution order (so consecutive EM -> NVT chains get readable filenames).
         const _simLabel = simType === "minimize" ? "EM" : simType === "npt" ? "NPT" : "NVT";
@@ -1779,7 +1779,6 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
 
         // Thermodynamic time-series plot: parse the engine's energy output and emit it
         // to a connected Data Plotter (GROMACS .edr via gmx energy; OpenMM StateDataReporter log).
-        const thermoPlot = getString(data, "thermoPlot", "off");
         const thermoPlotTarget = edges.find((e) => e.source === id && nodes.find((nn) => nn.id === e.target)?.type === "plot")?.target;
         const THERMO_MAP: Record<string, { gmx: string; omm: string; label: string }> = {
           potential:   { gmx: "Potential",    omm: "Potential Energy", label: "Potential energy" },
@@ -1789,8 +1788,13 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           volume:      { gmx: "Volume",       omm: "Box Volume",        label: "Volume" },
           density:     { gmx: "Density",      omm: "Density",           label: "Density" },
         };
-        const thermo = THERMO_MAP[thermoPlot];
-        const doThermo = !!thermo && !!thermoPlotTarget && mode !== "strict";
+        // Multi-select: thermoPlots[] (new) or legacy single thermoPlot string.
+        const rawThermoPlots = (data as Record<string, unknown>)?.thermoPlots;
+        const thermoKeys: string[] = Array.isArray(rawThermoPlots)
+          ? (rawThermoPlots as string[])
+          : (() => { const s = getString(data, "thermoPlot", "off"); return s && s !== "off" ? [s] : []; })();
+        const thermoSel = thermoKeys.map((k) => THERMO_MAP[k]).filter(Boolean) as { gmx: string; omm: string; label: string }[];
+        const doThermo = thermoSel.length > 0 && !!thermoPlotTarget && mode !== "strict";
 
         // ===== Local GROMACS engine (grompp + mdrun) =====
         // Reuses the SAME topology writers as the OpenMM path (write_merged_top /
@@ -1931,16 +1935,23 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           pythonCode += `    except Exception as _e:\n`;
           pythonCode += `        print(f"(note: could not write final pdb: {_e})")\n`;
           if (doThermo) {
-            pythonCode += `# Thermodynamic time-series (${thermo.label}) -> Data Plotter\n`;
+            const gmxTerms = thermoSel.map((t) => `'${t.gmx}'`).join(", ");
+            pythonCode += `# Thermodynamic time-series (${thermoSel.map((t) => t.label).join(", ")}) -> Data Plotter\n`;
             pythonCode += `try:\n`;
             pythonCode += `    import json as _json\n`;
-            pythonCode += `    _th = _gmx.energy_timeseries('.', _final_stage + '.edr', terms=['${thermo.gmx}'], gmx=_gmx_spec, on_line=print)\n`;
+            pythonCode += `    _th = _gmx.energy_timeseries('.', _final_stage + '.edr', terms=[${gmxTerms}], gmx=_gmx_spec, on_line=print)\n`;
             pythonCode += `    if _th and _th.get('series'):\n`;
-            pythonCode += `        _ts = _th['series'][0]\n`;
-            pythonCode += `        _pts = [[float(t), float(v)] for t, v in zip(_th['time'], _ts['values'])]\n`;
-            pythonCode += `        print("__PLOT_${thermoPlotTarget}__:" + _json.dumps({'series': [{'name': _ts['name'], 'points': _pts}], 'xLabel': 'time (ps)', 'yLabel': _ts['name']}))\n`;
+            pythonCode += `        _series = [{'name': _s['name'], 'points': [[float(t), float(v)] for t, v in zip(_th['time'], _s['values'])]} for _s in _th['series']]\n`;
+            pythonCode += `        _ylab = _series[0]['name'] if len(_series) == 1 else 'value'\n`;
+            pythonCode += `        # Persist the chosen terms as a plain-text table (matches OpenMM's energy.log).\n`;
+            pythonCode += `        with open('energy.log', 'w', encoding='utf-8') as _elog:\n`;
+            pythonCode += `            _elog.write('time (ps),' + ','.join(_s['name'] for _s in _th['series']) + '\\n')\n`;
+            pythonCode += `            for _ri, _tv in enumerate(_th['time']):\n`;
+            pythonCode += `                _elog.write(f"{_tv}," + ','.join(f"{_s['values'][_ri]}" for _s in _th['series']) + '\\n')\n`;
+            pythonCode += `        print(f"Wrote energy.log ({len(_th['series'])} term(s), {len(_th['time'])} rows)")\n`;
+            pythonCode += `        print("__PLOT_${thermoPlotTarget}__:" + _json.dumps({'series': _series, 'xLabel': 'time (ps)', 'yLabel': _ylab}))\n`;
             pythonCode += `    else:\n`;
-            pythonCode += `        print("(thermo: '${thermo.gmx}' not found in ${"$"}{_final_stage}.edr)")\n`;
+            pythonCode += `        print("(thermo: none of [${gmxTerms}] found in ${"$"}{_final_stage}.edr)")\n`;
             pythonCode += `except Exception as _te:\n`;
             pythonCode += `    print(f"(thermo plot skipped: {_te})")\n`;
           }
@@ -2297,6 +2308,41 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `                    self._stream.close()\n`;
         pythonCode += `        simulation.reporters.append(app.StateDataReporter(CleanHeaderStream(open('${logFile}', 'w', encoding='utf-8')), max(1, ${logFreq}), step=True, potentialEnergy=True, totalEnergy=True, temperature=True, volume=True, density=True))\n`;
         pythonCode += `        simulation.reporters.append(app.StateDataReporter(CleanHeaderStream(_sys.stdout), max(1, ${logFreq}), step=True, potentialEnergy=True, temperature=True))\n`;
+        // Live/incremental thermo -> Data Plotter: a StateDataReporter whose stream parses
+        // each row and prints a __PLOTPT_<id>__ marker (yielded immediately by the backend,
+        // appended by the frontend) so the plot fills in as the run proceeds.
+        const liveOmm = doThermo ? thermoSel.filter((t) => t.omm) : [];
+        if (liveOmm.length > 0 && !isMinimize && thermoPlotTarget) {
+          const wantList = liveOmm.map((t) => `'${t.omm}'`).join(", ");
+          pythonCode += `        class _LivePlotStream:\n`;
+          pythonCode += `            def __init__(self, pid, want):\n`;
+          pythonCode += `                self._pid = pid; self._want = want; self._hdr = None\n`;
+          pythonCode += `            def write(self, message):\n`;
+          pythonCode += `                import json as _lpj\n`;
+          pythonCode += `                for _row in message.split('\\n'):\n`;
+          pythonCode += `                    _row = _row.strip()\n`;
+          pythonCode += `                    if not _row: continue\n`;
+          pythonCode += `                    _cells = [_c.strip().strip('#').strip('"') for _c in _row.split(',')]\n`;
+          pythonCode += `                    if self._hdr is None:\n`;
+          pythonCode += `                        try: float(_cells[0]); _isdata = True\n`;
+          pythonCode += `                        except Exception: _isdata = False\n`;
+          pythonCode += `                        if not _isdata:\n`;
+          pythonCode += `                            self._hdr = _cells; continue\n`;
+          pythonCode += `                        self._hdr = ['col%d' % _i for _i in range(len(_cells))]\n`;
+          pythonCode += `                    try: _x = float(_cells[0])\n`;
+          pythonCode += `                    except Exception: continue\n`;
+          pythonCode += `                    _lps = []\n`;
+          pythonCode += `                    for _w in self._want:\n`;
+          pythonCode += `                        _ci = next((_i for _i, _h in enumerate(self._hdr) if _w in _h), None)\n`;
+          pythonCode += `                        if _ci is not None and _ci < len(_cells):\n`;
+          pythonCode += `                            try: _lps.append({'name': self._hdr[_ci], 'y': float(_cells[_ci])})\n`;
+          pythonCode += `                            except Exception: pass\n`;
+          pythonCode += `                    if _lps:\n`;
+          pythonCode += `                        print("__PLOTPT_${thermoPlotTarget}__:" + _lpj.dumps({'x': _x, 'series': _lps, 'xLabel': self._hdr[0]}), flush=True)\n`;
+          pythonCode += `            def flush(self): pass\n`;
+          pythonCode += `            def close(self): pass\n`;
+          pythonCode += `        simulation.reporters.append(app.StateDataReporter(_LivePlotStream("${thermoPlotTarget}", [${wantList}]), max(1, ${logFreq}), step=True, potentialEnergy=True, totalEnergy=True, temperature=True, volume=True, density=True))\n`;
+        }
         pythonCode += `        simulation.step(${mdSteps})\n`;
         pythonCode += `        print("\\u2705 ${simType.toUpperCase()} simulation finished OK!")\n`;
         pythonCode += `    \n`;
@@ -2328,21 +2374,30 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `        ${blockOutBox} = _new_box\n`;
         pythonCode += `        ap.write_pdb(list(_sim_atoms), _new_box, "${simBase}_final.pdb")\n`;
 
-        if (doThermo && thermo.omm && !isMinimize) {
-          pythonCode += `    # Thermodynamic time-series (${thermo.label}) -> Data Plotter\n`;
+        const ommSel = doThermo ? thermoSel.filter((t) => t.omm) : [];
+        const ommMissing = doThermo ? thermoSel.filter((t) => !t.omm) : [];
+        if (ommSel.length > 0 && !isMinimize) {
+          const ommTargets = ommSel.map((t) => `('${t.omm}')`).join(", ");
+          pythonCode += `    # Thermodynamic time-series (${ommSel.map((t) => t.label).join(", ")}) -> Data Plotter\n`;
           pythonCode += `    try:\n`;
           pythonCode += `        import csv as _csv, json as _json\n`;
           pythonCode += `        with open('${logFile}', 'r', encoding='utf-8') as _lf: _rows = list(_csv.reader(_lf))\n`;
           pythonCode += `        _hdr = [str(_h).strip().strip('#').strip('"') for _h in _rows[0]]\n`;
-          pythonCode += `        _ci = next((_i for _i, _h in enumerate(_hdr) if '${thermo.omm}' in _h), None)\n`;
           pythonCode += `        _si = next((_i for _i, _h in enumerate(_hdr) if 'Step' in _h), 0)\n`;
-          pythonCode += `        if _ci is not None:\n`;
-          pythonCode += `            _pts = [[float(_r[_si]), float(_r[_ci])] for _r in _rows[1:] if len(_r) > _ci]\n`;
-          pythonCode += `            print("__PLOT_${thermoPlotTarget}__:" + _json.dumps({'series': [{'name': _hdr[_ci], 'points': _pts}], 'xLabel': 'Step', 'yLabel': _hdr[_ci]}))\n`;
+          pythonCode += `        _targets = [${ommTargets}]\n`;
+          pythonCode += `        _series = []\n`;
+          pythonCode += `        for _sub in _targets:\n`;
+          pythonCode += `            _ci = next((_i for _i, _h in enumerate(_hdr) if _sub in _h), None)\n`;
+          pythonCode += `            if _ci is not None:\n`;
+          pythonCode += `                _series.append({'name': _hdr[_ci], 'points': [[float(_r[_si]), float(_r[_ci])] for _r in _rows[1:] if len(_r) > _ci]})\n`;
+          pythonCode += `        if _series:\n`;
+          pythonCode += `            _ylab = _series[0]['name'] if len(_series) == 1 else 'value'\n`;
+          pythonCode += `            print("__PLOT_${thermoPlotTarget}__:" + _json.dumps({'series': _series, 'xLabel': 'Step', 'yLabel': _ylab}))\n`;
           pythonCode += `    except Exception as _te:\n`;
           pythonCode += `        print(f"(thermo plot skipped: {_te})")\n`;
-        } else if (doThermo && !thermo.omm && !isMinimize) {
-          pythonCode += `    print("(thermo: '${thermo.label}' is not available from OpenMM's reporter — use the GROMACS engine for pressure)")\n`;
+        }
+        if (ommMissing.length > 0 && !isMinimize) {
+          pythonCode += `    print("(thermo: ${ommMissing.map((t) => t.label).join(", ")} not available from OpenMM's reporter — use the GROMACS engine for pressure)")\n`;
         }
 
         pythonCode += `except Exception as md_err:\n`;
@@ -2991,7 +3046,80 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         break;
       }
       case "plot": {
-        pythonCode += `# Plot Node (${id}) is active downstream\n`;
+        // A Plot node is normally fed LIVE by a connected upstream node (Simulate thermo,
+        // Analysis/Stats/BVS) which streams a __PLOT_<id>__ marker to it. If no such
+        // streaming emitter is wired in, fall back to reading the named data file
+        // (default output.log) from the working dir, auto-parsing its columns.
+        const plotUpstreams = edges
+          .filter((e) => e.target === id)
+          .map((e) => nodeMap.get(e.source))
+          .filter((n): n is Node => !!n);
+        const hasStreamEmitter = plotUpstreams.some((n) => {
+          if (n.type === "analysis" || n.type === "stats" || n.type === "bvs") return true;
+          if (n.type === "simulate") {
+            const d = n.data as Record<string, unknown>;
+            const tp = d?.thermoPlots;
+            if (Array.isArray(tp) && tp.length > 0) return true;
+            const legacy = d?.thermoPlot;
+            return typeof legacy === "string" && legacy !== "" && legacy !== "off";
+          }
+          return false;
+        });
+        if (hasStreamEmitter || mode === "strict") {
+          pythonCode += `# Plot Node (${id}) is fed live by a connected node\n`;
+          break;
+        }
+        // Fallback: parse the named file and emit its series.
+        const plotFile = pyEscape(getString(data, "fileName", "output.log"));
+        pythonCode += `# Plot Node (${id}): read '${plotFile}' and emit its columns as series\n`;
+        pythonCode += `import os as _os, json as _json\n`;
+        pythonCode += `def _plt_isnum(_t):\n`;
+        pythonCode += `    try:\n`;
+        pythonCode += `        float(_t); return True\n`;
+        pythonCode += `    except Exception:\n`;
+        pythonCode += `        return False\n`;
+        pythonCode += `_pf = "${plotFile}"\n`;
+        pythonCode += `if _os.path.isfile(_pf):\n`;
+        pythonCode += `    try:\n`;
+        pythonCode += `        _plines = []; _plast_comment = None; _pseen_data = False\n`;
+        pythonCode += `        with open(_pf, 'r', encoding='utf-8', errors='replace') as _pfh:\n`;
+        pythonCode += `            for _pl in _pfh:\n`;
+        pythonCode += `                _ps = _pl.strip()\n`;
+        pythonCode += `                if not _ps: continue\n`;
+        pythonCode += `                if _ps[0] in '#@;&':  # comment / xvg metadata\n`;
+        pythonCode += `                    if not _pseen_data: _plast_comment = _ps  # candidate header line\n`;
+        pythonCode += `                    continue\n`;
+        pythonCode += `                _pseen_data = True; _plines.append(_ps)\n`;
+        pythonCode += `        # Comma-separated (CSV/StateDataReporter) else whitespace (.dat/.xvg).\n`;
+        pythonCode += `        _prows = [(_l.split(',') if ',' in _l else _l.split()) for _l in _plines]\n`;
+        pythonCode += `        _prows = [[_c.strip().strip('"') for _c in _r] for _r in _prows if len(_r) >= 2]\n`;
+        pythonCode += `        _pncol = min((len(_r) for _r in _prows), default=0)\n`;
+        pythonCode += `        _phdr = None\n`;
+        pythonCode += `        if _prows and not all(_plt_isnum(_t) for _t in _prows[0]):\n`;
+        pythonCode += `            _phdr = _prows[0]; _prows = _prows[1:]; _pncol = min((len(_r) for _r in _prows), default=0)\n`;
+        pythonCode += `        elif _plast_comment:  # a leading '#Step,Pot,...' comment line can be the header\n`;
+        pythonCode += `            _pcand = _plast_comment.lstrip('#@;& ').strip()\n`;
+        pythonCode += `            _pctoks = [_c.strip().strip('"') for _c in (_pcand.split(',') if ',' in _pcand else _pcand.split())]\n`;
+        pythonCode += `            if len(_pctoks) == _pncol: _phdr = _pctoks\n`;
+        pythonCode += `        _pseries = []\n`;
+        pythonCode += `        for _pci in range(1, _pncol):\n`;
+        pythonCode += `            _pname = _phdr[_pci] if (_phdr and _pci < len(_phdr)) else ("col%d" % (_pci + 1))\n`;
+        pythonCode += `            _ppts = []\n`;
+        pythonCode += `            for _pr in _prows:\n`;
+        pythonCode += `                try: _ppts.append([float(_pr[0]), float(_pr[_pci])])\n`;
+        pythonCode += `                except Exception: pass\n`;
+        pythonCode += `            if _ppts: _pseries.append({'name': _pname, 'points': _ppts})\n`;
+        pythonCode += `        if _pseries:\n`;
+        pythonCode += `            _pxlab = _phdr[0] if _phdr else 'x'\n`;
+        pythonCode += `            _pylab = _pseries[0]['name'] if len(_pseries) == 1 else 'value'\n`;
+        pythonCode += `            print("__PLOT_${id}__:" + _json.dumps({'series': _pseries, 'xLabel': _pxlab, 'yLabel': _pylab, 'sourceFile': _pf}))\n`;
+        pythonCode += `            print("Plotted %d series from %s (%d rows)." % (len(_pseries), _pf, len(_prows)))\n`;
+        pythonCode += `        else:\n`;
+        pythonCode += `            print("(plot: no numeric data columns found in %s)" % _pf)\n`;
+        pythonCode += `    except Exception as _pe:\n`;
+        pythonCode += `        print("(plot: could not parse %s: %s)" % (_pf, _pe))\n`;
+        pythonCode += `else:\n`;
+        pythonCode += `    print("(plot: file '%s' not found — connect a node that streams data, or run a step that writes it)" % _pf)\n`;
         break;
       }
       case "inspect": {

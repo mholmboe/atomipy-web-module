@@ -103,6 +103,7 @@ type ViewerApi = {
 
 type ViewerNodeData = {
   renderer?: ViewerRenderer;
+  rendererUserSet?: boolean;   // true once the user explicitly picks a renderer (suppresses the trajectory→NGL auto-default)
   pdb?: string;
   charges?: number[];
   // Full trajectory available in the result bundle (streamed into NGL on demand, no cap)
@@ -313,8 +314,16 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   }, [pdb]);
   const isMulti = numFrames > 1;
 
-  // JSmol is fine for single structures but slow for trajectories -> force NGL there.
-  const renderer: ViewerRenderer = (data.renderer === "jsmol" && isMulti) ? "ngl" : (data.renderer ?? "ngl");
+  // Renderer resolution for trajectories (i.e. viewers downstream of a Simulate node,
+  // which always produce multi-frame output):
+  //  - JSmol is slow for trajectories -> always fall back to NGL.
+  //  - Otherwise default a trajectory to NGL unless the user explicitly picked a renderer
+  //    (rendererUserSet). Single-frame viewers (e.g. crystals with Miller planes, which
+  //    only render in 3Dmol/JSmol) keep their saved/creation default.
+  const renderer: ViewerRenderer =
+    (data.renderer === "jsmol" && isMulti) ? "ngl"
+    : (isMulti && !data.rendererUserSet) ? "ngl"
+    : (data.renderer ?? "ngl");
 
   // When the FULL trajectory is streamed into NGL from the bundle, the real frame count is
   // trajFile.nframes (> the inlined/capped numFrames). effectiveFrames drives the slider/play.
@@ -1114,14 +1123,14 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
             {/* Compact renderer toggle, centered between the title and the actions */}
             <div className="flex rounded-md overflow-hidden border border-border text-[9px] font-bold shrink-0">
               <button
-                onClick={() => setViewerOption({ renderer: "ngl" })}
+                onClick={() => setViewerOption({ renderer: "ngl", rendererUserSet: true })}
                 title="NGL — GPU-accelerated, fastest for large trajectories (default)"
                 className={`px-2 py-0.5 transition-all ${renderer === "ngl" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
               >
                 NGL
               </button>
               <button
-                onClick={() => setViewerOption({ renderer: "3dmol" })}
+                onClick={() => setViewerOption({ renderer: "3dmol", rendererUserSet: true })}
                 title="3Dmol — WebGL; Miller planes, element/charge labels, PNG export"
                 className={`px-2 py-0.5 transition-all ${renderer === "3dmol" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
               >
@@ -1129,7 +1138,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
               </button>
               {!isMulti && (
                 <button
-                  onClick={() => setViewerOption({ renderer: "jsmol" })}
+                  onClick={() => setViewerOption({ renderer: "jsmol", rendererUserSet: true })}
                   title="JSmol — scripting & measurements; best for single structures (slow for trajectories)"
                   className={`px-2 py-0.5 transition-all ${renderer === "jsmol" ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground hover:bg-indigo-500/20"}`}
                 >

@@ -460,6 +460,49 @@ describe('graphExecution — review-fix regressions', () => {
     expect(code).not.toContain('__XRD_DATA_');
   });
 
+  it('plot node with no streaming upstream reads its named file (default output.log)', () => {
+    const code = generatePythonCode(
+      [struct, { id: 'p', type: 'plot', position: { x: 100, y: 0 }, data: {} }],
+      [edgeTo('p')], 'minimal');
+    expect(code).toContain('_pf = "output.log"');
+    expect(code).toContain('__PLOT_p__:');
+    expect(code).toContain('_os.path.isfile(_pf)');
+  });
+
+  it('plot node honours a custom fileName', () => {
+    const code = generatePythonCode(
+      [struct, { id: 'p', type: 'plot', position: { x: 100, y: 0 }, data: { fileName: 'energy.log' } }],
+      [edgeTo('p')], 'minimal');
+    expect(code).toContain('_pf = "energy.log"');
+  });
+
+  it('plot node fed by a streaming emitter does NOT read a file (live data wins)', () => {
+    const code = generatePythonCode(
+      [struct,
+       { id: 'an', type: 'analysis', position: { x: 100, y: 0 }, data: {} },
+       { id: 'p', type: 'plot', position: { x: 200, y: 0 }, data: {} }],
+      [edgeTo('an'), { id: 'e-an-p', source: 'an', target: 'p', targetHandle: 'in' }], 'minimal');
+    expect(code).toContain('fed live by a connected node');
+    expect(code).not.toContain('_pf = "output.log"');
+  });
+
+  it('OpenMM simulate streams live thermo points (__PLOTPT_) to a connected plot', () => {
+    const code = generatePythonCode(
+      [struct,
+       { id: 'sim', type: 'simulate', position: { x: 100, y: 0 }, data: { engine: 'openmm', simType: 'nvt', thermoPlots: ['potential', 'temperature'] } },
+       { id: 'p', type: 'plot', position: { x: 200, y: 0 }, data: {} }],
+      [edgeTo('sim'), { id: 'e-sim-p', source: 'sim', target: 'p', targetHandle: 'in' }], 'minimal');
+    expect(code).toContain('_LivePlotStream');
+    expect(code).toContain('__PLOTPT_p__:');
+  });
+
+  it('no live thermo stream without a connected plot node', () => {
+    const code = generatePythonCode(
+      [struct, { id: 'sim', type: 'simulate', position: { x: 100, y: 0 }, data: { engine: 'openmm', simType: 'nvt', thermoPlots: ['potential'] } }],
+      [edgeTo('sim')], 'minimal');
+    expect(code).not.toContain('_LivePlotStream');
+  });
+
   it('OpenMM simulate: dcd format adds a DCDReporter, xtc adds an XTCReporter', () => {
     const dcd = generatePythonCode(
       [struct, { id: 'sim', type: 'simulate', position: { x: 100, y: 0 }, data: { engine: 'openmm', simType: 'nvt', trajFormat: 'dcd' } }],

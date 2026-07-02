@@ -351,7 +351,7 @@ async def build_stream(request: BuildRequest):
 
             _PROTOCOL_PREFIXES = (
                 "__VISUALIZE_", "__BOX_", "__CHARGES_", "__TRAJFILE_",
-                "__XRD_DATA_", "__PLOT_", "__NODE_START__", "__INSPECT_",
+                "__XRD_DATA_", "__PLOTPT_", "__PLOT_", "__NODE_START__", "__INSPECT_",
             )
             _verbose_log = request.verbose_log
 
@@ -446,6 +446,14 @@ async def build_stream(request: BuildRequest):
                         node_id = parts[0].replace("__XRD_DATA_", "")
                         xrd_data = json.loads(parts[1])
                         return f"data: {json.dumps({'type': 'xrd', 'nodeId': node_id, **xrd_data})}\n\n"
+                    except: pass
+                elif "__PLOTPT_" in stripped:
+                    # Live/incremental thermo point — yielded IMMEDIATELY (not deferred) so the
+                    # plot fills in while the simulation is still running.
+                    try:
+                        parts = stripped.split("__:", 1)
+                        node_id = parts[0].replace("__PLOTPT_", "")
+                        return f"data: {json.dumps({'type': 'plotpoint', 'nodeId': node_id, **json.loads(parts[1])})}\n\n"
                     except: pass
                 elif "__PLOT_" in stripped:
                     try:
