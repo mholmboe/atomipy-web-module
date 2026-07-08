@@ -54,6 +54,15 @@ PRESETS_DIR = os.path.join(OUTPUTS_DIR, "presets")
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
+# Persistent per-node output cache (survives across builds, unlike the temp work_dir), so a
+# partial re-run can LOAD an upstream node's result via ap.load_node_state instead of
+# recomputing it. The build subprocess inherits this via _sandbox_env(). Cross-workflow
+# node-id collisions are safe: load_node_state verifies a content hash and rejects a
+# mismatched entry as stale.
+NODE_CACHE_DIR = os.path.join(CACHE_DIR, "node_state")
+os.makedirs(NODE_CACHE_DIR, exist_ok=True)
+os.environ.setdefault("ATOMIPY_NODE_CACHE", NODE_CACHE_DIR)
+
 
 def _safe_join(base: str, *user_parts: str) -> str:
     """Join user-supplied path parts under ``base``, refusing anything that escapes it.

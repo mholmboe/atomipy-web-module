@@ -278,6 +278,52 @@ const parseWorkflowImport = (value: unknown): { name: string; graph: WorkflowGra
   return { name: rootName, graph: rootGraph };
 };
 
+// Stable string hash (djb2) -> short hex, for content-addressing node-state caches.
+const _djb2Hex = (s: string): string => {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(16);
+};
+
+// Result/artifact fields written onto node.data AFTER a run (not user config) — excluded
+// from the content hash so a node isn't seen as "changed" just because a run stored its
+// output on it. Denylist is conservative: including a field only risks safe false-staleness
+// (a needless recompute), never false-freshness (loading stale data).
+const _RESULT_FIELDS = new Set([
+  "pdb", "charges", "trajFile", "resultToken", "detected", "lastInferredFrom", "numFrames",
+]);
+
+// Content hash per node = hash(type + config-data + sorted parent hashes), recursive over
+// the whole graph. A cached node output is fresh iff this hash matches the one recorded when
+// it was saved — so any change to the node or an ancestor marks its (and downstream) caches
+// stale, and load_node_state rejects them.
+const computeNodeHashes = (nodes: Node[], edges: Edge[]): Map<string, string> => {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const parents = new Map<string, string[]>();
+  nodes.forEach((n) => parents.set(n.id, []));
+  edges.forEach((e) => { if (parents.has(e.target)) parents.get(e.target)!.push(e.source); });
+  const memo = new Map<string, string>();
+  const hashOf = (id: string, stack: Set<string>): string => {
+    const done = memo.get(id);
+    if (done) return done;
+    if (stack.has(id)) return "cycle";
+    stack.add(id);
+    const n = byId.get(id);
+    const cfg: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries((n?.data ?? {}) as Record<string, unknown>)) {
+      if (!_RESULT_FIELDS.has(k)) cfg[k] = v;
+    }
+    const ph = (parents.get(id) ?? []).map((p) => hashOf(p, stack)).sort();
+    const h = _djb2Hex(`${n?.type ?? ""}|${JSON.stringify(cfg)}|${ph.join(",")}`);
+    stack.delete(id);
+    memo.set(id, h);
+    return h;
+  };
+  const out = new Map<string, string>();
+  nodes.forEach((n) => out.set(n.id, hashOf(n.id, new Set())));
+  return out;
+};
+
 const validateWorkflow = (nodes: Node[], edges: Edge[]): string[] => {
   const errors: string[] = [];
   if (nodes.length === 0) {
@@ -2090,6 +2136,7 @@ export default function VisualBuilder() {
 
     let activeNodes = nodes;
     let activeEdges = edges;
+    let partialBoundaryLoads: string[] = [];
     const selectedNodes = nodes.filter((n) => n.selected);
 
     if (targetNodeId) {
@@ -2109,29 +2156,31 @@ export default function VisualBuilder() {
       const targetType = nodes.find((n) => n.id === targetNodeId)?.type || "node";
       toast.info(`Running workflow up to ${targetType}...`);
     } else if (selectedNodes.length > 0) {
-      // Shift-select a set of nodes, then hit Run to execute STRICTLY those nodes
-      // (no upstream auto-included). Selection is shown with a primary ring, so
-      // this is always a deliberate, visible choice.
+      // Shift-select a set of nodes, then hit Run to execute STRICTLY those nodes.
+      // Any input coming from an UNselected upstream node is loaded from the node-state
+      // cache (ap.load_node_state) instead of blocking — so you can re-run the middle of a
+      // workflow without recomputing everything above it. If a needed upstream was never
+      // run (or has changed since), load_node_state raises a clear error at runtime.
       const selIds = new Set(selectedNodes.map((n) => n.id));
-      // Guard: a selected node whose input comes from an UNselected node can't run
-      // — that input variable would be undefined. Block with a helpful message
-      // instead of producing a crashing script.
-      const missingInputEdges = edges.filter((e) => selIds.has(e.target) && !selIds.has(e.source));
-      if (missingInputEdges.length > 0) {
-        const missingTypes = [
-          ...new Set(missingInputEdges.map((e) => nodes.find((n) => n.id === e.source)?.type).filter(Boolean)),
-        ];
-        toast.error("Selected nodes are missing their inputs", {
-          description:
-            `These selected node(s) depend on unselected upstream node(s): ${missingTypes.join(", ")}. ` +
-            `Shift-click to add them to the selection, or right-click a node → "Run up to this node".`,
-          duration: 8000,
-        });
-        return;
-      }
+      // Include edges INTO the selection so the executed nodes can resolve their inputs;
+      // generatePythonCode topo-sorts only the selected<->selected subset among these.
+      const edgesIntoSelected = edges.filter((e) => selIds.has(e.target));
+      partialBoundaryLoads = [
+        ...new Set(edgesIntoSelected.filter((e) => !selIds.has(e.source)).map((e) => e.source)),
+      ];
       activeNodes = selectedNodes;
-      activeEdges = edges.filter((e) => selIds.has(e.source) && selIds.has(e.target));
-      toast.info(`Running ${activeNodes.length} selected node(s) only...`);
+      activeEdges = edgesIntoSelected;
+      if (partialBoundaryLoads.length > 0) {
+        const btypes = [
+          ...new Set(partialBoundaryLoads.map((b) => nodes.find((n) => n.id === b)?.type).filter(Boolean)),
+        ];
+        toast.info(
+          `Running ${selectedNodes.length} selected node(s); loading ${partialBoundaryLoads.length} ` +
+          `upstream input(s) from cache (${btypes.join(", ")}). Re-run upstream first if results look off.`,
+        );
+      } else {
+        toast.info(`Running ${activeNodes.length} selected node(s) only...`);
+      }
     }
 
     const validationErrors = validateWorkflow(activeNodes, activeEdges);
@@ -2171,9 +2220,13 @@ export default function VisualBuilder() {
     try {
       // Default to minimalistic execution for cleaner generated scripts
       const useMinimalExecution = true;
-      const fullScript = generatePythonCode(activeNodes, activeEdges, "full");
-      const runtimeScript = useMinimalExecution ? generatePythonCode(activeNodes, activeEdges, "minimal") : fullScript;
-      const strictScriptWithMarkers = generatePythonCode(activeNodes, activeEdges, "strict");
+      // Node-state caching: content hash per node (from the FULL graph, so ancestor changes
+      // are seen) drives save-on-run and stale-detection on partial re-runs.
+      const nodeHashes = computeNodeHashes(nodes, edges);
+      const cacheOpts = { nodeHashes, boundaryLoads: partialBoundaryLoads };
+      const fullScript = generatePythonCode(activeNodes, activeEdges, "full", cacheOpts);
+      const runtimeScript = useMinimalExecution ? generatePythonCode(activeNodes, activeEdges, "minimal", cacheOpts) : fullScript;
+      const strictScriptWithMarkers = generatePythonCode(activeNodes, activeEdges, "strict", cacheOpts);
       const strictScript = stripOperationMarkers(strictScriptWithMarkers);
       const notebookScript = generateNotebookFromStrictScript(activeNodes, strictScriptWithMarkers);
       const abortController = new AbortController();

@@ -281,7 +281,19 @@ export function validateWorkflow(nodes: Node[], edges: Edge[]): string[] {
   return errors;
 }
 
-export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScriptMode = "full") {
+export function generatePythonCode(
+  nodes: Node[],
+  edges: Edge[],
+  mode: PythonScriptMode = "full",
+  opts?: { nodeHashes?: Map<string, string>; boundaryLoads?: string[] },
+) {
+  // Node-state cache wiring (see ap.save_node_state / ap.load_node_state):
+  //  - nodeHashes:    content hash per node (config + all ancestors) — recorded on save
+  //    and checked on load so a changed upstream can't feed a partial re-run stale data.
+  //  - boundaryLoads: ids of upstream nodes NOT being executed this run whose cached output
+  //    must be loaded so the executed (selected) nodes can resolve their inputs.
+  const nodeHashes = opts?.nodeHashes ?? new Map<string, string>();
+  const boundaryLoads = opts?.boundaryLoads ?? [];
   const nodeIds = new Set(nodes.map((n) => n.id));
   const activeEdges = edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
 
@@ -350,6 +362,21 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
   }
 
   const stateVars = new Map<string, { atoms: string; box: string; traj?: string; top?: string }>();
+
+  // Partial re-run: load boundary upstream outputs from the node-state cache and pre-seed
+  // stateVars so the executed nodes resolve their inputs without recomputing everything
+  // above them. load_node_state raises a clear error if a cache is missing or stale.
+  if (boundaryLoads.length > 0) {
+    pythonCode += `\n# Load upstream node outputs from cache (partial re-run)\n`;
+    for (const bid of boundaryLoads) {
+      const safe = bid.replace(/[^a-zA-Z0-9_]/g, "_");
+      const av = `cached_${safe}_atoms`;
+      const bv = `cached_${safe}_box`;
+      pythonCode += `${av}, ${bv} = ap.load_node_state('${pyEscape(bid)}', '${nodeHashes.get(bid) ?? ""}')\n`;
+      stateVars.set(bid, { atoms: av, box: bv });
+    }
+    pythonCode += `\n`;
+  }
 
   // Unique GROMACS moleculetype/residue name per organic MOLECULE so distinct
   // organics never collide. A molecule may span a structure(SMILES/file) node AND
@@ -1917,11 +1944,17 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           // box shows in the viewer). MD writes .xtc; steepest-descent EM writes .trr
           // instead — so try .xtc first, then fall back to .trr.
           pythonCode += `_final_stage = "${stage}"\n`;
-          // Wrap-trajectory toggle: trjconv -pbc mol (wrap by molecule, keeping each
-          // molecule WHOLE in the box) when on — this avoids bonds stretching across the
-          // box during playback (atom-wise wrapping splits molecules). -pbc none (leave
-          // coordinates as-is) when off. Independent of the .mdp.
-          const gmxPbc = wrapTrajectory ? "mol" : "none";
+          // Wrap-trajectory toggle (a trjconv -pbc step, independent of the .mdp):
+          //   ON  -> -pbc atom : wrap EVERY atom into the box. A periodic mineral slab
+          //          then stays in the box (‑pbc mol would make the slab "whole" across the
+          //          boundary and push it OUTSIDE). A solvent molecule sitting on a box face
+          //          may be split (part in / part out) — for a clay system keeping the
+          //          framework in the box wins.
+          //   OFF -> -pbc whole : make every molecule WHOLE (reassemble any broken across
+          //          the boundary) but DON'T wrap into the box — molecules stay where they
+          //          are (can lie outside the box). This is the "whole but unwrapped" view.
+          //          (Not -pbc none, which would leave molecules broken.)
+          const gmxPbc = wrapTrajectory ? "atom" : "whole";
           pythonCode += `_traj = None\n`;
           pythonCode += `_traj_src = None\n`;
           pythonCode += `for _ext in ('xtc', 'trr'):\n`;
@@ -2204,12 +2237,28 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `            return {'steps': steps, 'periodic': True, 'include': ['positions']}\n`;
         pythonCode += `        def report(self, simulation, state):\n`;
         pythonCode += `            try:\n`;
-        pythonCode += `                import io as _io, re as _re\n`;
+        pythonCode += `                import io as _io, re as _re, numpy as _np\n`;
         pythonCode += `                _state = simulation.context.getState(getPositions=True, enforcePeriodicBox=${wrapTrajectory ? "True" : "False"})\n`;
         pythonCode += `                _bv = _state.getPeriodicBoxVectors()\n`;
         pythonCode += `                if self._topology is None:\n`;
         pythonCode += `                    self._topology = simulation.topology\n`;
+        if (wrapTrajectory) {
+          pythonCode += `                    _wres = {'SOL','WAT','HOH','TIP3','TIP4','TIP5','OPC','OPC3','SPC','SPCE','MW','IW','NA','CL','K','LI','CS','RB','F','BR','I','CA','MG','ZN','SR','BA','ION','NA+','CL-','K+','CA2+','MG2+'}\n`;
+          pythonCode += `                    self._min_idx = [a.index for a in self._topology.atoms() if str(a.residue.name).upper() not in _wres]\n`;
+        }
         pythonCode += `                self._topology.setPeriodicBoxVectors(_bv)\n`;
+        pythonCode += `                _positions = _state.getPositions(asNumpy=True)\n`;
+        if (wrapTrajectory) {
+          // enforcePeriodicBox already keeps water/ions whole (molecule-wrapped); ATOM-wrap
+          // only the mineral framework so a periodic slab stays inside the box instead of
+          // being made "whole" across the boundary and sticking out.
+          pythonCode += `                if getattr(self, '_min_idx', None):\n`;
+          pythonCode += `                    _bvn = _state.getPeriodicBoxVectors(asNumpy=True).value_in_unit(unit.nanometer)\n`;
+          pythonCode += `                    _p = _positions.value_in_unit(unit.nanometer)\n`;
+          pythonCode += `                    _fr = _p[self._min_idx] @ _np.linalg.inv(_bvn); _fr -= _np.floor(_fr)\n`;
+          pythonCode += `                    _p[self._min_idx] = _fr @ _bvn\n`;
+          pythonCode += `                    _positions = _p * unit.nanometer\n`;
+        }
         pythonCode += `                # Write header (REMARK lines) once — strip CRYST1, we inject it per-frame\n`;
         pythonCode += `                if not self._header_written:\n`;
         pythonCode += `                    _hdr_buf = _io.StringIO()\n`;
@@ -2225,7 +2274,7 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         pythonCode += `                _cryst1 = next((l for l in _c_buf.getvalue().split('\\n') if l.startswith('CRYST1')), '')\n`;
         pythonCode += `                # Write MODEL block, injecting CRYST1 right after the MODEL line\n`;
         pythonCode += `                _m_buf = _io.StringIO()\n`;
-        pythonCode += `                app.PDBFile.writeModel(self._topology, _state.getPositions(), _m_buf, self._model)\n`;
+        pythonCode += `                app.PDBFile.writeModel(self._topology, _positions, _m_buf, self._model)\n`;
         pythonCode += `                _m_str = _m_buf.getvalue()\n`;
         pythonCode += `                if _cryst1:\n`;
         pythonCode += `                    _nl = _m_str.find('\\n')\n`;
@@ -3543,6 +3592,17 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
 
     if (mode === "full") {
       pythonCode += `print("__NODE_SUCCESS__:${opIdEscaped}")\n`;
+    }
+
+    // Persist this node's output to the node-state cache so a later partial run can load it
+    // (no-op unless ATOMIPY_NODE_CACHE is set). Only nodes that produce atoms/box and have a
+    // known content hash are cached; loaded boundary nodes are skipped (not re-saved here).
+    const _cacheSt = stateVars.get(id);
+    if (
+      _cacheSt && _cacheSt.atoms && _cacheSt.atoms !== "None" &&
+      nodeHashes.has(id) && !boundaryLoads.includes(id)
+    ) {
+      pythonCode += `ap.save_node_state('${opIdEscaped}', ${_cacheSt.atoms}, ${_cacheSt.box}, '${nodeHashes.get(id)}')\n`;
     }
   });
 

@@ -562,10 +562,13 @@ Defaults to <code>gmx</code> on PATH — works on Colab (after the launcher's <s
             </>
             )}
 
-            {/* Wrap is a trjconv/post-processing step (GROMACS: -pbc atom vs none),
-                independent of the .mdp — keep it visible even with a custom .mdp. */}
-            <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
-              Wrap trajectory (periodic box)
+            {/* Wrap is a trajectory post-processing step (GROMACS: trjconv -pbc atom vs
+                whole; OpenMM: enforcePeriodicBox on/off), independent of the .mdp. */}
+            <label
+              className="nodrag flex items-center justify-between text-xs text-muted-foreground"
+              title="ON: wrap everything into the periodic box (a periodic mineral slab stays in the box; a solvent molecule sitting on a box face may be split). OFF: keep molecules whole but do NOT wrap them into the box — they stay where they are and may lie outside it."
+            >
+              Wrap trajectory into box
               <input
                 type="checkbox"
                 className="nodrag"
@@ -574,6 +577,9 @@ Defaults to <code>gmx</code> on PATH — works on Colab (after the launcher's <s
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </label>
+            <p className="text-[10px] text-muted-foreground/80 -mt-1">
+              On: wrap all atoms into the box. Off: molecules whole, unwrapped (may lie outside the box).
+            </p>
             <label className="nodrag flex items-center justify-between text-xs text-muted-foreground" title="Generates traj_no_water.pdb for high-performance visual display while retaining full traj.pdb">
               Exclude water in viewer
               <input
