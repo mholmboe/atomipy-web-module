@@ -280,6 +280,10 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   // Track which PDB was last loaded and by which renderer, to avoid
   // auto-loading stale PDB data when the user merely switches renderers.
   const pdbLoadedRef = useRef<{ renderer: ViewerRenderer; pdb: string } | null>(null);
+  // Track which (renderer, pdb) we last applied the default x/z camera orientation to,
+  // so we orient a *freshly loaded* structure once but leave the user's manual rotation
+  // alone on subsequent re-renders (style/background toggles).
+  const defaultViewRef = useRef<{ renderer: ViewerRenderer; pdb: string } | null>(null);
 
   // JSmol is kept for single structures but not offered for trajectories (benchmarks:
   // ~20x slower load, ~10-40x slower playback than NGL). Effective renderer resolved after
@@ -412,6 +416,47 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       if (w > 0 && h > 0 && stage.viewer?.setSize) stage.viewer.setSize(w, h);
       else stage.handleResize?.();
     } catch { /* ignore */ }
+  }, []);
+
+  // ─── Default camera orientation: x/z plane facing the screen ──────────────
+  // All three renderers default to looking down the model z-axis (x/y in the
+  // screen plane). We want the x/z plane in the screen plane instead — i.e. look
+  // down -y with z pointing up — which is a -90° rotation of the scene about the
+  // screen x-axis. Applied once per freshly loaded structure so a user's manual
+  // rotation survives style/background toggles.
+  // 3Dmol view quaternion (getView/setView slots 4..7) for R_x(-90°):
+  const XZ_QUAT_3DMOL = useMemo(() => [-Math.SQRT1_2, 0, 0, Math.SQRT1_2] as const, []);
+
+  const applyDefaultView3Dmol = useCallback((v: ViewerApi | null) => {
+    if (!v?.getView || !v?.setView) return;
+    try {
+      const view = v.getView();
+      if (Array.isArray(view) && view.length >= 8) {
+        view[4] = XZ_QUAT_3DMOL[0];
+        view[5] = XZ_QUAT_3DMOL[1];
+        view[6] = XZ_QUAT_3DMOL[2];
+        view[7] = XZ_QUAT_3DMOL[3];
+        v.setView(view);
+      }
+    } catch { /* getView/setView unavailable — leave default orientation */ }
+  }, [XZ_QUAT_3DMOL]);
+
+  // NGL: set an absolute scene rotation while preserving autoView's center+zoom by
+  // swapping only the rotation component of the orientation matrix.
+  const applyDefaultViewNgl = useCallback(() => {
+    const stage = nglStageRef.current;
+    const NGL = window.NGL;
+    if (!stage || !NGL) return;
+    try {
+      const m = stage.viewerControls.getOrientation();
+      const pos = new NGL.Vector3();
+      const quat = new NGL.Quaternion();
+      const scale = new NGL.Vector3();
+      m.decompose(pos, quat, scale);
+      const desired = new NGL.Quaternion().setFromAxisAngle(new NGL.Vector3(1, 0, 0), -Math.PI / 2);
+      m.compose(pos, desired, scale);
+      stage.viewerControls.orient(m);
+    } catch { /* API shape differs — leave default orientation */ }
   }, []);
 
   const setViewerOption = (patch: Partial<ViewerNodeData>) => {
@@ -633,9 +678,18 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
         viewer.spin(false);
       }
 
+      // Orient a freshly loaded structure to the x/z-plane default, then re-fit.
+      const fresh3d =
+        !defaultViewRef.current ||
+        defaultViewRef.current.renderer !== "3dmol" ||
+        defaultViewRef.current.pdb !== pdb;
+      if (fresh3d) {
+        applyDefaultView3Dmol(viewer);
+        defaultViewRef.current = { renderer: "3dmol", pdb };
+      }
       viewer.zoomTo();
       viewer.render();
-      
+
       setTimeout(() => {
         if (viewerInstance.current) {
           viewerInstance.current.resize();
@@ -673,6 +727,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     showMiller,
     millerSig,
     selectionSig,
+    applyDefaultView3Dmol,
     // Note: Do not include currentFrame here, or else it will re-render the whole model 10 times a second!
   ]);
 
@@ -779,6 +834,16 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
           } catch { /* trajectory unavailable */ }
         }
         comp.autoView();
+        // Orient a freshly loaded structure to the x/z-plane default (once per new
+        // structure, so a manual rotation survives style/background toggles).
+        const freshNgl =
+          !defaultViewRef.current ||
+          defaultViewRef.current.renderer !== "ngl" ||
+          defaultViewRef.current.pdb !== pdb;
+        if (freshNgl) {
+          applyDefaultViewNgl();
+          defaultViewRef.current = { renderer: "ngl", pdb };
+        }
         // Layout may not be flushed yet (node just shown/resized) — fit now and shortly after.
         fitNgl();
         setTimeout(fitNgl, 60);
@@ -787,7 +852,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       .catch(() => { /* parse failed — leave the stage empty */ });
 
     return () => { cancelled = true; };
-  }, [renderer, pdb, viewStyle, showHydrogens, showUnitCell, isMulti, stickRadius, sphereScale, showAtomLabels, labelIsCharge, chargeValues, selectionSig, fitNgl]);
+  }, [renderer, pdb, viewStyle, showHydrogens, showUnitCell, isMulti, stickRadius, sphereScale, showAtomLabels, labelIsCharge, chargeValues, selectionSig, fitNgl, applyDefaultViewNgl]);
 
   // Stream the FULL trajectory file straight from the result bundle into NGL — NGL parses
   // frames itself (holding only coordinates), so it shows EVERY frame without the inline
@@ -820,6 +885,8 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       const trajComp = comp.addTrajectory(undefined, {});
       nglTrajRef.current = trajComp?.trajectory ?? null;
       comp.autoView();
+      applyDefaultViewNgl();          // full-trajectory reload → x/z-plane default
+      defaultViewRef.current = { renderer: "ngl", pdb };
       fitNgl(); setTimeout(fitNgl, 100);
       setCurrentFrame(0);
       setFullFrameCount(tf.nframes);   // slider/play now span every frame
@@ -828,7 +895,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     } finally {
       setFullTrajBusy(false);
     }
-  }, [data.trajFile, data.resultToken, renderer, viewStyle, showHydrogens, sphereScale, stickRadius, fitNgl]);
+  }, [data.trajFile, data.resultToken, renderer, viewStyle, showHydrogens, sphereScale, stickRadius, fitNgl, applyDefaultViewNgl, pdb]);
 
   // ─── Keep the NGL canvas sized to the node (resize, panel/layout changes) ──
   useEffect(() => {
@@ -914,6 +981,10 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     if (pdbString) {
       const escaped = pdbString.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
       lines.push(`load inline "${escaped}"`);
+      // Default camera: view the x/z plane (look down -y, z up) instead of Jmol's
+      // front view (x/y plane). moveto sets an absolute orientation (-90° about x)
+      // from the standard front reference, keeping the current zoom.
+      lines.push("moveto 0 {1 0 0} -90");
     }
 
     // Drop periodic (cross-cell, wrap-around) bonds that JSmol draws for a
@@ -1082,23 +1153,18 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     e.stopPropagation();
     if (renderer === "3dmol" && viewerInstance.current) {
       const v = viewerInstance.current;
-      // Reset rotation to identity (zoomTo only re-fits zoom/center, not rotation),
-      // then re-center and re-fit so it's a full "reset view".
-      try {
-        if (v.getView && v.setView) {
-          const view = v.getView();
-          if (Array.isArray(view) && view.length >= 8) {
-            v.setView([view[0], view[1], view[2], view[3], 0, 0, 0, 1]);
-          }
-        }
-      } catch { /* getView/setView unavailable — fall back to zoomTo only */ }
+      // Reset to the x/z-plane default orientation (zoomTo only re-fits zoom/center,
+      // not rotation), then re-center and re-fit so it's a full "reset view".
+      applyDefaultView3Dmol(v);
       if (v.spin) v.spin(false);
       v.zoomTo();
       v.render();
     } else if (renderer === "jsmol" && jsmolAppletRef.current && window.Jmol) {
-      window.Jmol.script(jsmolAppletRef.current, "reset; zoom 0");
+      // reset → front view, then re-apply the x/z-plane default orientation.
+      window.Jmol.script(jsmolAppletRef.current, "reset; zoom 0; moveto 0 {1 0 0} -90");
     } else if (renderer === "ngl" && nglStageRef.current) {
       try { (nglCompRef.current?.autoView ? nglCompRef.current : nglStageRef.current).autoView(); } catch { /* ignore */ }
+      applyDefaultViewNgl();
     }
   };
 
