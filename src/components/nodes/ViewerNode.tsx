@@ -30,6 +30,9 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { NodeComponentProps } from "./types";
@@ -139,6 +142,11 @@ type ViewerNodeData = {
   stickRadius?: number;
   sphereScale?: number;
   lineWidth?: number;
+  // Selection filters: which residue names / atom-type (PDB atom) names to DISPLAY.
+  // undefined/absent = show everything (default). An explicit list shows only those;
+  // [] shows none. Names are taken from the PDB currently in the viewer.
+  visibleResnames?: string[];
+  visibleAtomNames?: string[];
 };
 
 const BACKGROUNDS = {
@@ -224,6 +232,26 @@ function addNglUnitcellBox(stage: any, NGL: any, pdb: string, hexColor: string, 
   } catch { return null; }
 }
 
+// Extract the unique residue names (PDB cols 18-20) and atom-type names (PDB atom name,
+// cols 13-16) present in a PDB string — used to build the show/hide selection menus.
+function parsePdbSelectors(pdb: string): { resnames: string[]; atomNames: string[] } {
+  const resnames = new Set<string>();
+  const atomNames = new Set<string>();
+  if (pdb) {
+    for (const line of pdb.split("\n")) {
+      if (!line.startsWith("ATOM") && !line.startsWith("HETATM")) continue;
+      const name = line.substring(12, 16).trim();
+      const res = line.substring(17, 20).trim();
+      if (name) atomNames.add(name);
+      if (res) resnames.add(res);
+    }
+  }
+  return {
+    resnames: [...resnames].sort(),
+    atomNames: [...atomNames].sort(),
+  };
+}
+
 export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNodeData>) {
   const { updateNodeData, deleteElements } = useReactFlow();
 
@@ -294,6 +322,23 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
   const stickRadius = data.stickRadius ?? 0.15;
   const sphereScale = data.sphereScale ?? 0.25;
   const lineWidth = data.lineWidth ?? 1.2;
+
+  // ── Selection filters: show/hide by residue name or atom-type name ──────────
+  const { resnames: allResnames, atomNames: allAtomNames } = useMemo(
+    () => parsePdbSelectors(pdb),
+    [pdb]
+  );
+  // Effective visible set: an absent data field means "all". Intersect with what's
+  // actually in the current PDB so a stale saved list never references gone names.
+  const effResnames = (data.visibleResnames ?? allResnames).filter((r) => allResnames.includes(r));
+  const effAtomNames = (data.visibleAtomNames ?? allAtomNames).filter((a) => allAtomNames.includes(a));
+  const resnFilterActive = effResnames.length < allResnames.length;
+  const atomFilterActive = effAtomNames.length < allAtomNames.length;
+  // Complement (what each renderer suppresses).
+  const hiddenResnames = allResnames.filter((r) => !effResnames.includes(r));
+  const hiddenAtomNames = allAtomNames.filter((a) => !effAtomNames.includes(a));
+  // Re-run the render effects whenever the selection changes.
+  const selectionSig = `R:${effResnames.join(" ")}|A:${effAtomNames.join(" ")}`;
   // Default a bit wider so the Miller-plane controls fit on one row; min width
   // also raised so a resized-small node keeps them readable.
   // Min/default 640 (the width the Miller panel's one-row controls need);
@@ -371,6 +416,18 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
 
   const setViewerOption = (patch: Partial<ViewerNodeData>) => {
     updateNodeData(id, { ...data, ...patch });
+  };
+
+  // Toggle one residue/atom-type name in the visible set. Seeds from "all present"
+  // on first toggle; collapses back to undefined (= all) when everything is re-checked.
+  const toggleName = (field: "visibleResnames" | "visibleAtomNames", all: string[], name: string) => {
+    const cur = (data[field] ?? all).filter((n) => all.includes(n));
+    const next = cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name];
+    const value = next.length === all.length ? undefined : next;
+    setViewerOption({ [field]: value } as Partial<ViewerNodeData>);
+  };
+  const setAllNames = (field: "visibleResnames" | "visibleAtomNames", all: string[], show: boolean) => {
+    setViewerOption({ [field]: show ? undefined : [] } as Partial<ViewerNodeData>);
   };
 
   const updateMillerPlane = (idx: number, patch: Partial<MillerPlaneDef>) => {
@@ -495,7 +552,17 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
           { stick: { hidden: true }, sphere: { hidden: true }, line: { hidden: true } }
         );
       }
-      
+
+      // Selection filter: hide the residues / atom-type names the user unchecked.
+      // (setStyle replaces style for the matched atoms; a hidden style removes them.)
+      const HIDDEN_STYLE = { stick: { hidden: true }, sphere: { hidden: true }, line: { hidden: true } };
+      if (resnFilterActive && hiddenResnames.length) {
+        viewer.setStyle({ resn: hiddenResnames }, HIDDEN_STYLE);
+      }
+      if (atomFilterActive && hiddenAtomNames.length) {
+        viewer.setStyle({ atom: hiddenAtomNames }, HIDDEN_STYLE);
+      }
+
       let shouldShowUnitCell = showUnitCell;
 
       if (shouldShowUnitCell) {
@@ -605,6 +672,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     isMulti,
     showMiller,
     millerSig,
+    selectionSig,
     // Note: Do not include currentFrame here, or else it will re-render the whole model 10 times a second!
   ]);
 
@@ -645,7 +713,12 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       : viewStyle === "stick" ? "licorice"
       : viewStyle === "line" ? "line"
       : "ball+stick";
-    const sele = showHydrogens ? undefined : "not _H";
+    // Build the NGL selection string: hydrogens + residue/atom-type filters, AND-combined.
+    const _seleParts: string[] = [];
+    if (!showHydrogens) _seleParts.push("not _H");
+    if (resnFilterActive) _seleParts.push(effResnames.length ? `(resname ${effResnames.join(" ")})` : "none");
+    if (atomFilterActive) _seleParts.push(effAtomNames.length ? `(atomname ${effAtomNames.join(" ")})` : "none");
+    const sele = _seleParts.length ? _seleParts.join(" and ") : undefined;
 
     const blob = new Blob([pdb], { type: "text/plain" });
     stage.loadFile(blob, { ext: "pdb", asTrajectory: isMulti })
@@ -686,7 +759,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
             });
             const dark = background === "dark" || background === "black";
             comp.addRepresentation("label", {
-              sele: showHydrogens ? undefined : "not _H",
+              sele,
               labelType: "text",
               labelText,
               color: dark ? "#e2e8f0" : "#0f172a",
@@ -714,7 +787,7 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
       .catch(() => { /* parse failed — leave the stage empty */ });
 
     return () => { cancelled = true; };
-  }, [renderer, pdb, viewStyle, showHydrogens, showUnitCell, isMulti, stickRadius, sphereScale, showAtomLabels, labelIsCharge, chargeValues, fitNgl]);
+  }, [renderer, pdb, viewStyle, showHydrogens, showUnitCell, isMulti, stickRadius, sphereScale, showAtomLabels, labelIsCharge, chargeValues, selectionSig, fitNgl]);
 
   // Stream the FULL trajectory file straight from the result bundle into NGL — NGL parses
   // frames itself (holding only coordinates), so it shows EVERY frame without the inline
@@ -871,6 +944,9 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
     } else {
       lines.push("display all");
     }
+    // NOTE: residue / atom-type selection filtering is wired for 3Dmol and NGL only;
+    // the Residues/Atom-types menus are hidden for JSmol. If JSmol filtering is wanted,
+    // build a combined `select (...); hide selected` here from the visible-name sets.
 
     // Unit cell
     if (showUnitCell) {
@@ -1226,6 +1302,56 @@ export function ViewerNode({ id, data, selected }: NodeComponentProps<ViewerNode
                   >
                     Hydrogens
                   </DropdownMenuCheckboxItem>
+                  {/* Show/hide by residue name or atom-type name (3Dmol & NGL). */}
+                  {(renderer === "3dmol" || renderer === "ngl") && allResnames.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger className={compactItemClass}>
+                          Residues{resnFilterActive ? ` (${effResnames.length}/${allResnames.length})` : ""}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="max-h-[320px] overflow-y-auto">
+                          <DropdownMenuItem className={compactItemClass} onSelect={(e) => { e.preventDefault(); setAllNames("visibleResnames", allResnames, true); }}>Show all</DropdownMenuItem>
+                          <DropdownMenuItem className={compactItemClass} onSelect={(e) => { e.preventDefault(); setAllNames("visibleResnames", allResnames, false); }}>Hide all</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {allResnames.map((r) => (
+                            <DropdownMenuCheckboxItem
+                              key={r}
+                              className={compactItemClass}
+                              checked={effResnames.includes(r)}
+                              onSelect={(e) => e.preventDefault()}
+                              onCheckedChange={() => toggleName("visibleResnames", allResnames, r)}
+                            >
+                              {r}
+                            </DropdownMenuCheckboxItem>
+                          ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                      {allAtomNames.length > 0 && (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger className={compactItemClass}>
+                            Atom types{atomFilterActive ? ` (${effAtomNames.length}/${allAtomNames.length})` : ""}
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="max-h-[320px] overflow-y-auto">
+                            <DropdownMenuItem className={compactItemClass} onSelect={(e) => { e.preventDefault(); setAllNames("visibleAtomNames", allAtomNames, true); }}>Show all</DropdownMenuItem>
+                            <DropdownMenuItem className={compactItemClass} onSelect={(e) => { e.preventDefault(); setAllNames("visibleAtomNames", allAtomNames, false); }}>Hide all</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {allAtomNames.map((a) => (
+                              <DropdownMenuCheckboxItem
+                                key={a}
+                                className={compactItemClass}
+                                checked={effAtomNames.includes(a)}
+                                onSelect={(e) => e.preventDefault()}
+                                onCheckedChange={() => toggleName("visibleAtomNames", allAtomNames, a)}
+                              >
+                                {a}
+                              </DropdownMenuCheckboxItem>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      )}
+                    </>
+                  )}
                   <DropdownMenuLabel className={compactLabelClass}>Labels</DropdownMenuLabel>
                   <DropdownMenuRadioGroup
                     value={labelMode}

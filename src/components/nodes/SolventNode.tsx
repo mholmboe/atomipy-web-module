@@ -12,7 +12,6 @@ type SolventNodeData = {
   maxSolventMode?: "max" | "count" | "shell";
   maxSolventCount?: number;
   shellThickness?: number;
-  includeSolute?: boolean;
   xlo?: number; ylo?: number; zlo?: number;
   xhi?: number; yhi?: number; zhi?: number;
 };
@@ -106,12 +105,6 @@ export function SolventNode({ id, data }: NodeComponentProps<SolventNodeData>) {
                   onPointerDown={(e) => e.stopPropagation()} />
               </div>
             )}
-            <label className="nodrag flex items-center gap-2 text-xs text-muted-foreground">
-              <input type="checkbox" checked={data.includeSolute ?? true}
-                onChange={(e) => set("includeSolute", e.target.checked)}
-                onPointerDown={(e) => e.stopPropagation()} />
-              Include solute in distance check
-            </label>
             <div className="space-y-1">
               <label className="text-xs font-semibold text-muted-foreground block">Solvation Limits (Å, blank = box)</label>
               <div className="grid grid-cols-3 gap-1">

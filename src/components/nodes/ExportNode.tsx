@@ -11,6 +11,7 @@ type ExportNodeData = {
   angleTerms?: "none" | "0" | "250" | "500" | "1500";
   writeConect?: boolean;
   writeElement?: boolean;
+  splitMoleculetypes?: boolean;
   cifTitle?: string;
   topologyRmaxH?: number;
   topologyRmaxM?: number;
@@ -106,6 +107,25 @@ export function ExportNode({ id, data }: NodeComponentProps<ExportNodeData>) {
               <option value="1500">1500</option>
             </select>
           </div>
+        )}
+
+        {topologyFormat !== "none" && (
+          <label className="nodrag flex items-start gap-2 text-xs text-muted-foreground mt-2">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={data.splitMoleculetypes || false}
+              onChange={(e) => updateNodeData(id, { ...data, splitMoleculetypes: e.target.checked })}
+              onPointerDown={(e) => e.stopPropagation()}
+            />
+            <span>
+              One <span className="font-mono">[moleculetype]</span> per molecule/slab
+              <span className="block text-[10px] text-muted-foreground/80">
+                Splits the mineral by MolID (e.g. 3 stacked layers → MIN1/MIN2/MIN3). Keep distinct
+                MolIDs upstream (Join, and Forcefield → uncheck “Reset MolID”).
+              </span>
+            </span>
+          </label>
         )}
 
         <button

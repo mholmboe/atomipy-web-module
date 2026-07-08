@@ -695,7 +695,12 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         if (gatheredStates.length > 0) {
           const atomArgs = gatheredStates.map((s) => s.atoms).join(", ");
           const reorder = getBoolean(data, "reorderMolids", true);
-          const customMolid = getNumber(data, "molid", undefined);
+          // A molid <= 0 is never a valid molecule id (GROMACS molids start at 1). Treat 0
+          // (or blank) as "auto" so a STALE saved 0 in the Set-Molid field can't collapse
+          // every layer to molid 0 -> GRO residue 0 / PDB residue 9999. Only a positive
+          // integer overrides; otherwise join_and_reorder assigns 1,2,3,...
+          const _rawMolid = getNumber(data, "molid", undefined);
+          const customMolid = (typeof _rawMolid === "number" && _rawMolid > 0) ? _rawMolid : undefined;
           const customResname = pyEscape(getString(data, "resname", ""));
 
           pythonCode += `\n# Smart Branch Joining (Organic/Mixed SystemList vs Mineral/Solvent/Ions)\n`;
@@ -1319,8 +1324,28 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
           const nearest = [10, 15, 20, 25, 30].reduce((a, b) => (Math.abs(b - th) < Math.abs(a - th) ? b : a), 10);
           maxSolventArg = `'shell${nearest}'`;
         }
-        const includeSolute = getBoolean(data, "includeSolute", true) ? "True" : "False";
-        pythonCode += `${blockOutAtoms} = ap.solvate(limits=${inBox}, Box=${inBox}, density=${dens}, min_distance=${spacing}, solute_atoms=${inAtoms}, solvent_type='${model}', max_solvent=${maxSolventArg}, include_solute=${includeSolute})\n`;
+        // The solute is ALWAYS kept in the output (include_solute=True): in a node graph
+        // the solvate step feeds downstream force-field/export nodes, so dropping the
+        // solute (water-only) would silently break the pipeline. `ap.solvate` still checks
+        // solvent↔solute clearance regardless — that check is unconditional.
+        // Optional sub-region ("Solvation Limits" in the UI). Any blank field inherits the
+        // box: lo -> 0, hi -> the box dimension. When ALL are blank we pass the full box.
+        // `limits` is the region to FILL; `Box` stays the full cell so PBC / solute
+        // clearance are computed against the real periodic system, not the sub-slab.
+        const _sxlo = getOptionalNumber(data, "xlo");
+        const _sylo = getOptionalNumber(data, "ylo");
+        const _szlo = getOptionalNumber(data, "zlo");
+        const _sxhi = getOptionalNumber(data, "xhi");
+        const _syhi = getOptionalNumber(data, "yhi");
+        const _szhi = getOptionalNumber(data, "zhi");
+        const _hasSolvLimits = [_sxlo, _sylo, _szlo, _sxhi, _syhi, _szhi].some((v) => v !== null);
+        const _bx = inBox !== "None" ? `${inBox}[0]` : "50.0";
+        const _by = inBox !== "None" ? `${inBox}[1]` : "50.0";
+        const _bz = inBox !== "None" ? `${inBox}[2]` : "50.0";
+        const solvLimits = _hasSolvLimits
+          ? `[${_sxlo !== null ? _sxlo : 0.0}, ${_sylo !== null ? _sylo : 0.0}, ${_szlo !== null ? _szlo : 0.0}, ${_sxhi !== null ? _sxhi : _bx}, ${_syhi !== null ? _syhi : _by}, ${_szhi !== null ? _szhi : _bz}]`
+          : `${inBox}`;
+        pythonCode += `${blockOutAtoms} = ap.solvate(limits=${solvLimits}, Box=${inBox}, density=${dens}, min_distance=${spacing}, solute_atoms=${inAtoms}, solvent_type='${model}', max_solvent=${maxSolventArg}, include_solute=True)\n`;
         // Propagate .itp so downstream Simulate nodes use the merged-topology path
         pythonCode += `if hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None:\n`;
         pythonCode += `    class _SL_solv2(list): pass\n`;
@@ -2399,6 +2424,27 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         if (ommMissing.length > 0 && !isMinimize) {
           pythonCode += `    print("(thermo: ${ommMissing.map((t) => t.label).join(", ")} not available from OpenMM's reporter — use the GROMACS engine for pressure)")\n`;
         }
+        // EM has no live StateDataReporter (minimizeEnergy runs no reporters), so unlike
+        // NVT/NPT nothing was streamed to the plotter. The per-chunk EM loop above logged
+        // Potential Energy to the SAME logFile; read it back and emit the convergence
+        // curve (Potential Energy vs iteration) so the Data Plotter isn't left empty.
+        // Temperature/pressure/volume are meaningless during minimization, so we only
+        // plot potential energy here regardless of which thermo boxes were ticked.
+        if (isMinimize && thermoPlotTarget && doThermo) {
+          pythonCode += `    # EM convergence (Potential Energy vs iteration) -> Data Plotter\n`;
+          pythonCode += `    try:\n`;
+          pythonCode += `        import csv as _csv, json as _json\n`;
+          pythonCode += `        with open('${logFile}', 'r', encoding='utf-8') as _lf: _rows = list(_csv.reader(_lf))\n`;
+          pythonCode += `        _hdr = [str(_h).strip().strip('#').strip('"') for _h in _rows[0]]\n`;
+          pythonCode += `        _si = next((_i for _i, _h in enumerate(_hdr) if 'Step' in _h), 0)\n`;
+          pythonCode += `        _pei = next((_i for _i, _h in enumerate(_hdr) if 'Potential Energy' in _h), None)\n`;
+          pythonCode += `        if _pei is not None:\n`;
+          pythonCode += `            _pts = [[float(_r[_si]), float(_r[_pei])] for _r in _rows[1:] if len(_r) > _pei and _r[_pei] != '']\n`;
+          pythonCode += `            if _pts:\n`;
+          pythonCode += `                print("__PLOT_${thermoPlotTarget}__:" + _json.dumps({'series': [{'name': 'Potential Energy (kJ/mole)', 'points': _pts}], 'xLabel': 'Iteration', 'yLabel': 'Potential Energy (kJ/mole)'}))\n`;
+          pythonCode += `    except Exception as _te:\n`;
+          pythonCode += `        print(f"(EM thermo plot skipped: {_te})")\n`;
+        }
 
         pythonCode += `except Exception as md_err:\n`;
         pythonCode += `    import traceback as _tb\n`;
@@ -3391,6 +3437,14 @@ export function generatePythonCode(nodes: Node[], edges: Edge[], mode: PythonScr
         const lmpMineralBlock = mineralFF === "clayff" ? "CLAYFF_2004" : `GMINFF_k${exportVariant}`;
 
         pythonCode += `\n# Export Final System Coordinate and Topology Outputs\n`;
+
+        // Optional: one [ moleculetype ] per molecule/slab. Renames each mineral molecule's
+        // residue (by molid) to <resname><k>, which the topology writer then emits as
+        // separate moleculetypes (e.g. MIN1/MIN2/MIN3 for three stacked layers). Mutates in
+        // place so the coordinate file's residue names match; guarded against per-atom molids.
+        if (getBoolean(data, "splitMoleculetypes", false)) {
+          pythonCode += `ap.split_slabs_by_molid(${inAtoms})\n`;
+        }
 
         // --- Structure file (all supported coordinate formats) ---
         if (structFmt === "pdb") {

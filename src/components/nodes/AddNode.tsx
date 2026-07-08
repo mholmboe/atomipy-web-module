@@ -57,8 +57,8 @@ export function AddNode({ id, data }: NodeComponentProps<AddNodeData>) {
                 min="1"
                 placeholder="Auto"
                 className="nodrag w-full text-[11px] bg-background border border-border rounded-md px-2 py-1"
-                value={data.molid ?? ""}
-                onChange={(e) => handleChange("molid", parseInt(e.target.value) || undefined)}
+                value={data.molid && data.molid > 0 ? data.molid : ""}
+                onChange={(e) => { const v = parseInt(e.target.value); handleChange("molid", v > 0 ? v : undefined); }}
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </div>

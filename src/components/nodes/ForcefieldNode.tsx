@@ -266,11 +266,18 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
 
         {showMore && (
           <div className="space-y-2 border border-border rounded-md p-2 bg-muted/30">
-            <label className="nodrag flex items-center justify-between text-xs text-muted-foreground">
-              Reset MolID (H2O sep)
+            <label className="nodrag flex items-start justify-between gap-2 text-xs text-muted-foreground">
+              <span>
+                Reset MolID
+                <span className="block text-[10px] text-muted-foreground/80">
+                  On: merge all mineral atoms into one molecule (MolID 1) and separate water for
+                  clean typing. Off: keep upstream MolIDs — needed to keep stacked layers as
+                  distinct molecules (e.g. for “one [moleculetype] per slab” on export).
+                </span>
+              </span>
               <input
                 type="checkbox"
-                className="nodrag"
+                className="nodrag mt-0.5"
                 checked={resetMolid}
                 onChange={(e) => updateNodeData(id, { ...data, resetMolid: e.target.checked })}
                 onPointerDown={(e) => e.stopPropagation()}
