@@ -1871,9 +1871,14 @@ export function generatePythonCode(
           pythonCode += `_has_solvent_or_ions = any(str(a.get('resname','')).upper() in _solvent_ion_res for a in ${inAtoms})\n`;
           pythonCode += `_has_itp = hasattr(${inAtoms}, 'itp') and ${inAtoms}.itp is not None\n`;
           pythonCode += `_dummy_frame = [a for a in ${inAtoms} if a.get('_dummy_type')]\n`;
+          pythonCode += `_freeze_kw = {}  # frozen-dummy freeze kwargs (empty for normal MINFF/CLAYFF runs)\n`;
           pythonCode += `if _dummy_frame:\n`;
-          pythonCode += `    # Frozen dummy mineral: self-contained dummy .top (true freezing via .mdp freezegrps is a follow-up; EM/NVT are meaningful as-is)\n`;
-          pythonCode += `    ap.write_dummy_system_top(list(${inAtoms}), ${inBox}, _top_path, _gro_path, water_model="${waterModel}")\n`;
+          pythonCode += `    # Frozen dummy mineral: bond-free self-contained .top; hold the framework rigid\n`;
+          pythonCode += `    # with .mdp freezegrps (the GROMACS counterpart of OpenMM's setParticleMass=0).\n`;
+          pythonCode += `    _dummy_ordered, _dummy_nfrozen = ap.write_dummy_system_top(list(${inAtoms}), ${inBox}, _top_path, _gro_path, water_model="${waterModel}")\n`;
+          pythonCode += `    _gmx.write_freeze_ndx('.', _dummy_nfrozen, len(_dummy_ordered))  # [System] + [frozen] groups for grompp -n\n`;
+          pythonCode += `    _freeze_kw = dict(ndx="index.ndx", freeze_group="frozen")\n`;
+          pythonCode += `    print(f"[dummy] GROMACS: freezing {_dummy_nfrozen} framework atoms via freezegrps (index.ndx) \\u2014 parity with the OpenMM mass=0 path.")\n`;
           pythonCode += `    _gmx_defines = []  # self-contained .top\n`;
           pythonCode += `elif _has_itp or _has_solvent_or_ions:\n`;
           pythonCode += `    _defines = ${definesExpr}\n`;
@@ -1938,7 +1943,7 @@ export function generatePythonCode(
             pythonCode += `_gmx_mdp_text = ${JSON.stringify(mdpText)}\n`;
             runKwargs += `, mdp_text=_gmx_mdp_text`;
           }
-          pythonCode += `_g = _gmx_run('${stage}', _os.path.basename(_gro_path), ${runKwargs})\n`;
+          pythonCode += `_g = _gmx_run('${stage}', _os.path.basename(_gro_path), ${runKwargs}, **_freeze_kw)\n`;
           pythonCode += `print("GROMACS simulation finished OK!")\n`;
           // Convert the stage's trajectory -> multi-frame PDB (CRYST1 per MODEL so the
           // box shows in the viewer). MD writes .xtc; steepest-descent EM writes .trr
