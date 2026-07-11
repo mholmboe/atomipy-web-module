@@ -672,7 +672,7 @@ const NODE_PURPOSE_DOCS: Record<string, string> = {
   bvs: "Runs bond-valence analysis and summaries.",
   xrd: "Calculates and exports simulated XRD profiles.",
   export: "Writes final coordinate/topology files.",
-  simulate: "Runs OpenMM energy minimization or MD (NVT/NPT) on the full system (CPU online; GPU on Colab/local).",
+  simulate: "Runs energy minimization or MD (NVT/NPT) on the full system with OpenMM or a local GROMACS (grompp/mdrun) engine (CPU online; GPU on Colab/local).",
   organic: "Defines an organic molecule (SMILES, file, or library); GAFF/OpenFF parametrization is applied by the Forcefield node.",
 };
 

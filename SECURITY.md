@@ -18,8 +18,8 @@ from the client, so the backend treats it as **untrusted**.
 
 ### 1. Sandboxed execution (process isolation)
 The generated script runs in a **separate subprocess**, never in the web server's
-interpreter (`backend/core/build_runner.py` + `build_runtime.py`, spawned by
-`build_stream`). This gives:
+interpreter (spawned by `build_stream` in `backend/core/routers/execution.py`, with
+`backend/core/build_runner.py` + `build_runtime.py` as the child entry point). This gives:
 - **Scrubbed environment** (`_sandbox_env`): credentials/secrets are stripped from the
   child's env (any var whose name contains `SECRET`/`TOKEN`/`PASSWORD`/`CREDENTIAL`/
   `API_KEY`/`ACCESS_KEY`/`_AUTH`/`SESSION`, plus an explicit GCP/AWS/LLM-key denylist).

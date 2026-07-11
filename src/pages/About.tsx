@@ -217,14 +217,14 @@ const nodeCategories = [
       {
         name: "Simulate",
         type: "simulate",
-        desc: "Run an OpenMM molecular-dynamics simulation directly from the workflow. Works for mineral, organic, and mixed systems.",
+        desc: "Run a molecular-dynamics simulation directly from the workflow with either OpenMM or a local GROMACS (grompp/mdrun) engine. Works for mineral, organic, mixed, and frozen Dummy-FF systems.",
         features: [
-          "Mineral/inorganic: loads via ap.load_minff_into_openmm() (CLAYFF/MINFF)",
-          "Organic / mixed: loads natively generated top/gro via OpenMM's GromacsTopFile",
-          "Energy minimisation followed by NVT or NPT MD",
-          "Langevin integrator, configurable temperature and step count",
-          "PDB trajectory + state-data log written to the output bundle",
-          "Falls back to input coordinates gracefully if OpenMM is unavailable",
+          "Two engines: OpenMM, or local GROMACS (grompp + mdrun, editable .mdp)",
+          "Energy minimisation, NVT or NPT MD (Dummy FF is EM/NVT only)",
+          "Mineral/inorganic (CLAYFF/MINFF), organic/mixed, and frozen Dummy-FF topologies",
+          "Configurable temperature, pressure, timestep and step count",
+          "Trajectory output: PDB, plus DCD/XTC (OpenMM) or XTC/TRR (GROMACS); wrap-into-box toggle",
+          "Energy/thermodynamics time-series (potential, temperature, pressure, volume, density)",
         ],
       },
     ],
@@ -240,8 +240,8 @@ const nodeCategories = [
       {
         name: "Structure Viewer",
         type: "viewer",
-        desc: "Interactive 3D preview using 3Dmol.js (WebGL) or JSmol (Canvas) — toggle renderers in the node header. Save the view as a PNG (1×/2×/4×); JSmol adds measurements (right-click) and a 'Hide periodic bonds' option.",
-        features: ["3Dmol: fast WebGL (Ball-and-Stick / Spheres / Lines)", "JSmol: scripting, symmetry, measurements, hide periodic bonds", "Save image as PNG (1×/2×/4×)", "Passthrough: does not alter atoms or box"],
+        desc: "Interactive 3D preview using NGL (GPU, the default for trajectories/large systems), 3Dmol.js (WebGL) or JSmol (Canvas) — toggle renderers in the node header. Show/hide by residue name or atom type, overlay Miller planes, and save the view as a PNG (1×/2×/4×).",
+        features: ["NGL: GPU-accelerated, best for large systems & MD trajectories (default)", "3Dmol: fast WebGL (Ball-and-Stick / Spheres / Lines)", "JSmol: scripting, symmetry, measurements, hide periodic bonds", "Residue / atom-type show-hide selection; Miller-plane overlays", "Save image as PNG (1×/2×/4×); passthrough — does not alter atoms or box"],
       },
       {
         name: "Export",
@@ -257,8 +257,8 @@ const nodeCategories = [
       {
         name: "Trajectory",
         type: "trajectory",
-        desc: "Load and replay trajectory frames for post-simulation analysis.",
-        features: ["Frame selection", "Per-frame analysis hookup"],
+        desc: "Load and replay trajectory frames (PDB/DCD/XTC/TRR) for post-simulation analysis.",
+        features: ["Frame selection & playback", "Per-frame RDF, bond/angle, bond-valence (BVS) and XRD analysis"],
       },
     ],
   },
@@ -304,6 +304,7 @@ const acknowledgements: { group: string; items: { name: string; note?: string; h
     group: "Simulation engines & cheminformatics",
     items: [
       { name: "OpenMM", note: "molecular-dynamics engine (EM / NVT / NPT)", href: "https://openmm.org" },
+      { name: "GROMACS", note: "local molecular-dynamics engine (grompp / mdrun)", href: "https://www.gromacs.org" },
       { name: "OpenFF Toolkit, Interchange & Sage force fields", note: "organic parametrization", href: "https://openforcefield.org" },
       { name: "ACPYPE + AmberTools (antechamber)", note: "GAFF / GAFF2 atom typing & charges", href: "https://github.com/alanwilter/acpype" },
       { name: "RDKit", note: "SMILES → 3D, cheminformatics", href: "https://www.rdkit.org" },
@@ -319,7 +320,7 @@ const acknowledgements: { group: string; items: { name: string; note?: string; h
       { name: "CLAYFF", note: "Cygan, Liang & Kalinichev (2004)" },
       { name: "SPC/E · OPC3 · TIP3P/4P/5P", note: "water models" },
       { name: "UFF — Rappé et al. (1992)", note: "Dummy-FF van der Waals parameters" },
-      { name: "Heinz et al. (2008)", note: "Dummy-FF metallic (fcc) LJ parameters" },
+      { name: "Shannon (1976)", note: "ionic/crystal radii — Dummy-FF M–O bond distances" },
     ],
   },
   {
@@ -336,7 +337,7 @@ const acknowledgements: { group: string; items: { name: string; note?: string; h
     items: [
       { name: "React + Vite", note: "app framework & build" },
       { name: "React Flow (@xyflow/react)", note: "node-graph builder", href: "https://reactflow.dev" },
-      { name: "3Dmol.js & JSmol / Jmol", note: "interactive molecular viewer", href: "https://3dmol.csb.pitt.edu" },
+      { name: "NGL · 3Dmol.js · JSmol / Jmol", note: "interactive molecular viewers", href: "https://nglviewer.org" },
       { name: "Tailwind CSS · Radix UI (shadcn/ui) · lucide · sonner", note: "UI components & icons" },
       { name: "FastAPI · Uvicorn · Celery · Redis", note: "backend API & job queue" },
     ],

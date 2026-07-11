@@ -1616,13 +1616,15 @@ export function generatePythonCode(
           pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `    ${blockOutBox} = ${inBox}\n`;
         } else if (ff === "dummy") {
-          // Frozen "dummy mineral" for materials not covered by the built-in force fields: charges = scale ×
-          // guessed oxidation state, LJ borrowed from MINFF (O→OPC3, metal→small
-          // site), framework frozen. The atoms carry _dummy_type/frozen markers
-          // that the Simulate node detects to build a bond-free frozen topology.
+          // Frozen "dummy mineral" for materials not covered by the built-in force fields:
+          // charges default to Pauling effective; LJ defaults to 'shannon' (O→OPC3, H→none,
+          // each other element's LJ minimum at its Shannon-crystal M–O bond distance, ε from
+          // per-element UFF clamped near OPC3-O ε); framework frozen. The atoms carry
+          // _dummy_type/frozen markers that the Simulate node detects to build a bond-free
+          // frozen topology.
           const metalSite = pyEscape(getString(data, "dummyMetalSite", "Alo"));
           const chargeMode = pyEscape(getString(data, "dummyChargeMode", "pauling"));
-          const ljMode = pyEscape(getString(data, "dummyLjMode", "element"));
+          const ljMode = pyEscape(getString(data, "dummyLjMode", "shannon"));
           const chargeScale = getNumber(data, "dummyChargeScale", 0.5);
           // Same global bond-detection cutoffs as MINFF/CLAYFF — they set the
           // coordination used by the MINFF oxygen-charge formula.

@@ -22,7 +22,7 @@ type ForcefieldNodeData = {
   dummyMetalSite?: "Alo" | "Sit" | "Mgo";
   dummyChargeMode?: "pauling" | "half";
   dummyChargeScale?: number;
-  dummyLjMode?: "element" | "minff";
+  dummyLjMode?: "element" | "minff" | "shannon";
 };
 
 export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldNodeData>) {
@@ -132,8 +132,10 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
               <div className="mt-2.5 space-y-2">
                 <div className="text-[10px] leading-relaxed text-amber-700 bg-amber-500/10 border border-amber-500/30 rounded-md p-2">
                   ⚠️ <b>Dummy FF.</b> For materials not covered by the built-in force
-                  fields. Builds a <b>frozen dummy</b>: per-element LJ calculated from
-                  vdW data (UFF / Heinz metals) by default, framework frozen.
+                  fields. Builds a <b>frozen dummy</b>: by default O uses the OPC3
+                  oxygen LJ, H has none, and every other element's LJ minimum sits at
+                  its Shannon M–O bond distance (ε from per-element UFF, clamped to
+                  within ~1 order of magnitude of OPC3-O ε); framework frozen.
                   Qualitative only — <b>EM / NVT only</b> (no NPT).
                 </div>
                 <div>
@@ -164,15 +166,16 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
                   <label className="text-xs font-semibold text-muted-foreground block mb-1">LJ parameters</label>
                   <select
                     className="nodrag w-full text-xs bg-muted border border-border rounded-md px-2 py-1"
-                    value={data.dummyLjMode ?? "element"}
+                    value={data.dummyLjMode ?? "shannon"}
                     onChange={(e) => updateNodeData(id, { ...data, dummyLjMode: e.target.value as any })}
                     onPointerDown={(e) => e.stopPropagation()}
                   >
-                    <option value="element">Per-element (UFF/Heinz, calculated from vdW)</option>
+                    <option value="shannon">Shannon (O=OPC3; M r_min at M–O bond dist., ε≈UFF; H=none)</option>
+                    <option value="element">Per-element (UFF, calculated from vdW)</option>
                     <option value="minff">MINFF-borrowed (O=OPC3, F=F⁻, metals=site)</option>
                   </select>
                 </div>
-                {(data.dummyLjMode ?? "element") === "minff" && (
+                {(data.dummyLjMode ?? "shannon") === "minff" && (
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground block mb-1">Metal LJ site</label>
                     <select

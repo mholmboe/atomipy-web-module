@@ -39,6 +39,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Live two-way conversion between Cell and Box_dim.",
       "Auto-seeds from the upstream structure's box and follows changes to it.",
       "Fit to mol adds a margin on every side, with optional Cubic (a = b = c) and Center molecule.",
+      "Live volume + density readout: box volume (Å³) and system density (g/cm³), from a run-time PDB after a build, or estimated from the composition (topology molecule list / fixed-count Solvent) beforehand.",
       "Passes the box through downstream passthrough nodes.",
     ],
     theory: [
@@ -506,7 +507,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Inorganic: MINFF, CLAYFF, or Dummy FF; Organic: OpenFF Sage, OpenFF Parsley, GAFF.",
       "MINFF angle stiffness Ka: none (no angles), 0, 250, 500 (default), 1500 kJ/mol/rad²; CLAYFF angles default to none.",
       "Dummy FF charge model: Pauling effective (H = +0.4, anions balance) or half-oxidation.",
-      "Dummy FF LJ source: per-element (UFF / Heinz from vdW data) or MINFF-borrowed.",
+      "Dummy FF LJ source: Shannon (default — O=OPC3, H=none, each M's LJ minimum at its Shannon-crystal M–O bond distance with ε from per-element UFF clamped near OPC3-O ε), per-element UFF, or MINFF-borrowed. All vdW from UFF (Rappé 1992).",
       "Organic charge method: AM1-BCC (recommended), Gasteiger (fast), or none.",
       "Optional molecule name so distinct minerals don't merge as one; global typing cutoffs (rmax long / rmax H).",
     ],
@@ -657,7 +658,10 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Three modes: Energy Minimization, NVT (Langevin), NPT (Langevin + barostat). Each Simulate node runs ONE stage (no implicit EM before MD) for both engines; chain Simulate nodes to sequence EM/NVT/NPT in any order — each continues from the previous one's relaxed structure.",
       "Minimization steps; or MD steps, temperature (K), timestep (fs, ≤4), Langevin friction (1/ps), and pressure (bar) for NPT.",
       "Constraints None / HBonds / AllBonds; LJ cutoff + switch distance; PME for long-range electrostatics. (Friction/constraints/switch are OpenMM-only; the GROMACS path uses MINFF .mdp conventions.)",
-      "Optional positional restraints (POSRES) on non-water/non-ion atoms; PDB trajectory + log frequencies.",
+      "Optional positional restraints (POSRES) on non-water/non-ion atoms; a trajectory save frequency and a log frequency.",
+      "Trajectory format for download: a PDB is ALWAYS written (the viewer and analysis need it) plus an optional DCD / XTC copy (OpenMM) or XTC / TRR copy (GROMACS).",
+      "\"Wrap trajectory into box\" toggle: ON wraps every atom into the box (a periodic mineral slab stays put); OFF keeps molecules whole but does not wrap them into the box (they may lie outside it).",
+      "Plot data: tick any thermodynamic quantities (potential/total energy, temperature, pressure [GROMACS], volume, density) to stream them to a connected Data Plotter — parsed to energy.log; OpenMM streams the points LIVE as the run proceeds.",
     ],
     theory: [
       "EM iteratively descends the potential-energy surface and records a relaxation trajectory plus the maximum per-atom force norm as the convergence indicator.",
@@ -834,24 +838,32 @@ export const NODE_HELP: Record<string, NodeHelp> = {
   plot: {
     title: "Data Plotter",
     summary:
-      "Charts series data produced upstream (RDF g(r)/n(r), density, MSD, VACF/power spectrum, H-bond distribution, thermodynamics, XRD…) as an interactive line plot. Supports multiple series (legend) and editable axis labels.",
+      "Interactive chart of series data — Simulate thermodynamics, RDF g(r)/n(r), density, MSD, VACF/spectrum, H-bonds, XRD, BVS, stats. Fed live from a connected node or read from a data file. Resizable, zoomable, multi-series, with transforms and CSV/PNG/SVG export.",
     features: [
-      "Plots single- or multi-series (x, y) data — e.g. density per atom type, or VACF distribution + Gaussian overlay.",
-      "Fed by an upstream node's plot-data handle (the analysis/simulate node's selected curve).",
-      "Editable X/Y axis labels; interactive hover tooltips; legend for multi-series.",
+      "Two data sources: a connected upstream node streams its selected curve LIVE (the File Name field is hidden and a “Live from …” chip is shown); with no live source it reads the named data file (default output.log) written by the run and auto-parses its columns (CSV or whitespace, skipping #/@ comment lines, recovering column headers).",
+      "Live / incremental: an OpenMM Simulate node feeds thermodynamic points AS THE RUN PROCEEDS; the chart clears at the start of each new run.",
+      "Chart types: line, scatter, or bar. Multi-series with a clickable legend — click a series name to show/hide it.",
+      "Transforms (display-only): normalize each series (min–max 0–1 or z-score) so mixed-unit quantities share one axis; moving-average smoothing (window in points).",
+      "Axes: editable X/Y labels (override the auto labels); grid, point-marker and logarithmic-Y toggles; Lock Y freezes the range so it stops rescaling as live data grows.",
+      "Navigate: drag horizontally to zoom (Y auto-fits the window); double-click or Reset to zoom out; optional Brush pan/zoom mini-map under the chart.",
+      "Export: the plotted data as CSV (raw values) or the chart as PNG / SVG. The node is resizable like the Viewer.",
     ],
     quirks: [
-      "Shows a placeholder until an upstream node runs and supplies data.",
-      "One node → one plot; multi-quantity sources (thermo, RDF g(r) vs n(r)) have a selector for which curve to send.",
+      "Shows a placeholder until an upstream node runs and supplies data (or the named file exists in the run).",
+      "When a Simulate (thermo) / Analysis / Stats / BVS node is connected, that live stream wins and the File Name field is ignored.",
+      "log Y needs positive data — it can't plot zero/negative values (e.g. potential energy); it stays linear and shows a note instead.",
+      "CSV export is always the RAW series; smoothing/normalize are display-only. PNG/SVG capture exactly what's drawn.",
     ],
     before: [
-      "A producing node: Analysis (RDF/n(r), density, MSD, VACF/spectrum, H-bonds), Simulate (thermodynamics), XRD, BVS, or Stats.",
+      "A producing node: Simulate (thermodynamics, live for OpenMM), Analysis (RDF/n(r), density, MSD, VACF/spectrum, H-bonds), XRD, BVS, or Stats — wired to the plot's input. Or nothing, to read a file the run wrote.",
     ],
     after: [
       "Terminal node — for inspecting results, not modifying the structure.",
     ],
     tips: [
-      "Connect the source node's 'data' handle for live plotting without a file path.",
+      "For a Simulate run, tick the thermo quantities on the Simulate node's “Plot data” — each becomes a live series here.",
+      "Normalize (z-score) to compare the SHAPE of quantities with very different scales (energy vs temperature) on one axis.",
+      "To plot a file the run wrote (e.g. energy.log), leave the plot's input unconnected and type the filename.",
     ],
   },
 
@@ -888,7 +900,8 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "• 3Dmol — best for single structures & figures. Has: all representations, element/charge labels, OUTLINE, Miller-plane overlay, style presets (thin/default/bold), unit cell, hydrogens, spin, projection, trajectory playback, PNG (1×/2×/4×). Doesn't have: measurements, fast playback on very large trajectories.",
       "• JSmol — best for measurements & scripting. Has: all representations, labels, Miller-plane overlay, unit cell, hydrogens, spin, projection, trajectory playback, PNG, MEASUREMENTS/scripting, and 'Hide periodic bonds' (deletes cross-cell bonds > 3 Å). Doesn't have: outline, style presets.",
       "• NGL — GPU impostor rendering, best for large systems & MD trajectories (smoothest playback). Has: all representations, element/charge labels, style presets, unit cell (thin blue box), hydrogens, spin, projection, trajectory playback, PNG. Doesn't have: Miller-plane overlay, outline. (Cross-PBC bonds are avoided automatically — GROMACS viewer trajectories are wrapped per-molecule with -pbc mol.)",
-      "Shared by all three: representations (ball & stick, sticks, spheres, lines), unit-cell/hydrogens/spin/label toggles, perspective or orthographic projection, multi-frame trajectory playback (play/pause + frame slider), PNG export, and a resizable node.",
+      "Shared by all three: representations (ball & stick, sticks, spheres, lines), unit-cell/hydrogens/spin/label toggles, perspective or orthographic projection, multi-frame trajectory playback (play/pause + frame slider), PNG export, and a resizable node. Fresh structures open with the x/z plane facing the screen.",
+      "Show/hide by selection: tick which residue names and/or atom-type names to display (3Dmol & NGL) — e.g. show only the clay and hide water/ions, or isolate one atom type.",
       "Miller-plane overlay (3Dmol & JSmol only) — enable “Miller plane (hkl)” in the gear menu, then add one or more planes. Each uses the SAME Miller options as the Edit node’s cut — h, k, l, auto level (structure midpoint) or an explicit fractional level, and an offset (Å, with slider) along the normal — plus viewer-only display options (full family, colour, opacity). So a plane set up the same way appears exactly where the Edit cut would fall. Hexagonal crystals (e.g. quartz): tick “4-index (hkil)” (next to “+ add plane”) to enter Miller–Bravais indices — i is shown automatically as −(h+k). (To actually remove atoms, use the Edit node’s “Cut by Miller plane”; the Viewer just draws the plane.)",
     ],
     theory: [
@@ -902,6 +915,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
     ],
     quirks: [
       "Renders only after a Build step provides coordinates; otherwise shows a placeholder (with a renderer guide).",
+      "Multi-frame trajectories default to NGL automatically (fastest playback); single-frame structures and crystals stay on 3Dmol (which draws Miller planes). A renderer you pick explicitly is always kept.",
       "Miller-plane overlay works in 3Dmol & JSmol only (not NGL); outline is 3Dmol-only — these toggles have no effect under NGL.",
       "Cross-cell bonds: JSmol has a 'Hide periodic bonds' toggle (deletes bonds > 3 Å); 3Dmol doesn't draw them; NGL avoids them because GROMACS viewer trajectories are wrapped per-molecule (-pbc mol).",
       "The Miller overlay needs a unit cell (CRYST1 in the structure) — set a Box upstream if the plane doesn't appear.",
@@ -923,12 +937,14 @@ export const NODE_HELP: Record<string, NodeHelp> = {
     summary:
       "Imports or writes multi-frame trajectories, or extracts/passes through a single frame. Bridges MD output and the single-structure nodes downstream.",
     features: [
-      "Import Trajectory or Write Trajectory (append) modes; formats PDB, GRO, XYZ.",
+      "Import Trajectory — PDB, GRO, XYZ, and binary XTC / TRR / DCD; or Write Trajectory (append) — PDB / GRO / XYZ.",
+      "Binary formats (XTC / TRR / DCD) carry no atom names, so importing one needs a companion .gro/.pdb structure for the names/topology.",
       "Extract single frame by index; otherwise the current coordinates pass through.",
     ],
     quirks: [
       "Without Extract single frame, the node is a pass-through.",
       "Frame extraction is 0-based and falls back to the current coordinates if out of range.",
+      "XTC / TRR read via GROMACS libxdrfile (bundled in the cloud image) or a local gmx; DCD uses a built-in zero-dependency reader.",
     ],
     before: [
       "A simulation/MD step or an imported trajectory file.",
@@ -949,6 +965,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Structure formats: .xyz, .gro, .pdb, .cif, .poscar, .sdf, .pqr.",
       "Topology formats: GROMACS (.top + .itp), LAMMPS data (.data), or NAMD/OpenMM (.psf).",
       "Configurable output name; extras: PDB CONECT/element records, CIF title, bond-detection cutoffs, molecule name/nrexcl/segid.",
+      "\"One [moleculetype] per molecule/slab\" toggle: writes each mineral slab as its own #included .itp (e.g. a 3-layer clay → MIN1/MIN2/MIN3) — needs distinct upstream MolIDs (Forcefield node \"Reset MolID\" off).",
       "All exporters write a provenance header.",
     ],
     quirks: [

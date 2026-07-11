@@ -12,14 +12,14 @@ A powerful, node-based visual programming environment for designing, manipulatin
     - **Two engines — OpenMM and local GROMACS**: the Simulation node runs either **OpenMM** (CPU/GPU) or a local **GROMACS** engine (grompp + mdrun, MINFF/CLAYFF). Each node runs **one stage** (EM, NVT or NPT) and they **chain in any order** (e.g. EM → NPT → NVT), each continuing from the previous structure.
     - **Editable `.mdp` (GROMACS)**: pop out and edit the full GROMACS `.mdp` per stage, or let it auto-generate from the structured fields; point to any local GROMACS install (binary, `GMXRC`, or install dir).
     - **GPU GROMACS on Google Colab**: run the launcher's optional **Step 1c** cell to enable the GROMACS engine *inside* the Colab app (CUDA gmx via micromamba, no kernel restart), then run grompp + mdrun on a free Colab GPU.
-    - **Thermodynamics plot**: stream energy / temperature / pressure / volume / density vs time from `.edr` (GROMACS) or the OpenMM reporter to a Data Plotter.
     - **Simulation Node**: Execute Molecular Dynamics (NVT/NPT) and Energy Minimization (EM) simulations directly in the node workspace.
     - **Dynamic EM Trajectories**: Unlike standard minimizers, EM now runs step-by-step to compile a smooth, real-time relaxation trajectory of your system.
     - **Max Force Norm Logging**: EM table outputs report both Potential Energy and Maximum Euclidean Force Norm vectors in standard `kJ/mol/nm` units.
-    - **Decoupled reporting frequencies**: Configure **Log frequency (steps)** and **PDB frequency (steps)** independently in the advanced settings.
+    - **Decoupled reporting frequencies**: Configure **Log frequency (steps)** and **Trajectory save frequency (steps)** independently in the advanced settings.
+    - **Trajectory download formats**: a multi-frame **PDB** is always written (for the viewer/analysis) plus an optional **DCD / XTC** copy (OpenMM) or **XTC / TRR** copy (GROMACS).
     - **Clean Log CSV Headers Interceptor**: Built-in Python output stream wrapper (`CleanHeaderStream`) automatically filters and cleans comment symbols (`#`) and double quotes (`"`) from CSV header columns.
     - **GPU Acceleration**: Utilizes hardware GPU acceleration (via OpenMM's OpenCL/Metal/CUDA platforms) automatically when available, falling back to CPU or Reference platforms seamlessly.
-    - **Live Trajectory Plotting**: Real-time graphing of potential energy and temperature progress directly in the web UI.
+    - **Live thermodynamic plotting**: OpenMM streams the selected quantities (potential/total energy, temperature, pressure [GROMACS only], volume, density) to a connected **Data Plotter** in real time *as the run proceeds*; the chart clears at the start of each new run. GROMACS plots its `.edr` terms at the end. Values are also written to `energy.log`.
     - **Auto-Unzipping & Download**: Download the completed trajectory, topology, and state files in an automatically unzipped structural bundle.
 - **Visual Workflow**: Build systems by connecting nodes: Import → Replicate → Solvate → Add Ions → Run Simulation → Export.
 - **Structure Uploads**: Drag-and-drop structural coordinate files (`.pdb`, `.gro`, `.xyz`, `.cif`/`.mmcif`, `.pqr`, `.poscar`, `.cjson`) cleanly into both the Import and Insert nodes.
@@ -28,14 +28,16 @@ A powerful, node-based visual programming environment for designing, manipulatin
 - **Undo & Redo Capabilities**: Unlimited layout timeline history (up to 50 snapshots) with full `Cmd+Z` / `Cmd+Y` (or `Ctrl+Z` / `Ctrl+Y`) keyboard shortcut integration.
 - **Session Auto-save & Restore**: Debounced local storage caching preserves the complete workflow layout across page refreshes or unexpected crashes.
 - **Topological Warnings Alert**: Active rule-based prerequisite check validation (e.g. alerts when a Forcefield node is missing before a Simulation).
-- **Trajectory Frame Extraction**: Advanced trajectory parser allowing standard pass-through of coordinates and single-frame snapshot extraction.
+- **Node-state cache / re-run selected nodes**: each node's output is cached (content-hashed), so you can re-run a selected node and its downstream without re-executing unchanged upstream nodes (backend `ATOMIPY_NODE_CACHE`).
+- **Trajectory import & frame extraction**: import trajectories as **PDB / GRO / XYZ** or binary **XTC / TRR / DCD** (the binary formats need a companion `.gro`/`.pdb` for atom names); pass frames through or extract a single-frame snapshot. XTC/TRR read via GROMACS libxdrfile (bundled in the cloud image) or a local `gmx`; DCD uses a built-in zero-dependency reader.
 - **Strict Backend Safety Limits**: Enforced safety boundaries on system sizes and parameters:
     - **Replication Limits**: Maximum grid replication size capped at $15 \times 15 \times 15$.
     - **Spacing Safeguards**: Early errors for non-positive or abnormal solvate/ion minimum distances.
     - **Ion Thresholds**: Capped maximum ionization count at $10,000$ to prevent out-of-memory overheads.
     - **Path Traversal Shields**: Basename-scoped path parsing blocking folder traversal attempts (`..` or absolute prefixes).
 - **Structure Libraries**: Built-in MINFF mineral presets, a ~517-CIF inorganic crystal library (Avogadro), a ~428-molecule organic library (amino acids, nucleobases, sugars, …), parametric lattice builder, and a dedicated **Water-models library** (SPC/E, TIP3P, TIP4P, TIP5P — hexagonal-ice, grid, and equilibrated 1/96/216/864-molecule boxes).
-- **3D Visualization**: Real-time 3D previewing with three switchable renderers — **3Dmol.js** (fast styling, outline, Miller-plane overlay; best for single structures/figures), **JSmol** (measurements/scripting, periodic-bond cleanup), and **NGL** (GPU impostor rendering; best for large systems & MD trajectories). All support representations, element/charge labels, unit cell, trajectory playback, and PNG export.
+- **3D Visualization**: Real-time 3D previewing with three switchable renderers — **3Dmol.js** (fast styling, outline, Miller-plane overlay; best for single structures/figures), **JSmol** (measurements/scripting, periodic-bond cleanup), and **NGL** (GPU impostor rendering; best for large systems & MD trajectories). All support representations, element/charge labels, unit cell, trajectory playback, and PNG export. **Multi-frame trajectories default to NGL** (fastest playback); single-frame structures/crystals stay on 3Dmol.
+- **Interactive Data Plotter**: resizable, zoomable chart (drag to zoom X with Y auto-fit, double-click to reset, Brush pan). Line/scatter/bar, click-legend show/hide, per-series **normalize** (0–1 / z-score) and moving-average **smoothing**, grid/markers/log-Y/lock-Y toggles, and export as **CSV / PNG / SVG**. Fed live from a connected node, or reads a named data file (e.g. `energy.log`) the run wrote.
 - **Forcefield Generation**: Inorganic **MINFF / CLAYFF** and a frozen **Dummy FF** for non-MINFF materials; organic **GAFF** and **OpenFF (Sage/Parsley)**.
 - **Advanced Analysis**:
     - **Trajectory analysis** (single structure *or* ensemble-averaged over a trajectory): **RDF g(r) + running coordination n(r)**, **density profiles** (x/y/z; number/mass/charge), **MSD / self-diffusion** (3D/2D/1D + van Hove distribution), **VACF / power spectrum** (Green–Kubo D + vibrational DOS), and **hydrogen-bond** analysis (per-molecule counts, donor/acceptor by type or residue). Results stream to a multi-series **Data Plotter** and export as `.dat`/`.json`.
@@ -43,7 +45,7 @@ A powerful, node-based visual programming environment for designing, manipulatin
     - **BVS/GII Analysis**: Calculate Bond Valence Sums and Global Instability Index.
     - **Solvation & Ionization**: Automated placement of water and ions with periodic boundary awareness (density-scaled template, overlap removal).
     - **Inspector node**: drop it anywhere to report the variables (atom counts/types, box, trajectory, topology) and files present at that point in the workflow.
-- **Format Support**: Import/Export for PDB, GRO, XYZ, and CIF (with symmetry expansion).
+- **Format Support**: import PDB, GRO, XYZ, CIF/mmCIF (with symmetry expansion), PQR, POSCAR/CONTCAR, and CJSON; export XYZ, GRO, PDB, CIF, POSCAR, SDF, and PQR, plus topologies (GROMACS `.top`/`.itp`, LAMMPS `.data`, NAMD/OpenMM `.psf`).
 
 ---
 
@@ -120,10 +122,13 @@ still interact with water and solutes:
   oxidation × [1 − exp(−¼(χ_O − χ_M)²)]` (its bond's ionic character), H = +0.4,
   and oxygens take a coordination-resolved charge so each framework is neutral.
   A simpler `Half oxidation state` mode is also available.
-- **Lennard-Jones** — borrowed: oxygen → OPC3 water-O, fluorine → F⁻, hydrogens
-  none. Metals use a small buried site (default `Alo`) inside oxides/halides;
-  for a **pure metal/alloy** each metal gets **element-appropriate LJ** (Heinz
-  2008 for fcc Cu/Ag/Au/Ni/Pd/Pt/Al/Pb; UFF for others).
+- **Lennard-Jones** (default `Shannon`) — oxygen → OPC3 water-O; hydrogens →
+  none; every other element M has its LJ *minimum* placed at the Shannon-crystal
+  M–O bond distance (`r_min` matching), with ε from the per-element **UFF** well
+  depth clamped to within one order of magnitude of the OPC3-oxygen ε. Very short
+  M–O bonds (e.g. tetrahedral Si⁴⁺) give the metal no LJ (Coulomb only). All vdW
+  data is from UFF (Rappé 1992). Two other modes — `Per-element` (UFF) and
+  `MINFF-borrowed` (metals → a small buried site) — are also selectable.
 - **Frozen framework** — the lattice atoms are frozen (mass 0), so **no bonded
   parameters are needed**. They hold their positions while water, ions and
   organics move and interact with them electrostatically.
@@ -132,8 +137,8 @@ still interact with water and solutes:
 1. Load your structure (preset or upload). On the **inorganic** tab, click
    *Preview & Validate* — it scans the elements and, if any aren't covered by the
    built-in force fields, tells you to use the Dummy FF.
-2. Set the **Forcefield** node to **Dummy FF** (optionally choose the charge
-   model and metal LJ site).
+2. Set the **Forcefield** node to **Dummy FF** (optionally choose the charge and
+   LJ model).
 3. Add Solvent / ions as usual and run **Energy Minimization or NVT** (NPT is
    blocked — a frozen rigid body can't be barostatted).
 
@@ -314,6 +319,21 @@ Notes:
 - **Task Queue (optional)**: Celery + Redis for asynchronous jobs; not required for the build-only online path.
 - **Core Engine**: `atomipy` (molecular geometry & purely native dictionary-based topology merging).
 - **Legacy**: `app.py` (Flask) predates the FastAPI unification and is no longer in the serving path.
+
+## 🙏 Acknowledgements & External Tools
+
+atomipy-web-module builds on many excellent open-source projects, each the property of its
+respective authors and used under its own license:
+
+- **Simulation & force fields** — [OpenMM](https://openmm.org/) and [GROMACS](https://www.gromacs.org/) (MD/EM engines); [MINFF](https://github.com/mholmboe/minff) and CLAYFF (Cygan, Liang & Kalinichev, *J. Phys. Chem. B* **2004**, *108*, 1255) for inorganics; [OpenFF Toolkit / Interchange](https://openforcefield.org/) (Sage, Parsley) and [ACPYPE](https://github.com/alanwilter/acpype) + AmberTools *antechamber* (GAFF) for organics, via [RDKit](https://www.rdkit.org/) and [Open Babel](https://openbabel.org/).
+- **Structure & trajectory I/O** — [GEMMI](https://gemmi.readthedocs.io/) (CIF/mmCIF); GROMACS `libxdrfile` (XTC/TRR) and [MDTraj](https://www.mdtraj.org/) (optional binary trajectories). The bundled inorganic crystal library is derived from the [Avogadro](https://avogadro.cc/) collection.
+- **3D viewers** — [3Dmol.js](https://3dmol.org/), [Jmol / JSmol](https://jmol.sourceforge.net/), and [NGL Viewer](https://nglviewer.org/).
+- **Web stack** — [React](https://react.dev/), [React Flow](https://reactflow.dev/) (`@xyflow/react`), [Vite](https://vitejs.dev/), [Tailwind CSS](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/) + [Radix UI](https://www.radix-ui.com/), [Recharts](https://recharts.org/), and [Lucide](https://lucide.dev/) icons; backend [FastAPI](https://fastapi.tiangolo.com/) + [Uvicorn](https://www.uvicorn.org/), [Celery](https://docs.celeryq.dev/) + [Redis](https://redis.io/); numerics via [NumPy](https://numpy.org/) / [SciPy](https://scipy.org/) / [Numba](https://numba.pydata.org/).
+- **Infrastructure** — free GPU sessions via [Google Colab](https://colab.research.google.com/); public tunnelling via [Cloudflare Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/); privacy-friendly analytics via [GoatCounter](https://www.goatcounter.com/).
+
+## ⚠️ Disclaimer
+
+atomipy, this web application, and the bundled force-field implementations (MINFF, CLAYFF, GAFF/OpenFF, and the Dummy FF) are provided **as-is** as a beta/research tool, with **no warranty** of any kind. There is **no guarantee** that the generated structures, topologies, force-field parameters, or simulation results are correct. The author accepts **no responsibility or liability** for the accuracy of atomipy, the applications, or the force-field implementations, or for any use of their output. **Users are responsible** for verifying that all generated files and results are reasonable and suitable for their purposes. **Use at your own risk.**
 
 ## 📄 License
 This project is part of the atomipy web module toolbox. See the main [atomipy](https://github.com/mholmboe/atomipy) repository for licensing details.

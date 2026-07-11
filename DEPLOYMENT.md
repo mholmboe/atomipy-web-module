@@ -169,6 +169,7 @@ simulations enabled on the **GPU**, exposed through a free **Cloudflare Quick Tu
 | `OPENFF_WORKER_URL` | `http://127.0.0.1:8001` | URL of the OpenFF worker (Organic Molecule node) |
 | `WEB_CONCURRENCY` | `1` | uvicorn worker processes |
 | `FRONTEND_DIST` | `<backend>/dist` | Path to the built frontend; if absent, static serving is skipped (dev mode) |
+| `ATOMIPY_NODE_CACHE` | `<cache>/node_state` | Directory for the node-state cache (re-run selected nodes without re-executing unchanged upstream) |
 | `REDIS_URL` | `redis://127.0.0.1:6379/0` | Only used by the optional Celery worker |
 
 OpenFF worker: `PORT`, `INTERCHANGE_EXPERIMENTAL=1`.
