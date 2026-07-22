@@ -93,13 +93,29 @@ e.g. `grep -c pull_mdp_extra atomipy/gromacs/mdp.py` before `make_bundle.sh`.)
 
 ## GPU / engine reality (Apple Silicon)
 
-- **GROMACS = CPU-only on arm64, unavoidably.** GROMACS GPU offload is CUDA (no NVIDIA on Apple),
-  or OpenCL (Apple deprecated it, and recent GROMACS dropped it); there is **no Metal backend and no
-  GPU GROMACS conda package for `osx-arm64`** to bundle. Any "GPU GROMACS on a Mac" is an Intel Mac +
-  AMD GPU on older GROMACS (≤2024), which doesn't carry to arm64.
-- **OpenMM = GPU-capable on the same Mac** via its **OpenCL** platform (auto-selected on the M-series
-  integrated GPU). So on Apple Silicon: OpenMM is the GPU path, GROMACS is CPU. The bundle pairs
-  GPU-capable OpenMM (`openmm>=8.1`) with CPU GROMACS deliberately.
+- **GROMACS on Apple Silicon CAN be GPU-accelerated — via OpenCL, from a source build.** Verified on
+  an M2 here: `gromacs-2024.2` reports `GPU support: OpenCL`, mixed precision, `ARM_NEON_ASIMD`,
+  VkFFT/OpenCL FFT, using Apple's `OpenCL.framework` (OpenCL 1.2). It offloads nonbonded (and PME FFT)
+  to the M-series GPU. Build recipe: brew `libomp`+`llvm`, then
+  `cmake .. -DGMX_GPU=OPENCL -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DGMX_BUILD_OWN_FFTW=ON …`
+  (see [theabraryousaf/Gromacs-installation-MacOS-M-chip](https://github.com/theabraryousaf/Gromacs-installation-MacOS-M-chip)
+  and Michael's own install script).
+- **Why the *bundle* still ships CPU GROMACS:** conda-forge's `osx-arm64` `gromacs` package is built
+  **CPU-only** (no OpenCL) — so the zero-config bundled default is CPU. That's a packaging limitation,
+  **not** an impossibility. Caveats on the OpenCL path: Apple OpenCL is frozen at 1.2 and deprecated,
+  and GROMACS has itself **deprecated OpenCL** (moving toward SYCL), so a source-built OpenCL GROMACS
+  works today but is on borrowed time; mixed precision; not every kernel is offloaded.
+- **The app already uses a user's GPU build — no bundling required.** The Simulate node's "GROMACS
+  path" field overrides the bundled `gmx`; point it at e.g. `/usr/local/gromacs-2024.2/bin/gmx` (or the
+  install dir `/usr/local/gromacs-2024.2`) and mdrun auto-offloads to the GPU. Verified: `detect_gmx`
+  resolves both forms and reports version 2024.2. So the recommended pattern for GPU users is
+  **bundle CPU GROMACS as the default + type a custom path to your OpenCL build**, rather than trying
+  to bundle a GPU GROMACS.
+- **OpenMM is also GPU-capable on the same Mac** via its OpenCL platform (auto-selected on the M-series
+  GPU). So both engines can hit the Apple GPU; the bundle just can't provide GROMACS GPU *by default*.
+- **Optional (not recommended for the prototype):** to get GPU GROMACS *by default*, the recipe would
+  have to ship a self-compiled OpenCL `gmx` instead of the conda package — extra build step, Mach-O
+  signing, and OpenCL-runtime handling, for a deprecated backend. Skip unless there's demand.
 
 ## What's bundled vs not
 - **Bundled:** Python 3.11, OpenMM, CPU GROMACS, FastAPI/uvicorn, the built frontend, vendored
