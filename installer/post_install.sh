@@ -21,6 +21,7 @@ cat <<EOF
  atomipy installed to: $PREFIX
  Start it with:
    "$PREFIX/launch_atomipy.sh"
- then open http://127.0.0.1:8000 (opens automatically).
+ It opens your browser automatically (http://127.0.0.1:8000 by default, or the
+ next free port if 8000 is busy; set ATOMIPY_PORT to force a specific one).
 ============================================================
 EOF

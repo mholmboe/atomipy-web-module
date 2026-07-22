@@ -1,5 +1,9 @@
 # Distributing atomipy as a desktop installer (conda `constructor`)
 
+> **Building or re-building?** See [`installer/BUILD_NOTES.md`](installer/BUILD_NOTES.md) for the
+> exact commands, the toolchain that worked, every gotcha (port conflicts, "path already
+> exists", signing/notarization), and the checklist to reach a signed public build.
+
 This describes the **prototype** installer in [`installer/`](installer/) that packages the
 atomipy web-module as a **native, self-contained installer per operating system**, bundling
 a full conda environment (Python + **OpenMM** + **CPU GROMACS**) together with the FastAPI

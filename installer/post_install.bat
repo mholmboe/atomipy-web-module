@@ -15,6 +15,7 @@ echo.
 echo ============================================================
 echo  atomipy installed to: %PREFIX%
 echo  Start it with:  "%PREFIX%\launch_atomipy.bat"
-echo  then open http://127.0.0.1:8000 (opens automatically).
+echo  It opens your browser automatically (http://127.0.0.1:8000 by default, or the
+echo  next free port if 8000 is busy; set ATOMIPY_PORT to force a specific one).
 echo ============================================================
 echo.
