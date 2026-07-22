@@ -86,6 +86,26 @@ type SimulateNodeData = {
   wrapTrajectory?: boolean;
   trajFormat?: string;   // download trajectory format: openmm pdb/dcd/xtc, gromacs pdb/xtc/trr
   excludeWater?: boolean;
+  // Parameter sweep (GROMACS): run this stage once per value, varying one parameter.
+  sweepEnabled?: boolean;
+  sweepParam?: "temperature" | "pressure" | "mdpkey" | "mdp" | "fep" | "umbrella";   // 'mdpkey' = a .mdp key via extra={}; 'mdp' = __SWEEP__ in a custom .mdp; 'fep' = λ free-energy (gmx bar); 'umbrella' = PMF via SMD pull + gmx wham
+  sweepMdpKey?: string;                              // for sweepParam='mdpkey', the .mdp key (e.g. ref_t, tau_t, init-lambda-state)
+  sweepValues?: string;                              // comma-separated list, e.g. "280, 300, 320"
+  sweepMode?: "independent" | "sequential";          // each value from the input, or from the previous window's output
+  // Free-energy (λ-FEP), used when sweepParam='fep' — decouple a moleculetype over the λ schedule, then gmx bar → ΔG
+  fepCoupleMoltype?: string;                         // moleculetype to decouple (the solute/ligand), e.g. MOL
+  fepVdwLambdas?: string;                            // vdw-lambdas schedule, comma list "0.0, 0.25, 0.5, 0.75, 1.0"
+  fepCoulLambdas?: string;                           // coul-lambdas schedule (optional)
+  fepScAlpha?: number;                               // soft-core alpha (default 0.5)
+  // Umbrella sampling (PMF), used when sweepParam='umbrella' — SMD pull along COM(G1,G2), pick windows, gmx wham
+  usGroup1Sel?: string;                              // pull group 1 selection, e.g. "resname=MOL" or "molid=1"
+  usGroup2Sel?: string;                              // pull group 2 selection
+  usSpacing?: number;                                // window spacing along the reaction coordinate (nm), default 0.1
+  usK?: number;                                      // umbrella/pull force constant (kJ/mol/nm²), default 1000
+  usPullRate?: number;                               // SMD pull rate (nm/ps), default 0.01
+  usPullDim?: string;                                // pull-coord dims, default "N N Y"
+  usWindowSteps?: number;                            // MD steps per umbrella window, default 25000
+  usWhamBegin?: number;                              // gmx wham -b (ps, skip equilibration), default 0
 };
 
 export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeData>) {
@@ -93,6 +113,7 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
   const [showMore, setShowMore] = useState(false);
   const [showMdp, setShowMdp] = useState(false);
   const [mdpOpen, setMdpOpen] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const forcefieldMode = data?.forcefieldMode ?? "minff";
   const prmFile = data?.prmFile ?? "minff";
@@ -134,6 +155,8 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
 
   const engine: Engine = data?.engine ?? "openmm";
   const isGromacs = engine === "gromacs";
+  // The GROMACS "Advanced" panel expands the node into a second column (wider, not taller).
+  const wideNode = isGromacs && showAdvanced;
   const gmxInfo = (window as any).gromacs as { version?: string } | null | undefined;
   const gmxAvailable = !!gmxInfo;
 
@@ -158,7 +181,7 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
   const mdBlockedHere = simulationMode === "em_only" && showMdFields;
 
   return (
-    <div className={`bg-card w-[260px] shadow-lg rounded-xl border ${isSimulationDisabled ? "border-amber-500/40" : "border-emerald-500/50"} overflow-hidden font-sans select-none`}>
+    <div className={`bg-card ${wideNode ? "w-[560px]" : "w-[260px]"} transition-[width] duration-150 shadow-lg rounded-xl border ${isSimulationDisabled ? "border-amber-500/40" : "border-emerald-500/50"} overflow-hidden font-sans select-none`}>
       <Handle type="target" position={Position.Left} id="in" className="w-3 h-3 bg-secondary" />
 
       <NodeHeader
@@ -188,6 +211,25 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
               </button>
             ))}
           </div>
+          <p className="text-[9px] text-muted-foreground/60 mt-1 leading-snug">
+            {isGromacs
+              ? <><strong>GROMACS</strong> — full <code>.mdp</code> control, parameter sweeps, free energy &amp; umbrella. Runs local / Colab.</>
+              : <><strong>OpenMM</strong> — quick MD, auto-GPU, runs anywhere, live plots (EM / NVT / NPT).</>}
+          </p>
+          {isGromacs && (
+            <button
+              type="button"
+              className="nodrag mt-2 w-full flex items-center justify-between text-[10px] font-semibold text-muted-foreground border border-border rounded-md px-2 py-1.5 bg-background hover:bg-muted/50"
+              onClick={() => setShowAdvanced((p) => !p)}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              Advanced (GROMACS): .mdp · sweeps · free energy
+              {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          )}
+          {isGromacs && showAdvanced && (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-2 pt-2 border-t border-border/60">
+              <div className="space-y-2">
           {isGromacs && (
             <div className={`mt-1.5 rounded p-1.5 text-[10px] leading-relaxed border ${gmxAvailable ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700" : "bg-amber-500/10 border-amber-500/30 text-amber-700"}`}>
               {gmxAvailable
@@ -211,6 +253,265 @@ export function SimulateNode({ id, data = {} }: NodeComponentProps<SimulateNodeD
               <p className="text-[9px] text-muted-foreground/60 mt-1 leading-snug">
 Defaults to <code>gmx</code> on PATH — works on Colab (after the launcher's <strong>Step 1c</strong> cell) and any standard install. Set this only for a custom build: the <code>gmx</code> binary, its <code>GMXRC</code>, or the install dir; its libraries are added to the loader path automatically.
               </p>
+            </div>
+          )}
+                <button
+                  type="button"
+                  title="Edit the GROMACS .mdp for this stage"
+                  className="nodrag w-full flex items-center justify-between text-[10px] font-semibold text-muted-foreground border border-border rounded-md px-2 py-1.5 bg-background hover:bg-muted/50"
+                  onClick={() => setMdpOpen(true)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  Edit .mdp ({stageLabel}){mdpActive ? " — custom" : ""}
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="space-y-2">
+          {isGromacs && (
+            <div className="mt-2 pt-2 border-t border-border/60">
+              <label className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="nodrag"
+                  checked={!!data?.sweepEnabled}
+                  onChange={(e) => updateNodeData(id, { ...data, sweepEnabled: e.target.checked })}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+                Parameter sweep <span className="font-normal opacity-60">(run once per value)</span>
+              </label>
+              {data?.sweepEnabled && (
+                <div className="mt-1.5 space-y-1.5 pl-1">
+                  <div>
+                    <label className="text-[9px] text-muted-foreground/70 block mb-0.5">Parameter</label>
+                    <select
+                      className="nodrag w-full text-[11px] bg-muted border border-border rounded-md px-2 py-1 h-7"
+                      value={data?.sweepParam ?? "temperature"}
+                      onChange={(e) => updateNodeData(id, { ...data, sweepParam: e.target.value as SimulateNodeData["sweepParam"] })}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <option value="temperature">Temperature (K)</option>
+                      <option value="pressure">Pressure (bar) — NPT</option>
+                      <option value="mdpkey">Custom .mdp key</option>
+                      <option value="mdp">Custom .mdp value (__SWEEP__)</option>
+                      <option value="fep">Free energy (λ-FEP → ΔG)</option>
+                      <option value="umbrella">Umbrella sampling (PMF)</option>
+                    </select>
+                  </div>
+                  {data?.sweepParam === "mdpkey" && (
+                    <div>
+                      <label className="text-[9px] text-muted-foreground/70 block mb-0.5">.mdp key</label>
+                      <input
+                        type="text"
+                        className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                        placeholder="ref_t"
+                        value={data?.sweepMdpKey ?? ""}
+                        onChange={(e) => updateNodeData(id, { ...data, sweepMdpKey: e.target.value })}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  )}
+                  {data?.sweepParam === "fep" && (
+                    <div className="space-y-1.5">
+                      <div>
+                        <label className="text-[9px] text-muted-foreground/70 block mb-0.5">Decouple moleculetype</label>
+                        <input
+                          type="text"
+                          className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                          placeholder="MOL"
+                          value={data?.fepCoupleMoltype ?? ""}
+                          onChange={(e) => updateNodeData(id, { ...data, fepCoupleMoltype: e.target.value })}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-muted-foreground/70 block mb-0.5">vdw-lambdas (one window per value)</label>
+                        <input
+                          type="text"
+                          className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                          placeholder="0.0, 0.25, 0.5, 0.75, 1.0"
+                          value={data?.fepVdwLambdas ?? ""}
+                          onChange={(e) => updateNodeData(id, { ...data, fepVdwLambdas: e.target.value })}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-muted-foreground/70 block mb-0.5">coul-lambdas (optional)</label>
+                        <input
+                          type="text"
+                          className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                          placeholder="0.0, 0.0, 0.0, 0.0, 0.0"
+                          value={data?.fepCoulLambdas ?? ""}
+                          onChange={(e) => updateNodeData(id, { ...data, fepCoulLambdas: e.target.value })}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-muted-foreground/70 block mb-0.5">soft-core α</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                          placeholder="0.5"
+                          value={data?.fepScAlpha ?? 0.5}
+                          onChange={(e) => updateNodeData(id, { ...data, fepScAlpha: parseFloat(e.target.value) })}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {data?.sweepParam === "umbrella" && (
+                    <div className="space-y-1.5">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <label className="text-[9px] text-muted-foreground/70 block mb-0.5">Pull group 1</label>
+                          <input
+                            type="text"
+                            className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                            placeholder="resname=MOL"
+                            value={data?.usGroup1Sel ?? ""}
+                            onChange={(e) => updateNodeData(id, { ...data, usGroup1Sel: e.target.value })}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-muted-foreground/70 block mb-0.5">Pull group 2</label>
+                          <input
+                            type="text"
+                            className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                            placeholder="molid=1"
+                            value={data?.usGroup2Sel ?? ""}
+                            onChange={(e) => updateNodeData(id, { ...data, usGroup2Sel: e.target.value })}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <label className="text-[9px] text-muted-foreground/70 block mb-0.5">Window spacing (nm)</label>
+                          <input
+                            type="number"
+                            step="0.05"
+                            className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                            placeholder="0.1"
+                            value={data?.usSpacing ?? 0.1}
+                            onChange={(e) => updateNodeData(id, { ...data, usSpacing: parseFloat(e.target.value) })}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-muted-foreground/70 block mb-0.5">Force k (kJ/mol/nm²)</label>
+                          <input
+                            type="number"
+                            step="100"
+                            className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                            placeholder="1000"
+                            value={data?.usK ?? 1000}
+                            onChange={(e) => updateNodeData(id, { ...data, usK: parseFloat(e.target.value) })}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <label className="text-[9px] text-muted-foreground/70 block mb-0.5">SMD rate (nm/ps)</label>
+                          <input
+                            type="number"
+                            step="0.005"
+                            className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                            placeholder="0.01"
+                            value={data?.usPullRate ?? 0.01}
+                            onChange={(e) => updateNodeData(id, { ...data, usPullRate: parseFloat(e.target.value) })}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-muted-foreground/70 block mb-0.5">Steps / window</label>
+                          <input
+                            type="number"
+                            step="1000"
+                            className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                            placeholder="25000"
+                            value={data?.usWindowSteps ?? 25000}
+                            onChange={(e) => updateNodeData(id, { ...data, usWindowSteps: parseInt(e.target.value, 10) })}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <label className="text-[9px] text-muted-foreground/70 block mb-0.5">Pull dims</label>
+                          <input
+                            type="text"
+                            className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                            placeholder="N N Y"
+                            value={data?.usPullDim ?? "N N Y"}
+                            onChange={(e) => updateNodeData(id, { ...data, usPullDim: e.target.value })}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-muted-foreground/70 block mb-0.5">WHAM skip (ps)</label>
+                          <input
+                            type="number"
+                            step="10"
+                            className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                            placeholder="0"
+                            value={data?.usWhamBegin ?? 0}
+                            onChange={(e) => updateNodeData(id, { ...data, usWhamBegin: parseFloat(e.target.value) })}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {data?.sweepParam !== "fep" && data?.sweepParam !== "umbrella" && (
+                  <div>
+                    <label className="text-[9px] text-muted-foreground/70 block mb-0.5">Values (comma-separated)</label>
+                    <input
+                      type="text"
+                      className="nodrag w-full text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-1 h-7"
+                      placeholder="280, 300, 320"
+                      value={data?.sweepValues ?? ""}
+                      onChange={(e) => updateNodeData(id, { ...data, sweepValues: e.target.value })}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                  )}
+                  {data?.sweepParam !== "umbrella" && (
+                  <div>
+                    <label className="text-[9px] text-muted-foreground/70 block mb-0.5">Mode</label>
+                    <div className="flex gap-1">
+                      {(["independent", "sequential"] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className={`flex-1 text-[10px] px-2 py-1 rounded border ${(data?.sweepMode ?? "independent") === m ? "bg-emerald-500/20 text-emerald-700 border-emerald-500/40" : "bg-background text-muted-foreground border-border hover:bg-muted/50"}`}
+                          onClick={() => updateNodeData(id, { ...data, sweepMode: m })}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          {m === "independent" ? "Independent" : "Sequential"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  )}
+                  <p className="text-[9px] text-muted-foreground/60 leading-snug">
+                    {data?.sweepParam === "umbrella"
+                      ? <>Pulls <code>{data?.usGroup1Sel || "group 1"}</code> away from <code>{data?.usGroup2Sel || "group 2"}</code> (SMD), picks windows ~{data?.usSpacing ?? 0.1} nm apart along the COM distance, runs a restrained MD per window, then <code>gmx wham</code> → <code>pmf_profile.csv</code> / <code>pmf_result.json</code>; a connected Data Plotter shows the PMF vs ξ. Input should be equilibrated (chain an EM/NVT node first). NVT/NPT only.</>
+                      : <>{(data?.sweepMode ?? "independent") === "sequential"
+                      ? "Each window continues from the previous window's structure (e.g. annealing / staged equilibration)."
+                      : "Each window starts from this node's input structure (independent replicas)."}{" "}
+                    {data?.sweepParam === "fep"
+                      ? <>Runs one window per <code>vdw-lambda</code> value (decoupling <code>{data?.fepCoupleMoltype || "the moleculetype"}</code>), then combines them with <code>gmx bar</code> → <code>fep_result.json</code> (ΔG ± error); a connected Data Plotter shows cumulative ΔG vs λ. NVT/NPT only.</>
+                      : <>Writes <code>sweep_summary.csv</code>; a connected Data Plotter shows the metric-vs-value curve, filling in per window. The node passes the final window's structure downstream.</>}
+                    {data?.sweepParam === "mdpkey" && <> Sets the given <code>.mdp</code> key (e.g. <code>ref_t</code>, <code>tau_t</code>, <code>init-lambda-state</code>) to each value on the auto-generated <code>.mdp</code>.</>}
+                    {data?.sweepParam === "mdp" && <> Put <code>__SWEEP__</code> where the value goes in your full custom .mdp.</>}</>}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+              </div>
             </div>
           )}
         </div>
@@ -259,6 +560,8 @@ Defaults to <code>gmx</code> on PATH — works on Colab (after the launcher's <s
         )}
 
 
+        {/* Run setup — two columns when the node is wide (Advanced open) */}
+        <div className={wideNode ? "grid grid-cols-2 gap-x-3 gap-y-3 items-start" : "space-y-3"}>
         {/* Simulation type */}
         <div>
           <label className="text-xs font-semibold text-muted-foreground block mb-1">Simulation Type</label>
@@ -300,6 +603,7 @@ Defaults to <code>gmx</code> on PATH — works on Colab (after the launcher's <s
             adds that file to the download bundle.
           </p>
         </div>
+        </div>
 
         {mdBlockedHere && (
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 text-[10px] text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
@@ -310,63 +614,7 @@ Defaults to <code>gmx</code> on PATH — works on Colab (after the launcher's <s
           </div>
         )}
 
-        {/* GROMACS: full editable .mdp for the selected stage (advanced) */}
-        {isGromacs && (
-          <div>
-            <button
-              type="button"
-              className="nodrag w-full flex items-center justify-between text-xs font-semibold text-muted-foreground border border-border rounded-md px-2 py-1.5 bg-background hover:bg-muted/50"
-              onClick={() => setShowMdp((p) => !p)}
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              Advanced: edit .mdp ({stageLabel}){mdpActive ? " — custom" : ""}
-              {showMdp ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
-            {showMdp && (
-              <div className="mt-1.5 space-y-1.5">
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    className="nodrag flex-1 text-[10px] font-semibold py-1 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20"
-                    onClick={loadMdpTemplate}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  >
-                    Load template
-                  </button>
-                  <button
-                    type="button"
-                    className="nodrag flex-1 text-[10px] font-semibold py-1 rounded border border-border bg-background text-muted-foreground hover:bg-muted/50 disabled:opacity-40"
-                    disabled={!data?.mdpText}
-                    onClick={resetMdp}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  >
-                    Reset to auto
-                  </button>
-                  <button
-                    type="button"
-                    title="Pop out the editor"
-                    className="nodrag shrink-0 px-2 py-1 rounded border border-border bg-background text-muted-foreground hover:bg-muted/50"
-                    onClick={() => setMdpOpen(true)}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  >
-                    <Maximize2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <textarea
-                  className="nodrag w-full text-[10px] font-mono bg-muted border border-border rounded-md px-2 py-1.5 h-40 resize-y focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  placeholder="Blank = auto-generated from the fields below. Click 'Load template' to edit it, or paste a full .mdp to use verbatim."
-                  value={data?.mdpText ?? ""}
-                  spellCheck={false}
-                  onChange={(e) => setMdp(e.target.value)}
-                  onPointerDown={(e) => e.stopPropagation()}
-                />
-                <p className="text-[9px] text-muted-foreground/60 leading-snug">
-                  Non-blank = used <strong>verbatim</strong> for this {stageLabel} run (the run-parameter fields below are hidden/ignored). Blank = auto-generated. Use ⤢ for a larger editor.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+        {/* GROMACS .mdp editing lives in the Advanced (GROMACS) panel's "Edit .mdp" button (pop-out dialog). */}
 
         {/* Minimization steps — only for minimize */}
         {!mdpActive && simType === "minimize" && (

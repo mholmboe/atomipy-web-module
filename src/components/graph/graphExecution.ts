@@ -1947,22 +1947,226 @@ export function generatePythonCode(
           const stage = simType === "npt" ? "npt" : (simType === "nvt" ? "nvt" : "em");
           // nstxtc applies to MD (.xtc) AND EM (.trr via nstxout) so EM also yields a
           // viewable trajectory; dt/temperature only matter for the dynamics stages.
-          let runKwargs = `nsteps=${isMinimize ? miniSteps : mdSteps}, nstxtc=${pdbFreq}`;
-          if (!isMinimize) runKwargs += `, dt=${timestepFs / 1000.0}, temperature=${temp}`;
-          if (isNPT) runKwargs += `, pressure=${pressure}`;
+          const nstepsExpr = isMinimize ? miniSteps : mdSteps;
           // Full editable .mdp: if the user supplied one, it's used verbatim (the
-          // structured kwargs above are then ignored by run_stage).
+          // structured kwargs are then ignored by run_stage).
           const mdpText = getString(data, "mdpText", "").trim();
-          if (mdpText) {
-            pythonCode += `_gmx_mdp_text = ${JSON.stringify(mdpText)}\n`;
-            runKwargs += `, mdp_text=_gmx_mdp_text`;
+          // --- Parameter sweep: run this stage once per value of one parameter ---
+          const sweepOn = getBoolean(data, "sweepEnabled", false);
+          const sweepParam = getString(data, "sweepParam", "temperature");
+          const sweepMdpKey = getString(data, "sweepMdpKey", "").trim();
+          const sweepMode = getString(data, "sweepMode", "independent");
+          const sweepVals = getString(data, "sweepValues", "")
+            .split(/[,\s]+/).map((s) => s.trim()).filter(Boolean)
+            .map(Number).filter((v) => Number.isFinite(v));
+          const isFep = sweepParam === "fep";
+          const fepCoupleMoltype = getString(data, "fepCoupleMoltype", "").trim();
+          const fepVdw = getString(data, "fepVdwLambdas", "").split(/[,\s]+/).map((s) => s.trim()).filter(Boolean).map(Number).filter((v) => Number.isFinite(v));
+          const fepCoul = getString(data, "fepCoulLambdas", "").split(/[,\s]+/).map((s) => s.trim()).filter(Boolean).map(Number).filter((v) => Number.isFinite(v));
+          const fepScAlpha = getNumber(data, "fepScAlpha", 0.5);
+          // --- Umbrella sampling (PMF): SMD pull -> windows -> gmx wham ---
+          const isUmbrella = sweepParam === "umbrella";
+          const usG1 = getString(data, "usGroup1Sel", "").trim();
+          const usG2 = getString(data, "usGroup2Sel", "").trim();
+          const usSpacing = getNumber(data, "usSpacing", 0.1);
+          const usK = getNumber(data, "usK", 1000);
+          const usPullRate = getNumber(data, "usPullRate", 0.01);
+          const usPullDim = (getString(data, "usPullDim", "N N Y").trim() || "N N Y");
+          const usWindowSteps = Math.max(1, Math.round(getNumber(data, "usWindowSteps", 25000)));
+          const usWhamBegin = getNumber(data, "usWhamBegin", 0);
+          const doSweep = sweepOn && (isFep ? (fepVdw.length >= 2 && !!fepCoupleMoltype)
+                                            : isUmbrella ? (!!usG1 && !!usG2)
+                                            : sweepVals.length > 0);
+          if (doSweep && isFep) {
+            pythonCode += `# --- Free-energy (λ-FEP): decouple ${fepCoupleMoltype} over ${fepVdw.length} windows, then gmx bar (${sweepMode}) ---\n`;
+            pythonCode += `_fep_vdw = [${fepVdw.join(", ")}]\n`;
+            pythonCode += `_fep_coul = ${fepCoul.length ? `[${fepCoul.join(", ")}]` : "None"}\n`;
+            pythonCode += `_fep_couple = ${JSON.stringify(fepCoupleMoltype)}\n`;
+            pythonCode += `_sweep_terms = ['Potential', 'Temperature', 'Pressure', 'Density']\n`;
+            pythonCode += `_sweep_struct = _os.path.basename(_gro_path)\n`;
+            pythonCode += `_dhdl_files = []\n`;
+            pythonCode += `_final_stage = "${stage}"; _g = _sweep_struct\n`;
+            pythonCode += `for _state in range(len(_fep_vdw)):\n`;
+            pythonCode += `    print(f"[FEP] window {_state+1}/{len(_fep_vdw)}: init-lambda-state={_state}  (from {_sweep_struct})")\n`;
+            pythonCode += `    _extra = _gmx.fep_mdp_extra(_fep_couple, _state, _fep_vdw, coul_lambdas=_fep_coul, sc_alpha=${fepScAlpha})\n`;
+            pythonCode += `    _kw = dict(nsteps=${isMinimize ? miniSteps : mdSteps}, nstxtc=${pdbFreq}, dt=${timestepFs / 1000.0}, temperature=${temp}, extra=_extra)\n`;
+            if (isNPT) pythonCode += `    _kw['pressure'] = ${pressure}\n`;
+            pythonCode += `    _gmx_run("${stage}", _sweep_struct, **_kw, **_freeze_kw)\n`;
+            pythonCode += `    _dh = f"dhdl_{_state}.xvg"\n`;
+            pythonCode += `    if _os.path.exists("${stage}.xvg"):\n`;
+            pythonCode += `        _os.replace("${stage}.xvg", _dh); _dhdl_files.append(_dh)\n`;
+            pythonCode += `    else:\n`;
+            pythonCode += `        print(f"  (FEP: no dH/dλ file '${stage}.xvg' for window {_state})")\n`;
+            pythonCode += `    _saved = {}\n`;
+            pythonCode += `    for _ext in ('gro','edr','xtc','trr','tpr','log','cpt'):\n`;
+            pythonCode += `        _p = "${stage}." + _ext\n`;
+            pythonCode += `        if _os.path.exists(_p):\n`;
+            pythonCode += `            _d = f"${stage}_L{_state}.{_ext}"; _os.replace(_p, _d); _saved[_ext] = _d\n`;
+            pythonCode += `    _final_stage = f"${stage}_L{_state}"; _g = _saved.get('gro', _g)\n`;
+            pythonCode += `    if ${JSON.stringify(sweepMode)} == 'sequential' and 'gro' in _saved: _sweep_struct = _saved['gro']\n`;
+            pythonCode += `import json as _json\n`;
+            pythonCode += `_fep = None\n`;
+            pythonCode += `try:\n`;
+            pythonCode += `    _fep = _gmx.run_bar('.', _dhdl_files, gmx=_gmx_spec, on_line=print)\n`;
+            pythonCode += `except Exception as _be:\n`;
+            pythonCode += `    print(f"[FEP] gmx bar failed: {_be}")\n`;
+            pythonCode += `if _fep:\n`;
+            pythonCode += `    print(f"[FEP] \\u0394G = {_fep['dG']:.3f} \\u00b1 {_fep['dG_err']:.3f} {_fep['unit']}  ({len(_dhdl_files)} windows)")\n`;
+            pythonCode += `    with open('fep_result.json', 'w', encoding='utf-8') as _ff:\n`;
+            pythonCode += `        _json.dump({'dG': _fep['dG'], 'dG_err': _fep['dG_err'], 'unit': _fep['unit'], 'intervals': _fep['intervals'], 'couple_moltype': _fep_couple, 'vdw_lambdas': _fep_vdw, 'coul_lambdas': _fep_coul}, _ff, indent=2)\n`;
+            pythonCode += `    print("Wrote fep_result.json")\n`;
+            if (thermoPlotTarget) {
+              pythonCode += `    _cum = 0.0; _pts = [[0, 0.0]]\n`;
+              pythonCode += `    for _i, _iv in enumerate(_fep['intervals']):\n`;
+              pythonCode += `        _cum += _iv['dG']; _pts.append([_i + 1, _cum])\n`;
+              pythonCode += `    print("__PLOT_${thermoPlotTarget}__:" + _json.dumps({'series': [{'name': 'cumulative \\u0394G (kJ/mol)', 'points': _pts}], 'xLabel': '\\u03bb window', 'yLabel': '\\u0394G (kJ/mol)'}))\n`;
+            }
+            pythonCode += `else:\n`;
+            pythonCode += `    print("[FEP] no \\u0394G (need \\u22652 dH/d\\u03bb windows and a successful gmx bar).")\n`;
+            pythonCode += `print(f"GROMACS FEP finished ({len(_fep_vdw)} windows).")\n`;
+          } else if (doSweep && isUmbrella) {
+            // Umbrella sampling / PMF: (1) SMD pull along the COM(G1,G2) reaction
+            // coordinate, (2) pick windows ~usSpacing nm apart, (3) run a restrained
+            // MD per window, (4) gmx wham -> PMF. Groups are selected from the atom
+            // list (resname=... / molid=...) and written to index.ndx.
+            const usDt = timestepFs / 1000.0;
+            pythonCode += `# --- Umbrella sampling (PMF): SMD pull '${usG1}' <-> '${usG2}', ~${usSpacing} nm windows, then gmx wham ---\n`;
+            pythonCode += `import json as _json\n`;
+            pythonCode += `_us_atoms, _ = ap.import_auto(_os.path.basename(_gro_path))  # gro atom order == grompp index order\n`;
+            pythonCode += `def _us_sel(_s):\n`;
+            pythonCode += `    _k, _sep, _v = str(_s).partition('=')\n`;
+            pythonCode += `    _k = _k.strip().lower(); _v = _v.strip()\n`;
+            pythonCode += `    if not _sep: return {'resname': _s.strip()}   # bare token -> resname\n`;
+            pythonCode += `    if _k in ('molid', 'mol', 'resid', 'residue'): return {'molid': int(_v)}\n`;
+            pythonCode += `    if _k in ('resname', 'res'): return {'resname': _v}\n`;
+            pythonCode += `    if _k in ('element', 'elem'): return {'element': _v}\n`;
+            pythonCode += `    if _k in ('type', 'atomtype', 'atom_type'): return {'atom_type': _v}\n`;
+            pythonCode += `    return {'resname': _v}\n`;
+            pythonCode += `_us_g1 = _gmx.group_indices(_us_atoms, **_us_sel(${JSON.stringify(usG1)}))\n`;
+            pythonCode += `_us_g2 = _gmx.group_indices(_us_atoms, **_us_sel(${JSON.stringify(usG2)}))\n`;
+            pythonCode += `print(f"[umbrella] group G1 (${usG1}) = {len(_us_g1)} atoms; G2 (${usG2}) = {len(_us_g2)} atoms")\n`;
+            pythonCode += `if not _us_g1 or not _us_g2:\n`;
+            pythonCode += `    raise RuntimeError("Umbrella sampling: a pull-group selection matched no atoms. Use 'resname=MOL' or 'molid=1' matching your structure (Simulate node -> Umbrella sampling).")\n`;
+            pythonCode += `if set(_us_g1) & set(_us_g2):\n`;
+            pythonCode += `    raise RuntimeError("Umbrella sampling: the two pull groups overlap. Pick two disjoint selections.")\n`;
+            pythonCode += `_gmx.write_index_ndx('.', {'G1': _us_g1, 'G2': _us_g2}, n_total=len(_us_atoms))\n`;
+            pythonCode += `_us_ndx = 'index.ndx'\n`;
+            // (1) SMD pull generates a continuous set of configurations along xi.
+            pythonCode += `_us_smd = _gmx.pull_mdp_extra('G1', 'G2', k=${usK}, rate=${usPullRate}, dim=${JSON.stringify(usPullDim)})\n`;
+            pythonCode += `print(f"[umbrella] 1/3 SMD pull (rate=${usPullRate} nm/ps, k=${usK}) over ${mdSteps} steps...")\n`;
+            pythonCode += `_gmx_run('pull', _os.path.basename(_gro_path), nsteps=${mdSteps}, nstxtc=${pdbFreq}, dt=${usDt}, temperature=${temp}, gen_vel=True, continuation='no', extra=_us_smd, ndx=_us_ndx)\n`;
+            // (2) select windows spaced ~usSpacing along the COM distance.
+            pythonCode += `_us_windows = _gmx.extract_umbrella_windows('.', 'pull.tpr', 'pull.xtc', _us_ndx, 'G1', 'G2', spacing=${usSpacing}, on_line=print)\n`;
+            pythonCode += `print(f"[umbrella] 2/3 selected {len(_us_windows)} windows (~${usSpacing} nm apart)")\n`;
+            pythonCode += `if len(_us_windows) < 2:\n`;
+            pythonCode += `    raise RuntimeError("Umbrella sampling: fewer than 2 windows — increase Steps / SMD rate (pull farther) or reduce window spacing.")\n`;
+            // (3) one restrained MD per window (rate=0 => harmonic umbrella at start distance).
+            pythonCode += `_us_umb = _gmx.pull_mdp_extra('G1', 'G2', k=${usK}, rate=0.0, dim=${JSON.stringify(usPullDim)})\n`;
+            pythonCode += `_us_tprs = []; _us_pullf = []\n`;
+            pythonCode += `for _wi, (_wgro, _wdist) in enumerate(_us_windows):\n`;
+            pythonCode += `    _wst = f"umb{_wi}"\n`;
+            pythonCode += `    print(f"[umbrella] 3/3 window {_wi+1}/{len(_us_windows)}: d={_wdist:.3f} nm ({${usWindowSteps}} steps)")\n`;
+            pythonCode += `    _gmx_run(_wst, _wgro, nsteps=${usWindowSteps}, nstxtc=0, dt=${usDt}, temperature=${temp}, gen_vel=True, continuation='no', extra=_us_umb, ndx=_us_ndx)\n`;
+            pythonCode += `    _wpf = f"{_wst}_pullf.xvg"\n`;
+            pythonCode += `    if _os.path.exists(f"{_wst}.tpr") and _os.path.exists(_wpf):\n`;
+            pythonCode += `        _us_tprs.append(f"{_wst}.tpr"); _us_pullf.append(_wpf)\n`;
+            // (4) WHAM -> PMF profile.
+            pythonCode += `_us_wham = None\n`;
+            pythonCode += `try:\n`;
+            pythonCode += `    _us_wham = _gmx.run_wham('.', _us_tprs, _us_pullf, unit='kJ', begin=${usWhamBegin}, on_line=print)\n`;
+            pythonCode += `except Exception as _we:\n`;
+            pythonCode += `    print(f"[umbrella] gmx wham failed: {_we}")\n`;
+            pythonCode += `if _us_wham:\n`;
+            pythonCode += `    print(f"[umbrella] PMF over \\u03be=[{_us_wham['xi_min']:.3f}, {_us_wham['xi_max']:.3f}] nm; \\u0394G(range) = {_us_wham['dG']:.2f} {_us_wham['unit']}")\n`;
+            pythonCode += `    with open('pmf_result.json', 'w', encoding='utf-8') as _pj:\n`;
+            pythonCode += `        _json.dump({'dG': _us_wham['dG'], 'unit': _us_wham['unit'], 'xi_min': _us_wham['xi_min'], 'xi_max': _us_wham['xi_max'], 'n_windows': len(_us_tprs), 'pmf': _us_wham['pmf']}, _pj, indent=2)\n`;
+            pythonCode += `    with open('pmf_profile.csv', 'w', encoding='utf-8') as _pc:\n`;
+            pythonCode += `        _pc.write('xi_nm,PMF_kJ_per_mol\\n')\n`;
+            pythonCode += `        for _xi, _gv in _us_wham['pmf']: _pc.write(f"{_xi},{_gv}\\n")\n`;
+            pythonCode += `    print("Wrote pmf_profile.csv, pmf_result.json")\n`;
+            if (thermoPlotTarget) {
+              pythonCode += `    print("__PLOT_${thermoPlotTarget}__:" + _json.dumps({'series': [{'name': 'PMF (' + _us_wham['unit'] + ')', 'points': [[float(_x), float(_y)] for _x, _y in _us_wham['pmf']]}], 'xLabel': 'COM distance \\u03be (nm)', 'yLabel': 'PMF (' + _us_wham['unit'] + ')'}))\n`;
+            }
+            pythonCode += `else:\n`;
+            pythonCode += `    print("[umbrella] no PMF produced (need \\u22652 windows with pull-force data and a successful gmx wham).")\n`;
+            pythonCode += `_final_stage = "pull"   # show the SMD pulling trajectory in the viewer\n`;
+            pythonCode += `print(f"GROMACS umbrella sampling finished ({len(_us_windows)} windows).")\n`;
+          } else if (doSweep) {
+            pythonCode += `# --- Parameter sweep: run '${stage}' once per ${sweepParam} value (${sweepMode}) ---\n`;
+            pythonCode += `_sweep_values = [${sweepVals.join(", ")}]\n`;
+            pythonCode += `_sweep_param = ${JSON.stringify(sweepParam)}\n`;
+            pythonCode += `_sweep_mode = ${JSON.stringify(sweepMode)}\n`;
+            pythonCode += `_sweep_terms = ['Potential', 'Kinetic-En.', 'Total-Energy', 'Temperature', 'Pressure', 'Volume', 'Density']\n`;
+            if (sweepParam === "mdpkey") {
+              pythonCode += `_sweep_mdp_key = ${JSON.stringify(sweepMdpKey)}\n`;
+              pythonCode += `if not _sweep_mdp_key:\n`;
+              pythonCode += `    raise RuntimeError("Parameter sweep 'Custom .mdp key' needs a .mdp key name (e.g. ref_t) in the Simulate node.")\n`;
+            }
+            if (sweepParam === "mdp") {
+              pythonCode += `_sweep_mdp_template = ${JSON.stringify(mdpText)}\n`;
+              pythonCode += `if '__SWEEP__' not in _sweep_mdp_template:\n`;
+              pythonCode += `    raise RuntimeError("Parameter sweep 'Custom .mdp value' needs a __SWEEP__ placeholder in the Simulate node's .mdp editor.")\n`;
+            }
+            pythonCode += `def _sweep_tag(_v): return str(_v).replace('.', 'p').replace('-', 'm')\n`;
+            pythonCode += `_sweep_struct = _os.path.basename(_gro_path)\n`;
+            pythonCode += `_sweep_rows = []\n`;
+            pythonCode += `_final_stage = "${stage}"; _g = _sweep_struct\n`;
+            pythonCode += `for _si, _sval in enumerate(_sweep_values):\n`;
+            pythonCode += `    _tag = _sweep_tag(_sval)\n`;
+            pythonCode += `    print(f"[sweep] window {_si+1}/{len(_sweep_values)}: {_sweep_param} = {_sval}  (from {_sweep_struct})")\n`;
+            pythonCode += `    _kw = dict(nsteps=${nstepsExpr}, nstxtc=${pdbFreq})\n`;
+            if (!isMinimize) pythonCode += `    _kw['dt'] = ${timestepFs / 1000.0}; _kw['temperature'] = ${temp}\n`;
+            if (isNPT) pythonCode += `    _kw['pressure'] = ${pressure}\n`;
+            pythonCode += `    if _sweep_param == 'temperature': _kw['temperature'] = _sval\n`;
+            pythonCode += `    elif _sweep_param == 'pressure': _kw['pressure'] = _sval\n`;
+            if (sweepParam === "mdpkey") pythonCode += `    _kw['extra'] = {_sweep_mdp_key: (int(_sval) if float(_sval).is_integer() else _sval)}\n`;
+            if (sweepParam === "mdp") pythonCode += `    _kw['mdp_text'] = _sweep_mdp_template.replace('__SWEEP__', str(_sval))\n`;
+            pythonCode += `    _gmx_run("${stage}", _sweep_struct, **_kw, **_freeze_kw)\n`;
+            pythonCode += `    _row = {'value': _sval}\n`;
+            pythonCode += `    try:\n`;
+            pythonCode += `        _th = _gmx.energy_timeseries('.', "${stage}.edr", terms=_sweep_terms, gmx=_gmx_spec)\n`;
+            pythonCode += `        for _s in ((_th.get('series') if _th else None) or []):\n`;
+            pythonCode += `            _row[_s['name']] = (_s['values'][-1] if _s['values'] else None)\n`;
+            pythonCode += `    except Exception as _me:\n`;
+            pythonCode += `        print(f"  (sweep: metrics unavailable this window: {_me})")\n`;
+            pythonCode += `    _sweep_rows.append(_row)\n`;
+            pythonCode += `    _saved = {}\n`;
+            pythonCode += `    for _ext in ('gro','edr','xtc','trr','tpr','log','cpt'):\n`;
+            pythonCode += `        _p = "${stage}." + _ext\n`;
+            pythonCode += `        if _os.path.exists(_p):\n`;
+            pythonCode += `            _d = f"${stage}_{_tag}.{_ext}"; _os.replace(_p, _d); _saved[_ext] = _d\n`;
+            pythonCode += `    _final_stage = f"${stage}_{_tag}"\n`;
+            pythonCode += `    _g = _saved.get('gro', _g)\n`;
+            pythonCode += `    if _sweep_mode == 'sequential' and 'gro' in _saved: _sweep_struct = _saved['gro']\n`;
+            pythonCode += `    _cols = ['value'] + [_c for _c in _sweep_rows[-1] if _c != 'value']\n`;
+            pythonCode += `    with open('sweep_summary.csv', 'w', encoding='utf-8') as _sf:\n`;
+            pythonCode += `        _sf.write(','.join(_cols) + '\\n')\n`;
+            pythonCode += `        for _r in _sweep_rows:\n`;
+            pythonCode += `            _sf.write(','.join('' if _r.get(_c) is None else str(_r.get(_c)) for _c in _cols) + '\\n')\n`;
+            pythonCode += `    print(f"[sweep] window {_si+1} done \\u2192 sweep_summary.csv ({len(_sweep_rows)} rows)")\n`;
+            if (thermoPlotTarget) {
+              pythonCode += `    import json as _json\n`;
+              pythonCode += `    _pt = [_c for _c in _cols if _c != 'value' and any(isinstance(_r.get(_c), (int, float)) for _r in _sweep_rows)]\n`;
+              pythonCode += `    _ps = [{'name': _t, 'points': [[_r['value'], _r[_t]] for _r in _sweep_rows if isinstance(_r.get(_t), (int, float))]} for _t in _pt]\n`;
+              pythonCode += `    if _ps:\n`;
+              pythonCode += `        print("__PLOT_${thermoPlotTarget}__:" + _json.dumps({'series': _ps, 'xLabel': _sweep_param, 'yLabel': (_ps[0]['name'] if len(_ps)==1 else 'value')}))\n`;
+            }
+            pythonCode += `print(f"GROMACS parameter sweep finished OK ({len(_sweep_values)} windows).")\n`;
+          } else {
+            let runKwargs = `nsteps=${nstepsExpr}, nstxtc=${pdbFreq}`;
+            if (!isMinimize) runKwargs += `, dt=${timestepFs / 1000.0}, temperature=${temp}`;
+            if (isNPT) runKwargs += `, pressure=${pressure}`;
+            if (mdpText) {
+              pythonCode += `_gmx_mdp_text = ${JSON.stringify(mdpText)}\n`;
+              runKwargs += `, mdp_text=_gmx_mdp_text`;
+            }
+            pythonCode += `_g = _gmx_run('${stage}', _os.path.basename(_gro_path), ${runKwargs}, **_freeze_kw)\n`;
+            pythonCode += `print("GROMACS simulation finished OK!")\n`;
+            pythonCode += `_final_stage = "${stage}"\n`;
           }
-          pythonCode += `_g = _gmx_run('${stage}', _os.path.basename(_gro_path), ${runKwargs}, **_freeze_kw)\n`;
-          pythonCode += `print("GROMACS simulation finished OK!")\n`;
-          // Convert the stage's trajectory -> multi-frame PDB (CRYST1 per MODEL so the
-          // box shows in the viewer). MD writes .xtc; steepest-descent EM writes .trr
+          // Convert the (final) stage's trajectory -> multi-frame PDB (CRYST1 per MODEL so
+          // the box shows in the viewer). MD writes .xtc; steepest-descent EM writes .trr
           // instead — so try .xtc first, then fall back to .trr.
-          pythonCode += `_final_stage = "${stage}"\n`;
           // Wrap-trajectory toggle (a trjconv -pbc step, independent of the .mdp):
           //   ON  -> -pbc atom : wrap EVERY atom into the box. A periodic mineral slab
           //          then stays in the box (‑pbc mol would make the slab "whole" across the
@@ -2011,7 +2215,7 @@ export function generatePythonCode(
           pythonCode += `        print(f"Wrote final frame ${trajFile} ({len(_fa)} atoms)")\n`;
           pythonCode += `    except Exception as _e:\n`;
           pythonCode += `        print(f"(note: could not write final pdb: {_e})")\n`;
-          if (doThermo) {
+          if (doThermo && !doSweep) {   // a sweep emits its own metric-vs-value plot instead of the per-run time series
             const gmxTerms = thermoSel.map((t) => `'${t.gmx}'`).join(", ");
             pythonCode += `# Thermodynamic time-series (${thermoSel.map((t) => t.label).join(", ")}) -> Data Plotter\n`;
             pythonCode += `try:\n`;
