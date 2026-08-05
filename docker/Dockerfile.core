@@ -2,6 +2,10 @@ FROM mambaorg/micromamba:1.5
 COPY envs/atomipy-core.yml /tmp/env.yml
 RUN micromamba install -f /tmp/env.yml -n base --yes && \
     micromamba clean --all --yes
+# GROMACS engine for the hosted image only (CPU build; Cloud Run is CPU-only). Kept out
+# of atomipy-core.yml so local dev + Colab keep their own GPU builds. See root Dockerfile.
+RUN micromamba install -n base --yes -c conda-forge gromacs && \
+    micromamba clean --all --yes
 COPY backend/core /app
 COPY atomipy /app/atomipy
 WORKDIR /app

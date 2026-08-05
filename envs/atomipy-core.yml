@@ -5,6 +5,11 @@ channels:
 dependencies:
   - python=3.11
   - pip
+  # NOTE: GROMACS is intentionally NOT here. It is added to the Cloud Run image in the
+  # Dockerfile only (a CPU build), so this shared env — used by local dev (restart_dev.sh)
+  # and mirrored by Colab's requirements.txt — stays free of a CPU gromacs that would
+  # shadow a local/Colab GPU build. OpenMM auto-selects a GPU (CUDA/OpenCL/Metal) when
+  # present, else CPU.
   - openmm>=8.1
   - numpy
   - scipy

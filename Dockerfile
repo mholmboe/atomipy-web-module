@@ -53,6 +53,13 @@ USER $MAMBA_USER
 COPY --chown=$MAMBA_USER:$MAMBA_USER envs/atomipy-core.yml /tmp/env.yml
 RUN micromamba install -y -n base -f /tmp/env.yml && \
     micromamba clean --all --yes
+# GROMACS engine for the HOSTED image only (~35 MB compressed / ~100 MB installed).
+# Kept out of atomipy-core.yml on purpose so local dev + Colab (which build from that env
+# / requirements.txt) are free to use their own GPU builds; here we add a CPU build (the
+# plain conda-forge selector resolves to the nompi CPU build), which is fine since Cloud
+# Run is CPU-only anyway. Heavy runs still belong on a local/Colab GPU.
+RUN micromamba install -y -n base -c conda-forge gromacs && \
+    micromamba clean --all --yes
 # Belt-and-suspenders: expose the env's lib dir so the loader (and any child process)
 # can also find libxdrfile by SONAME, not only by the prefix glob.
 ENV LD_LIBRARY_PATH=/opt/conda/lib:${LD_LIBRARY_PATH}
