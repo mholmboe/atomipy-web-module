@@ -767,20 +767,20 @@ _GROMACS_CACHE = {"done": False, "info": None}
 
 
 def _detect_gromacs():
-    """Cached local-GROMACS detection (path + version), or None if absent.
+    """Cached GROMACS detection (path + version), or None if no gmx is found.
 
-    Local engine only: on Cloud Run (K_SERVICE set) there is no gmx, so report
-    unavailable without probing.
+    The hosted Cloud Run image now ships a CPU gmx (see Dockerfile), so we probe
+    everywhere — including Cloud Run (K_SERVICE set) — instead of assuming it's absent.
+    detect_gmx() returns None when no gmx is on PATH (e.g. a local install without one).
     """
     if _GROMACS_CACHE["done"]:
         return _GROMACS_CACHE["info"]
     info = None
-    if not os.environ.get("K_SERVICE"):
-        try:
-            from atomipy.gromacs import detect_gmx
-            info = detect_gmx()
-        except Exception:
-            info = None
+    try:
+        from atomipy.gromacs import detect_gmx
+        info = detect_gmx()
+    except Exception:
+        info = None
     _GROMACS_CACHE["done"] = True
     _GROMACS_CACHE["info"] = info
     return info
