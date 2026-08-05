@@ -53,13 +53,16 @@ USER $MAMBA_USER
 COPY --chown=$MAMBA_USER:$MAMBA_USER envs/atomipy-core.yml /tmp/env.yml
 RUN micromamba install -y -n base -f /tmp/env.yml && \
     micromamba clean --all --yes
-# GROMACS engine for the HOSTED image only (~35 MB compressed / ~100 MB installed).
-# Kept out of atomipy-core.yml on purpose so local dev + Colab (which build from that env
-# / requirements.txt) are free to use their own GPU builds; here we add a CPU build (the
-# plain conda-forge selector resolves to the nompi CPU build), which is fine since Cloud
-# Run is CPU-only anyway. Heavy runs still belong on a local/Colab GPU.
-RUN micromamba install -y -n base -c conda-forge gromacs && \
+# GROMACS engine for the HOSTED image only (CPU build; fine — Cloud Run is CPU-only).
+# Installed in its OWN env, NOT base: the conda gromacs package ships a GMXRC activation
+# script that the entrypoint runs when it activates base, and it aborts container startup
+# on a bash-completion glob ("gmx-completion-*.bash: No such file or directory" -> exit 1).
+# A separate env is never activated, so GMXRC never runs; we just put `gmx` on PATH (base
+# python still wins; atomipy resolves gmx + its own libs). Kept out of atomipy-core.yml so
+# local dev + Colab keep their GPU builds.
+RUN micromamba create -y -n gmx -c conda-forge gromacs && \
     micromamba clean --all --yes
+ENV PATH=$PATH:/opt/conda/envs/gmx/bin
 # Belt-and-suspenders: expose the env's lib dir so the loader (and any child process)
 # can also find libxdrfile by SONAME, not only by the prefix glob.
 ENV LD_LIBRARY_PATH=/opt/conda/lib:${LD_LIBRARY_PATH}
