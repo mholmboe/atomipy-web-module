@@ -74,6 +74,33 @@ if os.path.isdir(FRONTEND_DIST):
     # Catch-all registered LAST so the API routers and /health win. Serves real
     # files (assets, etc.) and falls back to index.html for SPA client routes.
     _DIST_ROOT = os.path.realpath(FRONTEND_DIST)
+    _ASSETS_ROOT = os.path.join(_DIST_ROOT, "assets")
+
+    # Cache-Control matters more here than on a typical site: Cloud Run runs this
+    # service at concurrency=1 (builds exec user scripts with process-global
+    # state, so two per instance clobber each other), which means EVERY request
+    # occupies an instance exclusively — a 300-byte favicon costs the same slot
+    # as a build. Uncached, one page load was 4 requests (html + js + css +
+    # icon) against max-instances=6, so a single visitor could tie up most of
+    # the service. With these headers a repeat load is 1 request.
+    _ONE_YEAR = 31536000
+
+    def _cache_control(path: str) -> str:
+        # Vite content-hashes everything under assets/ (index-BNAzA1N8.js), so
+        # the URL changes whenever the bytes do — safe to cache forever.
+        if path.startswith(_ASSETS_ROOT + os.sep):
+            return "public, max-age=%d, immutable" % _ONE_YEAR
+        # index.html must revalidate or a deploy is never picked up. "no-cache"
+        # means "cache it, but always revalidate" — with the ETag that is a
+        # cheap 304, not a re-download.
+        if os.path.basename(path) == "index.html":
+            return "no-cache"
+        # Everything else at the dist root (favicon, manifest, robots.txt) is
+        # NOT content-hashed, so a long max-age would pin a stale copy.
+        return "public, max-age=3600"
+
+    def _file(path: str) -> FileResponse:
+        return FileResponse(path, headers={"Cache-Control": _cache_control(path)})
 
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
@@ -82,5 +109,5 @@ if os.path.isdir(FRONTEND_DIST):
         if full_path:
             candidate = os.path.realpath(os.path.join(FRONTEND_DIST, full_path))
             if (candidate == _DIST_ROOT or candidate.startswith(_DIST_ROOT + os.sep)) and os.path.isfile(candidate):
-                return FileResponse(candidate)
-        return FileResponse(_INDEX_HTML)
+                return _file(candidate)
+        return _file(_INDEX_HTML)
