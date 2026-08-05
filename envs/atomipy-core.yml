@@ -1,7 +1,9 @@
 name: atomipy-core
 channels:
+  # conda-forge only. The 'mosdef' channel was dropped: nothing here needs it (GMSO/ParmEd
+  # are no longer atomipy deps), and its repodata mirror is slow/flaky — it timed out and
+  # failed a Cloud Build. Every dependency below resolves from conda-forge.
   - conda-forge
-  - mosdef
 dependencies:
   - python=3.11
   - pip
