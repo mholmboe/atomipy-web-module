@@ -119,6 +119,21 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
   const source = data.source || "upload";
   const [activeTab, setActiveTab] = useState<"inorganic" | "organic">(source === "organic" ? "organic" : "inorganic");
 
+  // Re-derive the library category from `data` whenever a (non-empty) value arrives.
+  // Needed because a loaded workflow can land in a REUSED node instance: React keys nodes
+  // by id, so a saved node whose id matches one already on the canvas (e.g. the default
+  // `node_1`) is not remounted, and the useState initializers above never re-run — leaving
+  // the category dropdown empty even though data.value holds the correct preset. Guard on a
+  // non-empty value so this never clobbers the transient "" set while picking a category.
+  useEffect(() => {
+    const v = (data.source === "library" || data.source === "preset") ? (data.value || "") : "";
+    if (v) setInorgCategory(v.includes("/") ? v.split("/")[0] : "MINFF presets");
+  }, [data.value, data.source]);
+  useEffect(() => {
+    const m = data.libraryMolecule || "";
+    if (m) setLibCategory(m.split("/")[0] || "");
+  }, [data.libraryMolecule]);
+
   // ---- Build-lattice helpers ----
   const latticeMode = data.latticeMode ?? "preset";
   const latPreset = LATTICE_PRESETS.find((p) => p.value === (data.latticeType || "fcc")) ?? LATTICE_PRESETS[0];
