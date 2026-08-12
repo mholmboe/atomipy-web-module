@@ -195,7 +195,7 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain("ap.assign_dummy_mineral_params(");
     expect(code).toContain("metal_site='Alo'");
     expect(code).toContain("charge_mode='pauling'");
-    expect(code).toContain("lj_mode='element'");                     // self-calculated per-element LJ
+    expect(code).toContain("lj_mode='shannon'");                     // default: Shannon r_min LJ (UFF-only)
     expect(code).toMatch(/assign_dummy_mineral_params\([^)]*Box=/);  // coordination for O charges
     // Simulate node detects the dummy framework, builds the bond-free top, and freezes
     expect(code).toContain("_dummy_frame = [a for a in");
@@ -438,6 +438,32 @@ describe('graphExecution — review-fix regressions', () => {
     expect(code).toContain('ap.coordination_number(');
     expect(code).toContain('if cn_data:');                 // empty-list guard present
     expect(code).not.toMatch(/mean=\{sum\(cn_data\)\/len\(cn_data\)/);  // old unguarded f-string gone
+  });
+
+  it('analysis "distortion" mode emits ap.tetrahedral_rotation with the knobs + pools over frames', () => {
+    const nodes: Node[] = [struct,
+      { id: 'a', type: 'analysis', position: { x: 100, y: 0 },
+        data: { mode: 'distortion', distAxis: 'z', distBondCutoff: 1.9, distTetTetCutoff: 3.6,
+                distAlignTol: 0.5, distOutputBase: 'distort', distPlot: 'alpha' } }];
+    const code = generatePythonCode(nodes, [edgeTo('a')], 'minimal');
+    expect(code).toContain('ap.tetrahedral_rotation(');
+    expect(code).toContain("sheet_axis='z'");
+    expect(code).toContain('bond_cutoff=1.9');
+    expect(code).toContain('tet_tet_cutoff=3.6');
+    expect(code).toContain('align_tol=0.5');
+    expect(code).toContain('for _datoms, _dbox in _frames:');   // per-frame, pools over a trajectory
+    expect(code).toContain("open('distort.dat'");               // ASCII summary
+    expect(code).toContain("open('distort_perframe.dat'");      // per-frame series
+    expect(code).toContain('__PLOT_a__:');                       // default alpha plot to a connected plotter
+    expect(code).not.toContain('tet_types=');                    // no explicit types -> engine default set
+  });
+
+  it('analysis "distortion" mode passes custom tetrahedral types when set', () => {
+    const nodes: Node[] = [struct,
+      { id: 'a', type: 'analysis', position: { x: 100, y: 0 },
+        data: { mode: 'distortion', distTetTypes: 'Sit, Alt' } }];
+    const code = generatePythonCode(nodes, [edgeTo('a')], 'minimal');
+    expect(code).toContain("tet_types=['Sit', 'Alt']");
   });
 
   it('xrd node emits the __XRD_DATA_ marker at runtime (not the broken __PLOT_DATA__)', () => {

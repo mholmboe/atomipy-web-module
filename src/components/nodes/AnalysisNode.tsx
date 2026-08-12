@@ -4,7 +4,7 @@ import { BarChart3, ChevronDown, ChevronUp, X } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
 import type { NodeComponentProps } from "./types";
 
-type AnalysisMode = "rdf" | "density" | "msd" | "vacf" | "hbond" | "cn" | "closest" | "mindist" | "occupancy" | "bvs" | "stats";
+type AnalysisMode = "rdf" | "density" | "msd" | "vacf" | "hbond" | "cn" | "closest" | "mindist" | "occupancy" | "bvs" | "distortion" | "stats";
 
 type OutputMode = "none" | "json" | "csv" | "both";
 type ClosestReferenceMode = "index" | "coords";
@@ -74,6 +74,14 @@ type AnalysisNodeData = {
   bvsLogFile?: string;
   writeCsv?: boolean;
   csvFile?: string;
+  // Ditrigonal / tetrahedral distortion
+  distTetTypes?: string;
+  distBondCutoff?: number;
+  distTetTetCutoff?: number;
+  distAlignTol?: number;
+  distAxis?: "x" | "y" | "z";
+  distPlot?: "alpha" | "angles" | "dz";
+  distOutputBase?: string;
   // Stats
   statsLogFile?: string;
 };
@@ -113,6 +121,7 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
             <option value="mindist">Min Distances (Inter-mol)</option>
             <option value="occupancy">Site Occupancy</option>
             <option value="bvs">Bond Valence Sum (BVS)</option>
+            <option value="distortion">Ditrigonal Distortion (α)</option>
             <option value="stats">Structure Stats</option>
           </select>
         </div>
@@ -863,6 +872,112 @@ export function AnalysisNode({ id, data }: NodeComponentProps<AnalysisNodeData>)
               </div>
             )}
           </>
+        )}
+
+        {mode === "distortion" && (
+          <div className="space-y-2">
+            <div>
+              <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">
+                Tetrahedral cation types <span className="font-normal opacity-60">(comma-sep; blank = Si/Sit/Alt/Tit/Fee3)</span>
+              </label>
+              <input
+                type="text"
+                className={inputCls}
+                placeholder="blank = default set"
+                value={data.distTetTypes ?? ""}
+                onChange={(e) => set("distTetTypes", e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5" title="T–O bond cutoff (Å) for identifying the oxygens of each tetrahedron.">
+                  T–O cutoff (Å)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className={inputCls}
+                  value={data.distBondCutoff ?? 1.9}
+                  onChange={(e) => set("distBondCutoff", parseFloat(e.target.value) || 1.9)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5" title="Max metal→neighbour-metal distance (Å) via the shared basal oxygen; caps the α bond search.">
+                  T···T cutoff (Å)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className={inputCls}
+                  value={data.distTetTetCutoff ?? 3.6}
+                  onChange={(e) => set("distTetTetCutoff", parseFloat(e.target.value) || 3.6)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5" title="Min |cos| between the basal-triplet plane normal and the metal→apical direction (0–1). Rejects mis-identified tetrahedra.">
+                  Align tol (0–1)
+                </label>
+                <input
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  max="1"
+                  className={inputCls}
+                  value={data.distAlignTol ?? 0.5}
+                  onChange={(e) => set("distAlignTol", parseFloat(e.target.value) || 0.5)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5" title="Sheet-normal (stacking) axis of the layer.">
+                  Sheet normal
+                </label>
+                <select
+                  className={selectCls}
+                  value={data.distAxis ?? "z"}
+                  onChange={(e) => set("distAxis", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <option value="x">x</option>
+                  <option value="y">y</option>
+                  <option value="z">z</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Plot</label>
+                <select
+                  className={selectCls}
+                  value={data.distPlot ?? "alpha"}
+                  onChange={(e) => set("distPlot", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <option value="alpha">α + apical tilt vs frame</option>
+                  <option value="angles">α, tilt, τ−109.47, ψ−54.74</option>
+                  <option value="dz">Δz corrugation vs frame</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Output base</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={data.distOutputBase ?? "distortion_results"}
+                  onChange={(e) => set("distOutputBase", e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+            <p className="text-[9px] text-muted-foreground/60 leading-snug">
+              Phyllosilicate sheet distortion: tetrahedral rotation <strong>α</strong> (ditrigonal, Bailey 1984; 0–30°) plus apical tilt, <strong>τ</strong> (O–T–O, ideal 109.47°), <strong>Δz</strong> basal corrugation (Å) and <strong>ψ</strong> (octahedral flattening, ideal 54.74°). Runs per frame and <strong>pools over a connected trajectory</strong> (within-structure std + frame-to-frame SEM). Writes <code>.dat</code>/<code>.json</code> + a per-frame series. Connect a Data Plotter.
+            </p>
+          </div>
         )}
 
         {mode === "stats" && (

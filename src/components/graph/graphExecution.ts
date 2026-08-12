@@ -2871,6 +2871,67 @@ export function generatePythonCode(
           pythonCode += `    print("BVS: GII=%.4f -> ${bvsLog}${writeCsv ? ` + ${csvFile}` : ""}" % (_bvs.get('gii') or 0.0))\n`;
           pythonCode += `except Exception as _e:\n`;
           pythonCode += `    print("BVS analysis failed: %s" % _e)\n`;
+        } else if (option === "distortion") {
+          // Ditrigonal / tetrahedral distortion of a phyllosilicate sheet: tetrahedral
+          // rotation alpha (Bailey 1984) + companions apical tilt, tau (O-T-O), dz basal
+          // corrugation (Å), psi (octahedral flattening). Runs per frame and pools over a
+          // trajectory (within-structure std averaged over frames; frame-to-frame SEM).
+          const axis = ["x", "y", "z"].includes(getString(data, "distAxis", "z")) ? getString(data, "distAxis", "z") : "z";
+          const bondCut = getNumber(data, "distBondCutoff", 1.9);
+          const tetTetCut = getNumber(data, "distTetTetCutoff", 3.6);
+          const alignTol = getNumber(data, "distAlignTol", 0.5);
+          const outputBase = pyEscape(getString(data, "distOutputBase", "distortion_results"));
+          const distPlot = ["alpha", "angles", "dz"].includes(getString(data, "distPlot", "alpha")) ? getString(data, "distPlot", "alpha") : "alpha";
+          const typesRaw = getString(data, "distTetTypes", "").split(",").map((s) => s.trim()).filter(Boolean);
+          const typesArg = typesRaw.length ? `, tet_types=[${typesRaw.map((t) => `'${pyEscape(t)}'`).join(", ")}]` : "";
+
+          pythonCode += `\n# Ditrigonal / tetrahedral distortion (alpha, apical tilt, tau, dz, psi), pooled over frames\n`;
+          pythonCode += framesSetup;
+          pythonCode += `_dkeys = ['alpha', 'apical_tilt', 'tau', 'dz_corrugation', 'psi']\n`;
+          pythonCode += `_drows = []\n`;
+          pythonCode += `for _datoms, _dbox in _frames:\n`;
+          pythonCode += `    try:\n`;
+          pythonCode += `        _dr = ap.tetrahedral_rotation(_datoms, _dbox, sheet_axis='${axis}', bond_cutoff=${bondCut}, tet_tet_cutoff=${tetTetCut}, align_tol=${alignTol}${typesArg})\n`;
+          pythonCode += `    except Exception:\n`;
+          pythonCode += `        _dr = None\n`;
+          pythonCode += `    if _dr is not None and _dr.get('alpha') is not None:\n`;
+          pythonCode += `        _drows.append(_dr)\n`;
+          pythonCode += `if not _drows:\n`;
+          pythonCode += `    print("Distortion: no valid tetrahedra found (check atom types / bond_cutoff / align_tol)")\n`;
+          pythonCode += `else:\n`;
+          pythonCode += `    _dn = len(_drows)\n`;
+          pythonCode += `    _dunits = {'alpha': 'deg', 'apical_tilt': 'deg', 'tau': 'deg', 'dz_corrugation': 'Angstrom', 'psi': 'deg'}\n`;
+          pythonCode += `    _dsummary = {}\n`;
+          pythonCode += `    for _k in _dkeys:\n`;
+          pythonCode += `        _vals = [float(_r[_k]) for _r in _drows if _r.get(_k) is not None]\n`;
+          pythonCode += `        _stds = [float(_r[_k + '_std']) for _r in _drows if _r.get(_k + '_std') is not None]\n`;
+          pythonCode += `        _m = sum(_vals) / len(_vals) if _vals else float('nan')\n`;
+          pythonCode += `        _within = (sum(_stds) / len(_stds)) if _stds else float('nan')\n`;
+          pythonCode += `        _sem = ((sum((_v - _m) ** 2 for _v in _vals) / (len(_vals) - 1)) ** 0.5) / (len(_vals) ** 0.5) if len(_vals) > 1 else 0.0\n`;
+          pythonCode += `        _dsummary[_k] = {'mean': _m, 'within_std': _within, 'frame_sem': _sem, 'unit': _dunits[_k]}\n`;
+          pythonCode += `    print("Distortion over %d frame(s): alpha=%.3f+/-%.3f deg, apical_tilt=%.3f deg, tau=%.3f deg, dz=%.4f A, psi=%.3f deg -> ${outputBase}.dat/.json" % (_dn, _dsummary['alpha']['mean'], _dsummary['alpha']['within_std'], _dsummary['apical_tilt']['mean'], _dsummary['tau']['mean'], _dsummary['dz_corrugation']['mean'], _dsummary['psi']['mean']))\n`;
+          pythonCode += `    with open('${outputBase}.json', 'w') as _df:\n`;
+          pythonCode += `        json.dump({'n_frames': _dn, 'summary': _dsummary, 'per_frame': [{_k: _r.get(_k) for _k in _dkeys} for _r in _drows], 'n_bonds': _drows[0].get('n_bonds'), 'n_sheets': _drows[0].get('n_sheets'), 'n_oct': _drows[0].get('n_oct'), 'mean_triplet_alignment': _drows[0].get('mean_triplet_alignment')}, _df)\n`;
+          pythonCode += `    with open('${outputBase}.dat', 'w') as _df:\n`;
+          pythonCode += `        _df.write("# atomipy tetrahedral/ditrigonal distortion over %d frame(s); n_bonds=%s n_sheets=%s n_oct=%s\\n" % (_dn, _drows[0].get('n_bonds'), _drows[0].get('n_sheets'), _drows[0].get('n_oct')))\n`;
+          pythonCode += `        _df.write("# ideal: alpha=0 tau=109.47 psi=54.74 (deg); dz=0 (A). alpha max=30 deg.\\n")\n`;
+          pythonCode += `        _df.write("#%18s%14s%14s%14s   %s\\n" % ('parameter', 'mean', 'within_std', 'frame_sem', 'unit'))\n`;
+          pythonCode += `        for _k in _dkeys:\n`;
+          pythonCode += `            _s = _dsummary[_k]\n`;
+          pythonCode += `            _df.write("%19s%14.6g%14.6g%14.6g   %s\\n" % (_k, _s['mean'], _s['within_std'], _s['frame_sem'], _s['unit']))\n`;
+          pythonCode += `    with open('${outputBase}_perframe.dat', 'w') as _df:\n`;
+          pythonCode += `        _df.write("#%9s%14s%14s%14s%14s%14s\\n" % ('frame', 'alpha', 'apical_tilt', 'tau', 'dz_A', 'psi'))\n`;
+          pythonCode += `        for _i, _r in enumerate(_drows):\n`;
+          pythonCode += `            _df.write("%10d%14.6g%14.6g%14.6g%14.6g%14.6g\\n" % (_i, _r['alpha'], _r['apical_tilt'], _r['tau'], _r['dz_corrugation'], _r['psi']))\n`;
+          if (mode !== "strict") {
+            if (distPlot === "dz") {
+              pythonCode += `    print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'Δz corrugation', 'points': [[float(_i), float(_r['dz_corrugation'])] for _i, _r in enumerate(_drows)]}], 'xLabel': 'frame', 'yLabel': 'Δz (Å)'}))\n`;
+            } else if (distPlot === "angles") {
+              pythonCode += `    print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'α rotation', 'points': [[float(_i), float(_r['alpha'])] for _i, _r in enumerate(_drows)]}, {'name': 'apical tilt', 'points': [[float(_i), float(_r['apical_tilt'])] for _i, _r in enumerate(_drows)]}, {'name': 'τ − 109.47', 'points': [[float(_i), float(_r['tau']) - 109.47] for _i, _r in enumerate(_drows)]}, {'name': 'ψ − 54.74', 'points': [[float(_i), float(_r['psi']) - 54.74] for _i, _r in enumerate(_drows)]}], 'xLabel': 'frame', 'yLabel': 'angle (deg)'}))\n`;
+            } else {
+              pythonCode += `    print("__PLOT_${plotTarget}__:" + json.dumps({'series': [{'name': 'α rotation', 'points': [[float(_i), float(_r['alpha'])] for _i, _r in enumerate(_drows)]}, {'name': 'apical tilt', 'points': [[float(_i), float(_r['apical_tilt'])] for _i, _r in enumerate(_drows)]}], 'xLabel': 'frame', 'yLabel': 'angle (deg)'}))\n`;
+            }
+          }
         }
 
         pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
