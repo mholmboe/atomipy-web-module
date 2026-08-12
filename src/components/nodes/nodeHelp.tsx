@@ -655,6 +655,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Runs the system with one of two engines: OpenMM (default) or local GROMACS. Energy Minimization, NVT (constant volume), or NPT (constant pressure). Builds the topology from the upstream Forcefield/Solvent/Ions choices, uses PME electrostatics with a cutoff, and writes a trajectory + log.",
     features: [
       "Engine toggle: OpenMM (auto GPU/CPU, runs anywhere OpenMM is installed) or GROMACS — runs grompp + mdrun wherever gmx is available (a local install, or a free Colab GPU via the launcher's optional Step 1c cell). Both consume the SAME atomipy topology (minerals + ions + water + organics).",
+      "Performance: the public instance (atomipy.io) runs on CPU; both engines are much faster on a GPU, so heavy runs (long MD, parameter sweeps, λ-FEP, umbrella sampling) are best done locally or on a free Colab GPU. Note the GPU difference: OpenMM uses a present GPU automatically (same package), whereas GROMACS needs a GPU-enabled build — CUDA on Colab/Linux, or an OpenCL source build on Apple Silicon; the online/desktop-bundled GROMACS is CPU-only.",
       "Three modes: Energy Minimization, NVT (Langevin), NPT (Langevin + barostat). Each Simulate node runs ONE stage (no implicit EM before MD) for both engines; chain Simulate nodes to sequence EM/NVT/NPT in any order — each continues from the previous one's relaxed structure.",
       "Minimization steps; or MD steps, temperature (K), timestep (fs, ≤4), Langevin friction (1/ps), and pressure (bar) for NPT.",
       "Constraints None / HBonds / AllBonds; LJ cutoff + switch distance; PME for long-range electrostatics. (Friction/constraints/switch are OpenMM-only; the GROMACS path uses MINFF .mdp conventions.)",
@@ -727,11 +728,12 @@ export const NODE_HELP: Record<string, NodeHelp> = {
   analysis: {
     title: "Analysis Ops",
     summary:
-      "Structural and trajectory analysis. Static/ensemble: RDF g(r) + running coordination n(r), density profiles, coordination number, closest-atom / min distances, site occupancy, BVS, stats. Trajectory: MSD/diffusion, VACF/power spectrum, hydrogen bonds. Every mode runs on a single structure OR ensemble-averages over a connected trajectory, and exports ASCII .dat + JSON and a plot-data stream.",
+      "Structural and trajectory analysis. Static/ensemble: RDF g(r) + running coordination n(r), density profiles, coordination number, closest-atom / min distances, site occupancy, BVS, ditrigonal distortion (α), stats. Trajectory: MSD/diffusion, VACF/power spectrum, hydrogen bonds. Every mode runs on a single structure OR ensemble-averages over a connected trajectory, and exports ASCII .dat + JSON and a plot-data stream.",
     features: [
-      "Static/ensemble: RDF g(r) (+ running coordination n(r)), Density Profile (x/y/z), Coordination Number, Find Closest Atom, Min Distances, Site Occupancy, BVS, Structure Stats.",
+      "Static/ensemble: RDF g(r) (+ running coordination n(r)), Density Profile (x/y/z), Coordination Number, Find Closest Atom, Min Distances, Site Occupancy, BVS, Ditrigonal Distortion (α), Structure Stats.",
       "Trajectory: MSD / Diffusion (3D/2D/1D, PBC-unwrapped, multi-origin restarts), VACF / Power spectrum (Green-Kubo D + vibrational DOS), Hydrogen Bonds (gmx-hbond geometry, per-molecule distribution).",
-      "RDF/density/MSD/VACF/H-bond auto-average over all frames when a trajectory is connected; otherwise they use the single structure.",
+      "Ditrigonal Distortion (phyllosilicates): tetrahedral rotation α + apical tilt, τ (O–T–O), Δz basal corrugation, ψ (octahedral flattening); per frame, pooled over a trajectory (within-structure std + frame-to-frame SEM).",
+      "RDF/density/MSD/VACF/H-bond/distortion auto-average over all frames when a trajectory is connected; otherwise they use the single structure.",
       "Exports aligned ASCII .dat (numpy.loadtxt-ready) and JSON; a 'data' handle streams the chosen curve to a Data Plotter.",
     ],
     theory: [
@@ -740,6 +742,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "MSD: Einstein relation, D = slope/(2·dim); coordinates are nojump-unwrapped and averaged over multiple time origins. Also gives the van Hove self-part (Gaussian for normal diffusion).",
       "VACF: D = ⅓∫⟨v(0)·v(t)⟩dt (Green-Kubo); its Fourier transform is the vibrational power spectrum (DOS). Velocities are estimated by FINITE DIFFERENCE of positions (no trajectory velocities) — see quirks.",
       "H-bonds: geometric D-H···A with D···A < r_cut and H–D···A angle ≤ angle_cut (GROMACS gmx hbond convention).",
+      "Ditrigonal distortion: per tetrahedron, α is the in-plane angle of the metal→basal-O bond off the metal→neighbour-metal line (= the canonical ½·mean|120−φ| ring definition). Basal vs apical O are found by type (Ob/Op) with a bonded-count fallback; the local sheet normal is the metal→apical direction, so the result is tilt-independent and the basal-triplet plane is checked against it. Ideal α=0 (hexagonal), max 30° (ditrigonal). Companions: apical tilt (T–O_apical vs sheet normal), τ (O–T–O, ideal 109.47°), Δz basal-O corrugation (Å), ψ (M–O vs normal, ideal 54.74°).",
     ],
     equations: [
       { label: "RDF", expr: "g(r) = hist(r) / (N_A·ρ·V_shell(r))" },
@@ -747,6 +750,8 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       { label: "diffusion (MSD)", expr: "D = ⟨|r(t)−r(0)|²⟩ / (2·dim·t)" },
       { label: "diffusion (Green-Kubo)", expr: "D = (1/3) ∫₀^∞ ⟨v(0)·v(t)⟩ dt" },
       { label: "spectrum Nyquist", expr: "f_max = 1/(2·Δt_frame)" },
+      { label: "tetrahedral rotation α", expr: "α = ½ · mean_i |120° − φ_i|   (φ_i = basal O–O–O ring angles)" },
+      { label: "octahedral flattening ψ", expr: "cos ψ = t_oct / (2·⟨M–O⟩)" },
     ],
     quirks: [
       "Selections match the atom 'type' field (force-field/trajectory name, e.g. OW — not the element); H-bonds also accept residue-name filters (SOL water, MIN mineral).",
@@ -754,6 +759,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "VACF uses no real velocities — finite-difference of positions caps the spectrum at the Nyquist frequency 1/(2·Δt) and damps high frequencies (~sinc). Save every few fs for vibrational spectra; the Green-Kubo D (low-freq) is robust.",
       "MSD/VACF need the correct Time/frame (ps) = MD timestep × output frequency; getting it wrong rescales D.",
       "RDF/CN/density need a box for minimum-image distances; set R-max below half the shortest box edge.",
+      "Distortion is for phyllosilicate/clay/mica tetrahedral sheets; it needs minff-style types (basal Ob, apical Op, tetrahedral Si/Sit/Alt) — so keep a Forcefield node upstream. Δz is in Å; for a single symmetric unit cell Δz_std is 0 (identical sheets) and becomes non-zero for MD frames. Reference α: talc ~3, pyrophyllite ~11, muscovite ~11°.",
     ],
     before: [
       "Import Structure (+ Forcefield for type-based selections); for trajectory modes, connect a Simulate or Trajectory node so frames are available.",
