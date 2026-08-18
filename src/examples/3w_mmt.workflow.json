@@ -1,0 +1,1113 @@
+{
+ "kind": "atomipy-workflow",
+ "schemaVersion": 1,
+ "app": "atomipy-web-module",
+ "name": "3W_MMT",
+ "nodes": [
+  {
+   "id": "node_1",
+   "type": "structure",
+   "position": {
+    "x": 100,
+    "y": -230
+   },
+   "data": {
+    "source": "library",
+    "value": "Pyrophyllite_Lee_Guggenheim_1981_ortho_GII_0.063.pdb",
+    "materialName": "Pyrophyllite Lee Guggenheim 1981 ortho",
+    "librarySource": "preset"
+   },
+   "measured": {
+    "width": 260,
+    "height": 347
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none",
+    "boxShadow": "0 0 0 2px rgba(34, 197, 94, 0.95)",
+    "borderRadius": 12
+   }
+  },
+  {
+   "id": "replicate_1783460515505",
+   "type": "replicate",
+   "position": {
+    "x": 410,
+    "y": -230
+   },
+   "data": {
+    "keepMolid": true,
+    "keepResname": true,
+    "renumberIndex": true,
+    "x": 6,
+    "y": 4
+   },
+   "measured": {
+    "width": 220,
+    "height": 173
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none"
+   }
+  },
+  {
+   "id": "chemistry_1783460937606",
+   "type": "chemistry",
+   "position": {
+    "x": 720,
+    "y": -230
+   },
+   "data": {
+    "mode": "substitute",
+    "numOct": 16,
+    "numTet": 0,
+    "o1Type": "Al",
+    "o2Type": "Mg",
+    "t1Type": "Si",
+    "t2Type": "Alt",
+    "minO2Dist": 5.5,
+    "minT2Dist": 5.5,
+    "dimension": 3,
+    "fuseRmax": 0.5,
+    "fuseCriteria": "average",
+    "deltaThreshold": -0.5,
+    "maxAdditions": 10
+   },
+   "measured": {
+    "width": 300,
+    "height": 357
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none"
+   }
+  },
+  {
+   "id": "node_1783461026579_0",
+   "type": "structure",
+   "position": {
+    "x": 100,
+    "y": 250
+   },
+   "data": {
+    "source": "library",
+    "value": "Pyrophyllite_Lee_Guggenheim_1981_ortho_GII_0.063.pdb",
+    "materialName": "Pyrophyllite Lee Guggenheim 1981 ortho",
+    "librarySource": "preset"
+   },
+   "measured": {
+    "width": 260,
+    "height": 347
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none"
+   }
+  },
+  {
+   "id": "node_1783461026579_1",
+   "type": "replicate",
+   "position": {
+    "x": 410,
+    "y": 250
+   },
+   "data": {
+    "keepMolid": true,
+    "keepResname": true,
+    "renumberIndex": true,
+    "x": 6,
+    "y": 4
+   },
+   "measured": {
+    "width": 220,
+    "height": 173
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none"
+   }
+  },
+  {
+   "id": "node_1783461026579_2",
+   "type": "chemistry",
+   "position": {
+    "x": 720,
+    "y": 250
+   },
+   "data": {
+    "mode": "substitute",
+    "numOct": 16,
+    "numTet": 0,
+    "o1Type": "Al",
+    "o2Type": "Mg",
+    "t1Type": "Si",
+    "t2Type": "Alt",
+    "minO2Dist": 5.5,
+    "minT2Dist": 5.5,
+    "dimension": 3,
+    "fuseRmax": 0.5,
+    "fuseCriteria": "average",
+    "deltaThreshold": -0.5,
+    "maxAdditions": 10
+   },
+   "measured": {
+    "width": 300,
+    "height": 357
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none"
+   }
+  },
+  {
+   "id": "node_1783461036800_0",
+   "type": "structure",
+   "position": {
+    "x": 100,
+    "y": 730
+   },
+   "data": {
+    "source": "library",
+    "value": "Pyrophyllite_Lee_Guggenheim_1981_ortho_GII_0.063.pdb",
+    "materialName": "Pyrophyllite Lee Guggenheim 1981 ortho",
+    "librarySource": "preset"
+   },
+   "measured": {
+    "width": 260,
+    "height": 347
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none"
+   }
+  },
+  {
+   "id": "node_1783461036800_1",
+   "type": "replicate",
+   "position": {
+    "x": 410,
+    "y": 730
+   },
+   "data": {
+    "keepMolid": true,
+    "keepResname": true,
+    "renumberIndex": true,
+    "x": 6,
+    "y": 4
+   },
+   "measured": {
+    "width": 220,
+    "height": 173
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none"
+   }
+  },
+  {
+   "id": "node_1783461036800_2",
+   "type": "chemistry",
+   "position": {
+    "x": 720,
+    "y": 730
+   },
+   "data": {
+    "mode": "substitute",
+    "numOct": 16,
+    "numTet": 0,
+    "o1Type": "Al",
+    "o2Type": "Mg",
+    "t1Type": "Si",
+    "t2Type": "Alt",
+    "minO2Dist": 5.5,
+    "minT2Dist": 5.5,
+    "dimension": 3,
+    "fuseRmax": 0.5,
+    "fuseCriteria": "average",
+    "deltaThreshold": -0.5,
+    "maxAdditions": 10
+   },
+   "measured": {
+    "width": 300,
+    "height": 357
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none"
+   }
+  },
+  {
+   "id": "box_1783461045381",
+   "type": "box",
+   "position": {
+    "x": 1070,
+    "y": -230
+   },
+   "data": {
+    "a": 30.96,
+    "b": 35.864,
+    "c": 60,
+    "alpha": 90,
+    "beta": 90,
+    "gamma": 90,
+    "lastInferredFrom": {
+     "nodeId": "chemistry_1783460937606",
+     "values": {
+      "a": 30.96,
+      "b": 35.864,
+      "c": 9.347,
+      "alpha": 90,
+      "beta": 100.46,
+      "gamma": 90,
+      "lx": 30.96,
+      "ly": 35.864,
+      "lz": 9.191670547680753,
+      "xy": 2.1960366402310336e-15,
+      "xz": -1.6969388742374338,
+      "yz": 6.762462196156949e-16
+     }
+    }
+   },
+   "measured": {
+    "width": 270,
+    "height": 381
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none",
+    "boxShadow": "0 0 0 2px rgba(34, 197, 94, 0.95)",
+    "borderRadius": 12
+   }
+  },
+  {
+   "id": "box_1783461062071",
+   "type": "box",
+   "position": {
+    "x": 1070,
+    "y": 250
+   },
+   "data": {
+    "a": 30.96,
+    "b": 35.864,
+    "c": 60,
+    "alpha": 90,
+    "beta": 90,
+    "gamma": 90
+   },
+   "measured": {
+    "width": 270,
+    "height": 381
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none",
+    "boxShadow": "0 0 0 2px rgba(34, 197, 94, 0.95)",
+    "borderRadius": 12
+   }
+  },
+  {
+   "id": "box_1783461068900",
+   "type": "box",
+   "position": {
+    "x": 1070,
+    "y": 730
+   },
+   "data": {
+    "a": 30.96,
+    "b": 35.864,
+    "c": 60,
+    "alpha": 90,
+    "beta": 90,
+    "gamma": 90
+   },
+   "measured": {
+    "width": 270,
+    "height": 381
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none",
+    "boxShadow": "0 0 0 2px rgba(34, 197, 94, 0.95)",
+    "borderRadius": 12
+   }
+  },
+  {
+   "id": "add_1783461075769",
+   "type": "add",
+   "position": {
+    "x": 1700,
+    "y": 10
+   },
+   "data": {},
+   "measured": {
+    "width": 220,
+    "height": 169
+   }
+  },
+  {
+   "id": "transform_1783461088881",
+   "type": "transform",
+   "position": {
+    "x": 1390,
+    "y": 10
+   },
+   "data": {
+    "mode": "translate",
+    "translateMode": "relative",
+    "tx": 0,
+    "ty": 0,
+    "tz": 20,
+    "rotateMode": "random",
+    "rx": 0,
+    "ry": 0,
+    "rz": 0,
+    "sx": 1,
+    "sy": 1,
+    "sz": 1,
+    "radius": 50,
+    "useBox": true,
+    "centerDim": "xyz",
+    "centerResname": ""
+   },
+   "measured": {
+    "width": 260,
+    "height": 299
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none"
+   }
+  },
+  {
+   "id": "transform_1783461096638",
+   "type": "transform",
+   "position": {
+    "x": 1390,
+    "y": 490
+   },
+   "data": {
+    "mode": "translate",
+    "translateMode": "relative",
+    "tx": 0,
+    "ty": 0,
+    "tz": 40,
+    "rotateMode": "random",
+    "rx": 0,
+    "ry": 0,
+    "rz": 0,
+    "sx": 1,
+    "sy": 1,
+    "sz": 1,
+    "radius": 50,
+    "useBox": true,
+    "centerDim": "xyz",
+    "centerResname": ""
+   },
+   "measured": {
+    "width": 260,
+    "height": 299
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none"
+   }
+  },
+  {
+   "id": "viewer_1783461159848",
+   "type": "viewer",
+   "position": {
+    "x": 1700,
+    "y": 490
+   },
+   "data": {
+    "renderer": "3dmol",
+    "title": "Structure Viewer",
+    "width": 500,
+    "height": 500,
+    "computeBonds": true,
+    "background": "light",
+    "viewStyle": "both",
+    "showOutline": true,
+    "showHydrogens": true,
+    "showUnitCell": true,
+    "labelMode": "none",
+    "spin": false,
+    "projection": "perspective",
+    "stickRadius": 0.15,
+    "sphereScale": 0.25,
+    "lineWidth": 1.2
+   },
+   "measured": {
+    "width": 640,
+    "height": 500
+   }
+  },
+  {
+   "id": "ions_1783461307114",
+   "type": "ions",
+   "position": {
+    "x": 2390,
+    "y": 250
+   },
+   "data": {
+    "count": 16,
+    "directionValue": 0,
+    "zlo": 0,
+    "zhi": 20
+   },
+   "measured": {
+    "width": 260,
+    "height": 378
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none"
+   }
+  },
+  {
+   "id": "node_1783461345501",
+   "type": "ions",
+   "position": {
+    "x": 2700,
+    "y": 250
+   },
+   "data": {
+    "count": 16,
+    "directionValue": 0,
+    "zlo": 20,
+    "zhi": 40
+   },
+   "measured": {
+    "width": 260,
+    "height": 378
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none",
+    "boxShadow": "0 0 0 2px rgba(34, 197, 94, 0.95)",
+    "borderRadius": 12
+   }
+  },
+  {
+   "id": "node_1783461356201",
+   "type": "ions",
+   "position": {
+    "x": 3010,
+    "y": 250
+   },
+   "data": {
+    "count": 16,
+    "directionValue": 0,
+    "zlo": 40,
+    "zhi": 60
+   },
+   "measured": {
+    "width": 260,
+    "height": 378
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none",
+    "boxShadow": "0 0 0 2px rgba(34, 197, 94, 0.95)",
+    "borderRadius": 12
+   }
+  },
+  {
+   "id": "viewer_1783461367808",
+   "type": "viewer",
+   "position": {
+    "x": 3320,
+    "y": 250
+   },
+   "data": {
+    "renderer": "3dmol",
+    "title": "Structure Viewer",
+    "width": 500,
+    "height": 500,
+    "computeBonds": true,
+    "background": "light",
+    "viewStyle": "both",
+    "showOutline": true,
+    "showHydrogens": true,
+    "showUnitCell": true,
+    "labelMode": "none",
+    "spin": false,
+    "projection": "perspective",
+    "stickRadius": 0.15,
+    "sphereScale": 0.25,
+    "lineWidth": 1.2
+   },
+   "measured": {
+    "width": 640,
+    "height": 500
+   }
+  },
+  {
+   "id": "solvent_1783461438034",
+   "type": "solvent",
+   "position": {
+    "x": 4010,
+    "y": 250
+   },
+   "data": {
+    "waterModel": "opc3",
+    "density": 1.05,
+    "minDistance": 1.8,
+    "zlo": 0,
+    "zhi": 20,
+    "maxSolventMode": "count",
+    "maxSolventCount": 360,
+    "includeSolute": false
+   },
+   "measured": {
+    "width": 300,
+    "height": 322
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none",
+    "boxShadow": "0 0 0 2px rgba(239, 68, 68, 0.95)",
+    "borderRadius": 12
+   }
+  },
+  {
+   "id": "viewer_1783461473863",
+   "type": "viewer",
+   "position": {
+    "x": 5060,
+    "y": 250
+   },
+   "data": {
+    "renderer": "3dmol",
+    "title": "Structure Viewer",
+    "width": 500,
+    "height": 500,
+    "computeBonds": true,
+    "background": "light",
+    "viewStyle": "both",
+    "showOutline": true,
+    "showHydrogens": true,
+    "showUnitCell": true,
+    "labelMode": "none",
+    "spin": false,
+    "projection": "perspective",
+    "stickRadius": 0.15,
+    "sphereScale": 0.25,
+    "lineWidth": 1.2
+   },
+   "measured": {
+    "width": 640,
+    "height": 500
+   }
+  },
+  {
+   "id": "node_1783463360276",
+   "type": "solvent",
+   "position": {
+    "x": 4360,
+    "y": 250
+   },
+   "data": {
+    "waterModel": "opc3",
+    "density": 1.05,
+    "minDistance": 1.8,
+    "zlo": 20,
+    "zhi": 40,
+    "maxSolventMode": "count",
+    "maxSolventCount": 360,
+    "includeSolute": false
+   },
+   "measured": {
+    "width": 300,
+    "height": 322
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none",
+    "boxShadow": "0 0 0 2px rgba(34, 197, 94, 0.95)",
+    "borderRadius": 12
+   }
+  },
+  {
+   "id": "node_1783463361985",
+   "type": "solvent",
+   "position": {
+    "x": 4710,
+    "y": 250
+   },
+   "data": {
+    "waterModel": "opc3",
+    "density": 1.05,
+    "minDistance": 1.8,
+    "zlo": 40,
+    "zhi": 60,
+    "maxSolventMode": "count",
+    "maxSolventCount": 360,
+    "includeSolute": false
+   },
+   "measured": {
+    "width": 300,
+    "height": 322
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none",
+    "boxShadow": "0 0 0 2px rgba(34, 197, 94, 0.95)",
+    "borderRadius": 12
+   }
+  },
+  {
+   "id": "topology_1783463395455",
+   "type": "topology",
+   "position": {
+    "x": 5741.267299700973,
+    "y": 251.88469826900496
+   },
+   "data": {
+    "detectedMolecules": [
+     {
+      "name": "MIN",
+      "count": 3,
+      "type": "mineral"
+     },
+     {
+      "name": "Na",
+      "count": 48,
+      "type": "ion"
+     },
+     {
+      "name": "SOL",
+      "count": 1080,
+      "type": "water"
+     }
+    ]
+   },
+   "measured": {
+    "width": 270,
+    "height": 411
+   }
+  },
+  {
+   "id": "simulate_1784716086591",
+   "type": "simulate",
+   "position": {
+    "x": 6445.831329929928,
+    "y": 239.81109299984456
+   },
+   "data": {
+    "simType": "nvt",
+    "miniSteps": 500,
+    "mdSteps": 5000,
+    "temperature": 298.15,
+    "timestep": 1,
+    "cutoff": 12,
+    "constraints": "None",
+    "pressure": 1,
+    "frictionCoeff": 1,
+    "switchDistance": 10,
+    "writeDcd": false,
+    "dcdFreq": 1000,
+    "wrapTrajectory": true,
+    "thermoPlots": [
+     "potential"
+    ],
+    "logFreq": 100,
+    "pdbFreq": 100
+   },
+   "measured": {
+    "width": 260,
+    "height": 505
+   },
+   "style": {
+    "opacity": 1,
+    "filter": "none"
+   }
+  },
+  {
+   "id": "viewer_1784716116199",
+   "type": "viewer",
+   "position": {
+    "x": 6781.661667269275,
+    "y": 238.37506902580816
+   },
+   "data": {
+    "renderer": "3dmol",
+    "title": "Structure Viewer",
+    "width": 500,
+    "height": 500,
+    "computeBonds": true,
+    "background": "light",
+    "viewStyle": "both",
+    "showOutline": true,
+    "showHydrogens": true,
+    "showUnitCell": true,
+    "labelMode": "none",
+    "spin": false,
+    "projection": "perspective",
+    "stickRadius": 0.15,
+    "sphereScale": 0.25,
+    "lineWidth": 1.2
+   },
+   "measured": {
+    "width": 640,
+    "height": 500
+   }
+  },
+  {
+   "id": "plot_1784716127832",
+   "type": "plot",
+   "position": {
+    "x": 6787.973452608697,
+    "y": 809.0536149561726
+   },
+   "data": {
+    "title": "Data Plot",
+    "xlabel": "X",
+    "ylabel": "Y"
+   },
+   "measured": {
+    "width": 480,
+    "height": 460
+   }
+  },
+  {
+   "id": "forcefield_1784716219276",
+   "type": "forcefield",
+   "position": {
+    "x": 6111.126271347907,
+    "y": 243.4943204460912
+   },
+   "data": {
+    "forcefield": "minff",
+    "minffVariant": "500",
+    "rmaxLong": 2.45,
+    "rmaxH": 1.2,
+    "log": false
+   },
+   "measured": {
+    "width": 250,
+    "height": 382
+   }
+  }
+ ],
+ "edges": [
+  {
+   "type": "deletable",
+   "source": "node_1",
+   "sourceHandle": "out",
+   "target": "replicate_1783460515505",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__node_1out-replicate_1783460515505in",
+   "selected": false
+  },
+  {
+   "type": "deletable",
+   "source": "replicate_1783460515505",
+   "sourceHandle": "out",
+   "target": "chemistry_1783460937606",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__replicate_1783460515505out-chemistry_1783460937606in",
+   "selected": false
+  },
+  {
+   "type": "deletable",
+   "source": "node_1783461026579_0",
+   "sourceHandle": "out",
+   "target": "node_1783461026579_1",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "e_1783461026579_0",
+   "selected": false
+  },
+  {
+   "type": "deletable",
+   "source": "node_1783461026579_1",
+   "sourceHandle": "out",
+   "target": "node_1783461026579_2",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "e_1783461026579_1",
+   "selected": false
+  },
+  {
+   "type": "deletable",
+   "source": "node_1783461036800_0",
+   "sourceHandle": "out",
+   "target": "node_1783461036800_1",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "e_1783461036800_0",
+   "selected": false
+  },
+  {
+   "type": "deletable",
+   "source": "node_1783461036800_1",
+   "sourceHandle": "out",
+   "target": "node_1783461036800_2",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "e_1783461036800_1",
+   "selected": false
+  },
+  {
+   "type": "deletable",
+   "source": "chemistry_1783460937606",
+   "sourceHandle": "out",
+   "target": "box_1783461045381",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__chemistry_1783460937606out-box_1783461045381in"
+  },
+  {
+   "type": "deletable",
+   "source": "node_1783461026579_2",
+   "sourceHandle": "out",
+   "target": "box_1783461062071",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__node_1783461026579_2out-box_1783461062071in"
+  },
+  {
+   "type": "deletable",
+   "source": "node_1783461036800_2",
+   "sourceHandle": "out",
+   "target": "box_1783461068900",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__node_1783461036800_2out-box_1783461068900in"
+  },
+  {
+   "type": "deletable",
+   "source": "box_1783461045381",
+   "sourceHandle": "out",
+   "target": "add_1783461075769",
+   "targetHandle": "in1",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__box_1783461045381out-add_1783461075769in1"
+  },
+  {
+   "type": "deletable",
+   "source": "box_1783461062071",
+   "sourceHandle": "out",
+   "target": "transform_1783461088881",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__box_1783461062071out-transform_1783461088881in"
+  },
+  {
+   "type": "deletable",
+   "source": "box_1783461068900",
+   "sourceHandle": "out",
+   "target": "transform_1783461096638",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__box_1783461068900out-transform_1783461096638in"
+  },
+  {
+   "type": "deletable",
+   "source": "transform_1783461088881",
+   "sourceHandle": "out",
+   "target": "add_1783461075769",
+   "targetHandle": "in2",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__transform_1783461088881out-add_1783461075769in2"
+  },
+  {
+   "type": "deletable",
+   "source": "transform_1783461096638",
+   "sourceHandle": "out",
+   "target": "add_1783461075769",
+   "targetHandle": "in3",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__transform_1783461096638out-add_1783461075769in3"
+  },
+  {
+   "type": "deletable",
+   "source": "add_1783461075769",
+   "sourceHandle": "out",
+   "target": "viewer_1783461159848",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__add_1783461075769out-viewer_1783461159848in"
+  },
+  {
+   "type": "deletable",
+   "source": "viewer_1783461159848",
+   "sourceHandle": "out",
+   "target": "ions_1783461307114",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__viewer_1783461159848out-ions_1783461307114in"
+  },
+  {
+   "type": "deletable",
+   "source": "ions_1783461307114",
+   "sourceHandle": "out",
+   "target": "node_1783461345501",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__ions_1783461307114out-node_1783461345501in"
+  },
+  {
+   "type": "deletable",
+   "source": "node_1783461345501",
+   "sourceHandle": "out",
+   "target": "node_1783461356201",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__node_1783461345501out-node_1783461356201in"
+  },
+  {
+   "type": "deletable",
+   "source": "node_1783461356201",
+   "sourceHandle": "out",
+   "target": "viewer_1783461367808",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__node_1783461356201out-viewer_1783461367808in"
+  },
+  {
+   "type": "deletable",
+   "source": "viewer_1783461367808",
+   "sourceHandle": "out",
+   "target": "solvent_1783461438034",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__viewer_1783461367808out-solvent_1783461438034in"
+  },
+  {
+   "type": "deletable",
+   "source": "solvent_1783461438034",
+   "sourceHandle": "out",
+   "target": "node_1783463360276",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__solvent_1783461438034out-node_1783463360276in"
+  },
+  {
+   "type": "deletable",
+   "source": "node_1783463360276",
+   "sourceHandle": "out",
+   "target": "node_1783463361985",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__node_1783463360276out-node_1783463361985in"
+  },
+  {
+   "type": "deletable",
+   "source": "node_1783463361985",
+   "sourceHandle": "out",
+   "target": "viewer_1783461473863",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__node_1783463361985out-viewer_1783461473863in"
+  },
+  {
+   "type": "deletable",
+   "source": "viewer_1783461473863",
+   "sourceHandle": "out",
+   "target": "topology_1783463395455",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__viewer_1783461473863out-topology_1783463395455in"
+  },
+  {
+   "type": "deletable",
+   "source": "simulate_1784716086591",
+   "sourceHandle": "out",
+   "target": "viewer_1784716116199",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__simulate_1784716086591out-viewer_1784716116199in",
+   "selected": false
+  },
+  {
+   "type": "deletable",
+   "source": "simulate_1784716086591",
+   "sourceHandle": "out",
+   "target": "plot_1784716127832",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__simulate_1784716086591out-plot_1784716127832in",
+   "selected": false
+  },
+  {
+   "type": "deletable",
+   "source": "topology_1783463395455",
+   "sourceHandle": "out",
+   "target": "forcefield_1784716219276",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__topology_1783463395455out-forcefield_1784716219276in"
+  },
+  {
+   "type": "deletable",
+   "source": "forcefield_1784716219276",
+   "sourceHandle": "out",
+   "target": "simulate_1784716086591",
+   "targetHandle": "in",
+   "data": {
+    "type": "bezier"
+   },
+   "id": "xy-edge__forcefield_1784716219276out-simulate_1784716086591in",
+   "selected": false
+  }
+ ]
+}
