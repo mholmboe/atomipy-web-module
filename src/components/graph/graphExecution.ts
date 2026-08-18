@@ -1589,9 +1589,21 @@ export function generatePythonCode(
           pythonCode += `if isinstance(${inAtoms}, str):\n`;
           pythonCode += `    try:\n`;
           pythonCode += `        if '/' in ${inAtoms} or ${inAtoms}.endswith(('.pdb', '.mol2', '.sdf', '.mol')):\n`;
-          pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file(${inAtoms}, version='${versionArg}', charge_method='${chargeArg}', basename='${organicBasename(n)}')\n`;
+          pythonCode += `            ${blockOutAtoms}, _ff_box = ap.parametrize_organic_file(${inAtoms}, version='${versionArg}', charge_method='${chargeArg}', basename='${organicBasename(n)}')\n`;
           pythonCode += `        else:\n`;
-          pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff(${inAtoms}, version='${versionArg}', charge_method='${chargeArg}', basename='${organicBasename(n)}')\n`;
+          pythonCode += `            ${blockOutAtoms}, _ff_box = ap.parametrize_organic_gaff(${inAtoms}, version='${versionArg}', charge_method='${chargeArg}', basename='${organicBasename(n)}')\n`;
+          pythonCode += `        # An explicit upstream box (e.g. a Box node placed before this Forcefield\n`;
+          pythonCode += `        # node) takes precedence over the molecule's own bounding box, so the\n`;
+          pythonCode += `        # result no longer depends on Box/Forcefield ordering. Sync SystemList.box\n`;
+          pythonCode += `        # too, since merge/topology reads that attribute.\n`;
+          pythonCode += `        if ${inBox} is not None and hasattr(${inBox}, '__len__') and len(${inBox}) > 0:\n`;
+          pythonCode += `            ${blockOutBox} = ${inBox}\n`;
+          pythonCode += `            try:\n`;
+          pythonCode += `                ${blockOutAtoms}.box = ${inBox}\n`;
+          pythonCode += `            except Exception:\n`;
+          pythonCode += `                pass\n`;
+          pythonCode += `        else:\n`;
+          pythonCode += `            ${blockOutBox} = _ff_box\n`;
           pythonCode += `    except Exception as e:\n`;
           pythonCode += `        print(f"Failed to parametrize organic molecule: {e}")\n`;
           pythonCode += `        ${blockOutAtoms}, ${blockOutBox} = [], None\n`;
@@ -1606,13 +1618,30 @@ export function generatePythonCode(
           pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file(_osrc, version='${versionArg}', charge_method='${chargeArg}', basename='${organicBasename(n)}')\n`;
           pythonCode += `        else:\n`;
           pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff(_osrc, version='${versionArg}', charge_method='${chargeArg}', basename='${organicBasename(n)}')\n`;
+          pythonCode += `        # An explicit upstream box (Box node before this one) wins over the\n`;
+          pythonCode += `        # molecule's own bounding box, so order doesn't change the result.\n`;
+          pythonCode += `        if ${inBox} is not None and hasattr(${inBox}, '__len__') and len(${inBox}) > 0:\n`;
+          pythonCode += `            ${blockOutBox} = ${inBox}\n`;
+          pythonCode += `            try:\n`;
+          pythonCode += `                ${blockOutAtoms}.box = ${inBox}\n`;
+          pythonCode += `            except Exception:\n`;
+          pythonCode += `                pass\n`;
           pythonCode += `    except Exception as e:\n`;
           pythonCode += `        print(f"Failed to parametrize organic molecule: {e}")\n`;
           pythonCode += `        ${blockOutAtoms}, ${blockOutBox} = [], None\n`;
           pythonCode += `else:\n`;
           pythonCode += `    # Already parameterized (has .itp) or a plain structure -> pass through\n`;
+          pythonCode += `    # (e.g. an organic parametrized upstream with a Box node in between).\n`;
           pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `    ${blockOutBox} = ${inBox}\n`;
+          pythonCode += `    # Keep the carried SystemList.box in sync with the pass-through box, so a\n`;
+          pythonCode += `    # Box node placed before this Forcefield node isn't shadowed by the stale\n`;
+          pythonCode += `    # molecule bounding box the parametrizer originally stamped on the atoms.\n`;
+          pythonCode += `    if ${inBox} is not None and hasattr(${inBox}, '__len__') and len(${inBox}) > 0:\n`;
+          pythonCode += `        try:\n`;
+          pythonCode += `            ${blockOutAtoms}.box = ${inBox}\n`;
+          pythonCode += `        except Exception:\n`;
+          pythonCode += `            pass\n`;
           // Fail loudly HERE (attributed to the organic step) instead of silently
           // passing an empty list downstream, where it surfaces as a baffling
           // ZeroDivisionError in an unrelated node (e.g. Spatial Ops center()).
