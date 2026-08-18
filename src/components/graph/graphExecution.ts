@@ -1613,6 +1613,11 @@ export function generatePythonCode(
           pythonCode += `    # Already parameterized (has .itp) or a plain structure -> pass through\n`;
           pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `    ${blockOutBox} = ${inBox}\n`;
+          // Fail loudly HERE (attributed to the organic step) instead of silently
+          // passing an empty list downstream, where it surfaces as a baffling
+          // ZeroDivisionError in an unrelated node (e.g. Spatial Ops center()).
+          pythonCode += `if ${blockOutAtoms} is None or (hasattr(${blockOutAtoms}, '__len__') and len(${blockOutAtoms}) == 0):\n`;
+          pythonCode += `    raise RuntimeError("Organic parametrization (Forcefield '${ff}') produced no atoms. The GAFF/OpenFF worker call failed \\u2014 see the 'Failed to parametrize organic molecule' message above for the underlying error.")\n`;
         } else if (ff === "dummy") {
           // Frozen "dummy mineral" for materials not covered by the built-in force fields:
           // charges default to Pauling effective; LJ defaults to 'shannon' (O→OPC3, H→none,

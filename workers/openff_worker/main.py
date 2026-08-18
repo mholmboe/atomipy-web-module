@@ -55,6 +55,21 @@ def _sanitize_basename(name: str) -> str:
     return cleaned or "organic"
 
 
+# ACPYPE's -c flag only understands its own short names (gas, bcc, user). The web
+# UI sends friendly aliases (am1bcc, gasteiger, none), so normalize before passing
+# them on — an unmapped value used to make antechamber exit non-zero -> HTTP 500.
+_CHARGE_METHOD_ALIASES = {
+    "bcc": "bcc", "am1bcc": "bcc", "am1-bcc": "bcc", "am1_bcc": "bcc",
+    "gas": "gas", "gasteiger": "gas",
+    "user": "user", "none": "user",
+}
+
+
+def _normalize_charge_method(charge_method: str) -> str:
+    """Map a user-facing charge-method name onto an ACPYPE ``-c`` flag value."""
+    return _CHARGE_METHOD_ALIASES.get((charge_method or "").lower().strip(), "bcc")
+
+
 def _probe_gromacs_reader() -> bool:
     try:
         from openff.interchange import Interchange
@@ -220,6 +235,7 @@ def parametrize_gaff(smiles: str,
     molecules in one system can get distinct, non-colliding names (organic_1, …).
     """
     bn = _sanitize_basename(basename)
+    cm = _normalize_charge_method(charge_method)
     # Map user-facing version strings to ACPYPE atom_type flag
     at = version.lower()
     if "gaff2" in at or "gaff-2" in at:
@@ -230,7 +246,7 @@ def parametrize_gaff(smiles: str,
     # Cache dir keyed by molecule + atom type + CHARGE METHOD + basename, so an
     # identical parametrization is reused across runs (and two molecules that hash
     # the same but want different names/charges don't clobber each other).
-    workdir = f"/tmp/{_mol_id(smiles)}_gaff_{atom_type}_{charge_method}_{bn}"
+    workdir = f"/tmp/{_mol_id(smiles)}_gaff_{atom_type}_{cm}_{bn}"
     os.makedirs(workdir, exist_ok=True)
 
     acpype_dir = os.path.join(workdir, f"{bn}.acpype")
@@ -247,7 +263,7 @@ def parametrize_gaff(smiles: str,
             [
                 "acpype",
                 "-i", sdf_path,
-                "-c", charge_method,   # bcc (AM1-BCC) or gas (Gasteiger)
+                "-c", cm,              # bcc (AM1-BCC) or gas (Gasteiger)
                 "-a", atom_type,       # gaff or gaff2
                 "-o", "gmx",
                 "-n", "0",             # net charge 0 (neutral)
@@ -322,12 +338,13 @@ async def parametrize_gaff_file(
 
     at = version.lower()
     atom_type = "gaff2" if ("gaff2" in at or "gaff-2" in at) else "gaff"
+    cm = _normalize_charge_method(charge_method)
 
     result = subprocess.run(
         [
             "acpype",
             "-i", mol_path,
-            "-c", charge_method,
+            "-c", cm,
             "-a", atom_type,
             "-o", "gmx",
             "-n", "0",
