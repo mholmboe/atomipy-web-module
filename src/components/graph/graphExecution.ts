@@ -384,7 +384,7 @@ export function generatePythonCode(
   // structure node so they share one name. Single molecule keeps 'organic'
   // (back-compat); multiple become organic_1, organic_2, …; "moleculeName" overrides.
   const sanitizeMolName = (s: string): string => s.replace(/[^A-Za-z0-9_]/g, "_").replace(/^_+|_+$/g, "");
-  const _isStructOrganic = (nn: Node): boolean => nn.type === "structure" && getString(nn.data, "source", "") === "organic";
+  const _isStructOrganic = (nn: Node): boolean => (nn.type === "structure" && getString(nn.data, "source", "") === "organic") || nn.type === "organic";
   const _isFFOrganic = (nn: Node): boolean => nn.type === "forcefield" && ["gaff", "openff_sage", "openff_parsley"].includes(getString(nn.data, "forcefield", ""));
   const _upstreamStructOrganic = (startId: string): string | null => {
     const seen = new Set<string>([startId]);
@@ -455,7 +455,7 @@ export function generatePythonCode(
   // the carried itp would be stale. (Dummy per-atom markers ride the dicts and
   // need no re-attach.) Emits module-level Python.
   const carryTopo = (outVar: string, inVar: string): string =>
-    `_carry = [a for a in ('itp', '_defines', '_top_path', '_mol_counts_override') if hasattr(${inVar}, a)]\n` +
+    `_carry = [a for a in ('itp', '_defines', '_top_path', '_mol_counts_override', '_organic_src', '_organic_kind') if hasattr(${inVar}, a)]\n` +
     `if _carry:\n` +
     `    class _SL_carry(list): pass\n` +
     `    ${outVar} = _SL_carry(${outVar})\n` +
@@ -581,48 +581,32 @@ export function generatePythonCode(
           const libraryMol = pyEscape(getString(data, "libraryMolecule", ""));
           const isLibrary = (inputMode === "library" || !!libraryMol) && !!libraryMol;
 
-          // Bundled-library molecules carry curated 3D geometry + bond orders;
-          // load and write an SDF up front so downstream GAFF/Sage parametrizes
-          // from the real structure (the .sdf path then flows like an upload).
-          const libSdf = `${organicBasename(n)}.sdf`;
+          // Organic import is now COORDS-ONLY (fast): SMILES/uploads go through the
+          // worker's RDKit embed, library molecules load curated geometry directly.
+          // No atom types / charges / acpype here — the expensive GAFF/OpenFF
+          // parametrization is deferred to the Forcefield node. The original source
+          // is stashed on the atoms (_organic_src / _organic_kind) so a downstream
+          // Forcefield node can parametrize it. A Forcefield node is required before
+          // Export/Simulate (guarded there).
+          const bn = organicBasename(n);
+          pythonCode += `\n# Organic molecule: coords-only import (parametrize later in a Forcefield node)\n`;
+          pythonCode += `try:\n`;
           if (isLibrary) {
-            pythonCode += `# Organic molecule from bundled library: ${libraryMol}\n`;
-            pythonCode += `_lib_${blockOutAtoms}, _ = ap.load_molecule('${libraryMol}')\n`;
-            pythonCode += `ap.write_sdf(_lib_${blockOutAtoms}, '${libSdf}')\n`;
-          }
-
-          // Defer parametrization only if the organic node is directly connected to a forcefield node.
-          // If there are intermediate nodes (like System Box, Spatial Ops, etc.), we must parameterize immediately
-          // so those nodes receive valid coordinates instead of raw SMILES strings.
-          const hasDirectForcefield = edges.some(
-            (e) => e.source === id && nodeMap.get(e.target)?.type === "forcefield"
-          );
-          const hasDownstreamFF = hasDirectForcefield;
-
-          if (hasDownstreamFF) {
-            pythonCode += `# Organic structure definition (parameterized downstream in Forcefield node)\n`;
-            if (isLibrary) {
-              pythonCode += `${blockOutAtoms} = "${libSdf}"\n`;
-            } else if (inputMode === "file" && uploadPath) {
-              pythonCode += `${blockOutAtoms} = "${uploadPath}"\n`;
-            } else {
-              pythonCode += `${blockOutAtoms} = "${smiles}"\n`;
-            }
-            pythonCode += `${blockOutBox} = None\n`;
+            pythonCode += `    _org_atoms, _lib_cell = ap.load_molecule('${libraryMol}')\n`;
+            pythonCode += `    ${blockOutBox} = ap.Cell2Box_dim(_lib_cell) if (hasattr(_lib_cell,'__len__') and len(_lib_cell) in (3,6)) else _lib_cell\n`;
+            pythonCode += `    class _SL_organic(list): pass\n`;
+            pythonCode += `    ${blockOutAtoms} = _SL_organic(_org_atoms)\n`;
+            pythonCode += `    ${blockOutAtoms}.itp = None; ${blockOutAtoms}.box = ${blockOutBox}\n`;
+            pythonCode += `    ${blockOutAtoms}._organic_src, ${blockOutAtoms}._organic_kind = '${libraryMol}', 'library'\n`;
+          } else if (inputMode === "file" && uploadPath) {
+            pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.embed_organic('${uploadPath}', basename='${bn}', is_file=True)\n`;
           } else {
-            pythonCode += `\n# Parametrize Organic Molecule (Fallback / Standalone)\n`;
-            pythonCode += `try:\n`;
-            if (isLibrary) {
-              pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${libSdf}', version='gaff-2.11', basename='${organicBasename(n)}')\n`;
-            } else if (inputMode === "file" && uploadPath) {
-              pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${uploadPath}', version='gaff-2.11', basename='${organicBasename(n)}')\n`;
-            } else {
-              pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff('${smiles}', version='gaff-2.11', basename='${organicBasename(n)}')\n`;
-            }
-            pythonCode += `except Exception as e:\n`;
-            pythonCode += `    print(f"Failed to parametrize organic molecule: {e}")\n`;
-            pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = [], None\n`;
+            pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.embed_organic('${smiles}', basename='${bn}', is_file=False)\n`;
           }
+          pythonCode += `    print(f"Organic '${bn}': {len(${blockOutAtoms})} atoms (coords only; add a Forcefield node to assign types/charges)")\n`;
+          pythonCode += `except Exception as e:\n`;
+          pythonCode += `    print(f"Failed to import organic molecule: {e}")\n`;
+          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = [], None\n`;
         }
         
         if (source !== "organic") {
@@ -1611,8 +1595,22 @@ export function generatePythonCode(
           pythonCode += `    except Exception as e:\n`;
           pythonCode += `        print(f"Failed to parametrize organic molecule: {e}")\n`;
           pythonCode += `        ${blockOutAtoms}, ${blockOutBox} = [], None\n`;
+          pythonCode += `elif getattr(${inAtoms}, '_organic_src', None) is not None and getattr(${inAtoms}, 'itp', None) is None:\n`;
+          pythonCode += `    # Coords-only organic from import -> parametrize now from the stashed source\n`;
+          pythonCode += `    _osrc = ${inAtoms}._organic_src; _okind = getattr(${inAtoms}, '_organic_kind', 'smiles')\n`;
+          pythonCode += `    try:\n`;
+          pythonCode += `        if _okind == 'library':\n`;
+          pythonCode += `            _lm, _ = ap.load_molecule(_osrc); ap.write_sdf(_lm, '${organicBasename(n)}.sdf')\n`;
+          pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${organicBasename(n)}.sdf', version='${versionArg}', charge_method='${chargeArg}', basename='${organicBasename(n)}')\n`;
+          pythonCode += `        elif _okind == 'file':\n`;
+          pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file(_osrc, version='${versionArg}', charge_method='${chargeArg}', basename='${organicBasename(n)}')\n`;
+          pythonCode += `        else:\n`;
+          pythonCode += `            ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff(_osrc, version='${versionArg}', charge_method='${chargeArg}', basename='${organicBasename(n)}')\n`;
+          pythonCode += `    except Exception as e:\n`;
+          pythonCode += `        print(f"Failed to parametrize organic molecule: {e}")\n`;
+          pythonCode += `        ${blockOutAtoms}, ${blockOutBox} = [], None\n`;
           pythonCode += `else:\n`;
-          pythonCode += `    # Legacy compat: pass-through pre-parameterized structure\n`;
+          pythonCode += `    # Already parameterized (has .itp) or a plain structure -> pass through\n`;
           pythonCode += `    ${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `    ${blockOutBox} = ${inBox}\n`;
         } else if (ff === "dummy") {
@@ -1679,6 +1677,9 @@ export function generatePythonCode(
         break;
       }
       case "simulate": {
+        // Guard: an organic imported coords-only (no force field) cannot be simulated.
+        pythonCode += `\nif getattr(${inAtoms}, '_organic_src', None) is not None and getattr(${inAtoms}, 'itp', None) is None:\n`;
+        pythonCode += `    raise RuntimeError("Organic molecule '%s' has no force field. Add a Forcefield node (GAFF/OpenFF) between the organic import and this Simulate node to assign atom types and charges." % getattr(${inAtoms}, '_organic_src', '?'))\n`;
         const simType = getString(data, "simType", "nvt");
         const temp = getNumber(data, "temperature", 298.15);
         const timestepFs = getNumber(data, "timestep", 1.0);
@@ -3191,31 +3192,32 @@ export function generatePythonCode(
         break;
       }
       case "organic": {
+        // Same coords-only import as an organic Structure node: fast, no acpype.
+        // Parametrization (GAFF/OpenFF) is deferred to a downstream Forcefield node.
         const smiles = pyEscape(getString(data, "smiles", ""));
-        const ff = pyEscape(getString(data, "forcefield", "gaff-2.11"));
         const inputMode = getString(data, "inputMode", "smiles");
         const uploadPath = pyEscape(getString(data, "uploadedFilePath", ""));
         const libraryMol = pyEscape(getString(data, "libraryMolecule", ""));
         const isLibrary = (inputMode === "library" || !!libraryMol) && !!libraryMol;
-        const libSdf = `${organicBasename(n)}.sdf`;
+        const bn = organicBasename(n);
 
-        if (isLibrary) {
-          pythonCode += `# Organic molecule from bundled library: ${libraryMol}\n`;
-          pythonCode += `_lib_${blockOutAtoms}, _ = ap.load_molecule('${libraryMol}')\n`;
-          pythonCode += `ap.write_sdf(_lib_${blockOutAtoms}, '${libSdf}')\n`;
-        }
-
-        pythonCode += `\n# Parametrize Organic Molecule\n`;
+        pythonCode += `\n# Organic molecule: coords-only import (parametrize later in a Forcefield node)\n`;
         pythonCode += `try:\n`;
         if (isLibrary) {
-          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${libSdf}', version='${ff}', basename='${organicBasename(n)}')\n`;
+          pythonCode += `    _org_atoms, _lib_cell = ap.load_molecule('${libraryMol}')\n`;
+          pythonCode += `    ${blockOutBox} = ap.Cell2Box_dim(_lib_cell) if (hasattr(_lib_cell,'__len__') and len(_lib_cell) in (3,6)) else _lib_cell\n`;
+          pythonCode += `    class _SL_organic(list): pass\n`;
+          pythonCode += `    ${blockOutAtoms} = _SL_organic(_org_atoms)\n`;
+          pythonCode += `    ${blockOutAtoms}.itp = None; ${blockOutAtoms}.box = ${blockOutBox}\n`;
+          pythonCode += `    ${blockOutAtoms}._organic_src, ${blockOutAtoms}._organic_kind = '${libraryMol}', 'library'\n`;
         } else if (inputMode === "file" && uploadPath) {
-          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_file('${uploadPath}', version='${ff}', basename='${organicBasename(n)}')\n`;
+          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.embed_organic('${uploadPath}', basename='${bn}', is_file=True)\n`;
         } else {
-          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.parametrize_organic_gaff('${smiles}', version='${ff}', basename='${organicBasename(n)}')\n`;
+          pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = ap.embed_organic('${smiles}', basename='${bn}', is_file=False)\n`;
         }
+        pythonCode += `    print(f"Organic '${bn}': {len(${blockOutAtoms})} atoms (coords only; add a Forcefield node to assign types/charges)")\n`;
         pythonCode += `except Exception as e:\n`;
-        pythonCode += `    print(f"Failed to parametrize organic molecule: {e}")\n`;
+        pythonCode += `    print(f"Failed to import organic molecule: {e}")\n`;
         pythonCode += `    ${blockOutAtoms}, ${blockOutBox} = [], None\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: blockOutBox });
         break;
@@ -3438,6 +3440,12 @@ export function generatePythonCode(
         const outName = pyEscape(getString(data, "outputName", "system"));
         const structFmt = pyEscape(getString(data, "structureFormat", "pdb"));
         const topFmt = pyEscape(getString(data, "topologyFormat", "none"));
+        // Guard: exporting a TOPOLOGY for a coords-only organic (no force field)
+        // is impossible. Structure-only export (coords) of a viewed molecule is fine.
+        if (topFmt !== "none") {
+          pythonCode += `\nif getattr(${inAtoms}, '_organic_src', None) is not None and getattr(${inAtoms}, 'itp', None) is None:\n`;
+          pythonCode += `    raise RuntimeError("Cannot export a topology for organic '%s' with no force field. Add a Forcefield node (GAFF/OpenFF), or set Topology to 'none' to export coordinates only." % getattr(${inAtoms}, '_organic_src', '?'))\n`;
+        }
         // Walk upstream depth-first, visiting each node's inputs in handle order
         // (in1 before in2 …) so the FIRST-connected branch of a Join/Add node takes
         // precedence — e.g. an inorganic structure wired to in1 wins over an organic

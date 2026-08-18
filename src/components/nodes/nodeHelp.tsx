@@ -119,24 +119,25 @@ export const NODE_HELP: Record<string, NodeHelp> = {
   organic: {
     title: "Import Structure — Organic",
     summary:
-      "The Organic tab of the Import Structure node. Defines a single molecule from a SMILES string, an uploaded file, or the bundled library, and generates 3D coordinates to feed downstream.",
+      "The Organic tab of the Import Structure node. Defines a single molecule from a SMILES string, an uploaded file, or the bundled library, and generates 3D coordinates only — fast, with NO atom types or charges. The expensive GAFF/OpenFF parametrization is deferred to a downstream Forcefield node.",
     features: [
       "Three input modes: SMILES (e.g. CCO for ethanol), File (.mol, .mol2, .sdf, .pdb), or Library (~428 molecules).",
-      "Conformer count is configurable under More options (coordinate generation only).",
-      "Preview & Validate parametrizes a draft to confirm the molecule is well-formed before you build.",
+      "Import is coordinates-only (RDKit embed for SMILES, curated geometry for library, the file's own coords for uploads) — so viewing and building are fast.",
+      "The AM1-BCC / acpype step runs only once, at the Forcefield node, and only when you actually parametrize.",
     ],
     quirks: [
-      "Coordinates and validation happen here; the actual GAFF / OpenFF Sage parameters are assigned on the downstream Forcefield node.",
-      "Uploaded .mol/.mol2/.sdf files use the same GAFF/OpenFF path as SMILES input.",
-      "A failed parametrization leaves an empty atom list — check the SMILES/file before continuing.",
+      "No atom types / charges are assigned here — add a Forcefield node before Export (topology) or Simulate; both are guarded and will tell you if it's missing.",
+      "Coordinate-only export (Topology = none) and viewing work without a Forcefield node.",
+      "For several copies of the SAME molecule, parametrize once then use Replicate/Insert — the topology (moleculetype) is reused, so acpype runs a single time.",
+      "A failed import leaves an empty atom list — check the SMILES/file before continuing.",
     ],
     after: [
-      "Forcefield — assign GAFF / OpenFF Sage parameters.",
-      "Insert / Solvent / Box — place the molecule into a larger system.",
+      "Forcefield — assign GAFF / OpenFF Sage parameters (required before Export topology / Simulate).",
+      "Insert / Solvent / Box — place the molecule into a larger system (after parametrization).",
     ],
     tips: [
-      "Use a canonical SMILES; ambiguous or invalid strings fail validation.",
-      "For solute-in-box setups, combine with an inorganic or solvent system via Insert/Merge after parametrization.",
+      "Use a canonical SMILES; ambiguous or invalid strings fail to embed.",
+      "For solute-in-box setups, parametrize first (Forcefield), then combine with an inorganic or solvent system via Insert/Merge.",
     ],
   },
 

@@ -227,48 +227,51 @@ def parametrize_gaff(smiles: str,
     else:
         atom_type = "gaff"
 
-    # Include basename in the cache dir so two molecules that hash the same but
-    # want different names don't clobber each other.
-    workdir = f"/tmp/{_mol_id(smiles)}_gaff_{atom_type}_{bn}"
+    # Cache dir keyed by molecule + atom type + CHARGE METHOD + basename, so an
+    # identical parametrization is reused across runs (and two molecules that hash
+    # the same but want different names/charges don't clobber each other).
+    workdir = f"/tmp/{_mol_id(smiles)}_gaff_{atom_type}_{charge_method}_{bn}"
     os.makedirs(workdir, exist_ok=True)
-
-    sdf_path = os.path.join(workdir, f"{bn}.sdf")
-    _smiles_to_sdf(smiles, sdf_path)
-
-    result = subprocess.run(
-        [
-            "acpype",
-            "-i", sdf_path,
-            "-c", charge_method,   # bcc (AM1-BCC) or gas (Gasteiger)
-            "-a", atom_type,       # gaff or gaff2
-            "-o", "gmx",
-            "-n", "0",             # net charge 0 (neutral)
-            "-b", bn,              # output basename -> moleculetype/residue name
-        ],
-        cwd=workdir,
-        capture_output=True,
-        text=True,
-        timeout=180,
-    )
-
-    if result.returncode != 0:
-        raise HTTPException(
-            status_code=500,
-            detail=f"ACPYPE failed:\n{result.stderr or result.stdout}",
-        )
 
     acpype_dir = os.path.join(workdir, f"{bn}.acpype")
     top_path = os.path.join(acpype_dir, f"{bn}_GMX.top")
     itp_path = os.path.join(acpype_dir, f"{bn}_GMX.itp")
     gro_path = os.path.join(acpype_dir, f"{bn}_GMX.gro")
 
-    for p in (top_path, gro_path):
-        if not os.path.exists(p):
+    # Cache hit: identical molecule already parametrized -> skip the expensive run.
+    if not (os.path.exists(top_path) and os.path.exists(gro_path)):
+        sdf_path = os.path.join(workdir, f"{bn}.sdf")
+        _smiles_to_sdf(smiles, sdf_path)
+
+        result = subprocess.run(
+            [
+                "acpype",
+                "-i", sdf_path,
+                "-c", charge_method,   # bcc (AM1-BCC) or gas (Gasteiger)
+                "-a", atom_type,       # gaff or gaff2
+                "-o", "gmx",
+                "-n", "0",             # net charge 0 (neutral)
+                "-b", bn,              # output basename -> moleculetype/residue name
+            ],
+            cwd=workdir,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+
+        if result.returncode != 0:
             raise HTTPException(
                 status_code=500,
-                detail=f"ACPYPE ran but expected output not found: {p}\n"
-                       f"stdout: {result.stdout}\nstderr: {result.stderr}",
+                detail=f"ACPYPE failed:\n{result.stderr or result.stdout}",
             )
+
+        for p in (top_path, gro_path):
+            if not os.path.exists(p):
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"ACPYPE ran but expected output not found: {p}\n"
+                           f"stdout: {result.stdout}\nstderr: {result.stderr}",
+                )
 
     box = _box_from_gro(gro_path)
     return {
@@ -368,6 +371,85 @@ async def parametrize_gaff_file(
         "charge_method": charge_method,
         "note": f"GAFF ({atom_type}) from uploaded file, {charge_method} charges",
     }
+
+
+# ---------------------------------------------------------------------------
+# Cheap coords-only embed (RDKit) — NO charges, NO atom types, NO acpype.
+# Used at import time so viewing/building an organic is fast; the real
+# GAFF/OpenFF parametrization is deferred to the Forcefield node.
+# ---------------------------------------------------------------------------
+
+def _rdkit_mol_to_pdb(mol, pdb_path: str, bn: str) -> None:
+    """Write an RDKit mol (with 3D coords) to a PDB the atomipy reader accepts."""
+    from rdkit import Chem
+    for atom in mol.GetAtoms():
+        info = Chem.AtomPDBResidueInfo()
+        info.SetResidueName((bn[:3].upper() or "LIG").ljust(3))
+        info.SetResidueNumber(1)
+        info.SetIsHeteroAtom(True)
+        atom.SetMonomerInfo(info)
+    Chem.MolToPDBFile(mol, pdb_path)
+
+
+@app.post("/embed")
+def embed_smiles(smiles: str, basename: str = "organic") -> dict:
+    """SMILES -> 3D-embedded PDB via RDKit (ETKDG + MMFF). Fast (~1s), no charges.
+
+    Returns PDB content so the caller can read coordinates for viewing/geometry
+    without paying the AM1-BCC parametrization cost. atomipy reads .pdb natively.
+    """
+    from rdkit import Chem
+    from rdkit.Chem import rdDistGeom, rdForceFieldHelpers
+    bn = _sanitize_basename(basename)
+    workdir = f"/tmp/{_mol_id(smiles)}_embed_{bn}"
+    os.makedirs(workdir, exist_ok=True)
+    pdb_path = os.path.join(workdir, f"{bn}.pdb")
+    if not os.path.exists(pdb_path):        # cache: identical SMILES reuses the embed
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            raise HTTPException(status_code=400, detail=f"RDKit could not parse SMILES: {smiles}")
+        mol = Chem.AddHs(mol)
+        if rdDistGeom.EmbedMolecule(mol, rdDistGeom.ETKDGv3()) == -1:
+            rdDistGeom.EmbedMolecule(mol, rdDistGeom.EmbedParameters())
+        try:
+            rdForceFieldHelpers.MMFFOptimizeMolecule(mol)
+        except Exception:
+            pass
+        _rdkit_mol_to_pdb(mol, pdb_path, bn)
+    return {"pdb": pdb_path, "pdb_content": _read_text(pdb_path), "basename": bn}
+
+
+@app.post("/embed-file")
+async def embed_file(file: UploadFile = File(...), basename: str = "organic") -> dict:
+    """Uploaded structure file -> PDB via RDKit, preserving its existing 3D coords.
+
+    Covers .pdb/.mol2/.sdf/.mol uploads so the caller can view/geometry them
+    cheaply; parametrization is deferred to the Forcefield node.
+    """
+    from pathlib import Path
+    from rdkit import Chem
+    bn = _sanitize_basename(basename)
+    original_name = file.filename or "organic.sdf"
+    suffix = (Path(original_name).suffix or ".sdf").lower()
+    workdir = f"/tmp/{hashlib.md5(original_name.encode()).hexdigest()[:8]}_embed_file_{bn}"
+    os.makedirs(workdir, exist_ok=True)
+    src_path = os.path.join(workdir, f"{bn}{suffix}")
+    content = await file.read()
+    with open(src_path, "wb") as f:
+        f.write(content)
+    if suffix == ".pdb":
+        return {"pdb": src_path, "pdb_content": content.decode("utf-8", "replace"), "basename": bn}
+    if suffix in (".mol2",):
+        mol = Chem.MolFromMol2File(src_path, removeHs=False)
+    elif suffix in (".sdf", ".mol"):
+        mol = next(iter(Chem.SDMolSupplier(src_path, removeHs=False)), None)
+    else:
+        mol = None
+    if mol is None:
+        raise HTTPException(status_code=400, detail=f"RDKit could not read {suffix} file for embed")
+    pdb_path = os.path.join(workdir, f"{bn}.pdb")
+    _rdkit_mol_to_pdb(mol, pdb_path, bn)
+    return {"pdb": pdb_path, "pdb_content": _read_text(pdb_path), "basename": bn}
 
 
 # ---------------------------------------------------------------------------

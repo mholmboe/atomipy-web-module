@@ -178,6 +178,47 @@ def install_runtime():
         box = paths.get("box", [50.0, 50.0, 50.0])
         return SystemList(atoms, itp=itp, box=box), box
 
+    def embed_organic(src, basename="organic", is_file=False):
+        """Cheap COORDS-ONLY import of an organic molecule (SMILES or structure
+        file) via the worker's RDKit embed — NO atom types, NO charges, NO acpype.
+        Fast (~1s); the real GAFF/OpenFF parametrization is deferred to the
+        Forcefield node. Stashes the original source on the returned atoms
+        (``_organic_src`` / ``_organic_kind``) so the Forcefield node can
+        parametrize it later. Returns (SystemList atoms, box)."""
+        worker_url = os.environ.get("OPENFF_WORKER_URL", "http://127.0.0.1:8001")
+        if is_file:
+            with open(src, "rb") as fh:
+                resp = _requests.post(
+                    f"{worker_url}/embed-file",
+                    files={"file": (os.path.basename(src), fh)},
+                    params={"basename": basename}, timeout=60,
+                )
+        else:
+            resp = _requests.post(
+                f"{worker_url}/embed",
+                params={"smiles": src, "basename": basename}, timeout=60,
+            )
+        resp.raise_for_status()
+        pdb_text = resp.json().get("pdb_content")
+        if not pdb_text:
+            raise RuntimeError("embed worker returned no PDB content")
+        local = os.path.join(os.getcwd(), f"{basename}_embed.pdb")
+        with open(local, "w") as f:
+            f.write(pdb_text)
+        atoms, cell = ap.import_auto(local)
+        if hasattr(cell, "__len__") and len(cell) in (3, 6):
+            box = ap.Cell2Box_dim(cell)
+        else:
+            # Boxless molecule -> a padded bounding box so viewing/geometry works.
+            try:
+                box = ap.Cell2Box_dim(ap.fit_box(atoms, padding=10.0, cubic=False))
+            except Exception:
+                box = [50.0, 50.0, 50.0]
+        sl = SystemList(atoms, itp=None, box=box)
+        sl._organic_src = src
+        sl._organic_kind = "file" if is_file else "smiles"
+        return sl, box
+
     def mix_systems(*components, box=None):
         """N-way topology merge for mixed mineral + organic systems. Each component
         may be a SystemList, a {'atoms',...} dict, or a plain atoms list. Returns a
@@ -222,6 +263,7 @@ def install_runtime():
 
     setattr(ap, "parametrize_organic_gaff", parametrize_organic_gaff)
     setattr(ap, "parametrize_organic_file", parametrize_organic_file)
+    setattr(ap, "embed_organic", embed_organic)
     setattr(ap, "mix_systems", mix_systems)
 
     return {

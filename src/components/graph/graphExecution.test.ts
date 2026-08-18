@@ -16,10 +16,12 @@ describe('graphExecution Python Generator', () => {
     const edges: Edge[] = [];
     
     const code = generatePythonCode(nodes, edges, 'minimal');
-    
-    // basename names the GROMACS moleculetype; a single organic stays 'organic'.
-    expect(code).toContain("ap.parametrize_organic_gaff('CCO', version='gaff-2.11', basename='organic')");
-    expect(code).toContain("organic_atoms_0, organic_box_0 = ap.parametrize_organic_gaff");
+
+    // Import is now COORDS-ONLY (fast, no acpype); parametrization is deferred to
+    // a Forcefield node. basename names the GROMACS moleculetype; a single organic
+    // stays 'organic'.
+    expect(code).toContain("ap.embed_organic('CCO', basename='organic', is_file=False)");
+    expect(code).not.toContain("ap.parametrize_organic_gaff");
   });
 
   it('names multiple distinct organics organic_1 / organic_2', () => {
@@ -33,11 +35,12 @@ describe('graphExecution Python Generator', () => {
       { id: 'e2', source: 'orgB', target: 'add1', targetHandle: 'in' },
     ];
     const code = generatePythonCode(nodes, edges, 'minimal');
-    expect(code).toContain("ap.parametrize_organic_gaff('CO', version='gaff-2.11', basename='organic_1')");
-    expect(code).toContain("ap.parametrize_organic_gaff('CCO', version='gaff-2.11', basename='organic_2')");
+    // Coords-only import keeps the distinct per-molecule basenames.
+    expect(code).toContain("ap.embed_organic('CO', basename='organic_1', is_file=False)");
+    expect(code).toContain("ap.embed_organic('CCO', basename='organic_2', is_file=False)");
   });
 
-  it('loads a bundled library molecule, writes an SDF, and parametrizes from it', () => {
+  it('loads a bundled library molecule coords-only, stashing the source for later parametrization', () => {
     const nodes: Node[] = [
       { id: 'org-1', type: 'organic', position: { x: 0, y: 0 },
         data: { inputMode: 'library', libraryMolecule: 'amino_acids/L-alanine.cjson', forcefield: 'gaff-2.11' } },
@@ -45,12 +48,12 @@ describe('graphExecution Python Generator', () => {
     const edges: Edge[] = [];
     const code = generatePythonCode(nodes, edges, 'minimal');
 
-    // Curated geometry is loaded and written to SDF (with bond orders), then
-    // the .sdf path feeds the file-based GAFF path (not SMILES).
+    // Curated geometry is loaded (coords only). NO parametrization at import — the
+    // library path + kind are stashed for a downstream Forcefield node.
     expect(code).toContain("ap.load_molecule('amino_acids/L-alanine.cjson')");
-    expect(code).toContain("ap.write_sdf(");
-    expect(code).toContain("ap.parametrize_organic_file('organic.sdf'");
-    expect(code).not.toContain('parametrize_organic_gaff');
+    expect(code).toContain("_organic_src, ");
+    expect(code).toContain("'amino_acids/L-alanine.cjson', 'library'");
+    expect(code).not.toContain('parametrize_organic');
   });
 
   it('defers library molecule to a downstream forcefield node via the .sdf path', () => {
@@ -64,10 +67,15 @@ describe('graphExecution Python Generator', () => {
     ];
     const code = generatePythonCode(nodes, edges, 'minimal');
 
-    // Structure node loads + writes the SDF and hands the path to the FF node.
+    // Structure node imports coords-only (load_molecule) and stashes the library
+    // source; the Forcefield node parametrizes it later from _organic_src.
     expect(code).toContain("ap.load_molecule('nucleobases/adenine.cjson')");
-    expect(code).toContain("ap.write_sdf(");
-    expect(code).toMatch(/structure_atoms_\d+ = "organic\.sdf"/);
+    expect(code).toContain("_organic_src");
+    expect(code).toContain("'nucleobases/adenine.cjson', 'library'");
+    // The Forcefield node reads the stashed source and writes the SDF there.
+    expect(code).toContain("getattr(structure_atoms_0, '_organic_src', None) is not None");
+    expect(code).toContain("ap.write_sdf(_lm, 'organic.sdf')");
+    expect(code).toContain("ap.parametrize_organic_file('organic.sdf'");
   });
 
   it('propagates a molecule name set on the forcefield node to the early-parametrizing structure node', () => {
@@ -137,7 +145,7 @@ describe('graphExecution Python Generator', () => {
     ];
     const code = generatePythonCode(nodes, edges, 'minimal');
     // the wrap output re-attaches .itp/_defines/_top_path so the organic topology survives
-    expect(code).toMatch(/_carry = \[a for a in \('itp', '_defines', '_top_path', '_mol_counts_override'\)/);
+    expect(code).toMatch(/_carry = \[a for a in \('itp', '_defines', '_top_path', '_mol_counts_override', '_organic_src', '_organic_kind'\)/);
   });
 
   it('export writes the dummy topology for a Dummy-FF system', () => {
@@ -570,5 +578,56 @@ describe('graphExecution — review-fix regressions', () => {
     // both the trajectory node's own load and the downstream analysis pass top=
     expect(code).toContain("ap.import_traj('uploads/default_session/t.xtc', top='uploads/default_session/c.gro')");
     expect(code).toContain('ap.msd(_frames');   // analysis runs over the imported frames
+  });
+});
+
+describe('graphExecution — organic lazy parametrization', () => {
+  it('an uploaded organic imports coords-only via embed_organic(is_file=True)', () => {
+    const nodes: Node[] = [
+      { id: 's', type: 'structure', position: { x: 0, y: 0 },
+        data: { source: 'organic', inputMode: 'file', uploadedFilePath: 'uploads/default_session/lig.mol2' } },
+    ];
+    const code = generatePythonCode(nodes, [], 'minimal');
+    expect(code).toContain("ap.embed_organic('uploads/default_session/lig.mol2', basename='organic', is_file=True)");
+    expect(code).not.toContain('ap.parametrize_organic');
+  });
+
+  it('a Forcefield node parametrizes a coords-only organic from its stashed SMILES source', () => {
+    const nodes: Node[] = [
+      { id: 's', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'organic', smiles: 'CCO' } },
+      { id: 'ff', type: 'forcefield', position: { x: 100, y: 0 }, data: { forcefield: 'gaff', chargeMethod: 'am1bcc' } },
+    ];
+    const edges: Edge[] = [{ id: 'e', source: 's', target: 'ff', targetHandle: 'in' }];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    // import is coords-only; the FF node does the acpype parametrization from _organic_src
+    expect(code).toContain("ap.embed_organic('CCO', basename='organic', is_file=False)");
+    expect(code).toContain("getattr(structure_atoms_0, '_organic_src', None) is not None");
+    expect(code).toContain('ap.parametrize_organic_gaff(_osrc');
+    expect(code).toContain("charge_method='am1bcc'");
+  });
+
+  it('Simulate guards against an organic with no force field', () => {
+    const nodes: Node[] = [
+      { id: 's', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'organic', smiles: 'CCO' } },
+      { id: 'sim', type: 'simulate', position: { x: 100, y: 0 }, data: { engine: 'openmm', simType: 'nvt' } },
+    ];
+    const edges: Edge[] = [{ id: 'e', source: 's', target: 'sim', targetHandle: 'in' }];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    expect(code).toContain("getattr(structure_atoms_0, '_organic_src', None) is not None and getattr(structure_atoms_0, 'itp', None) is None");
+    expect(code).toContain('has no force field');
+  });
+
+  it('Export guards a topology export of an unparametrized organic, but allows coords-only export', () => {
+    const withTop = generatePythonCode(
+      [{ id: 's', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'organic', smiles: 'CCO' } },
+       { id: 'x', type: 'export', position: { x: 100, y: 0 }, data: { outputName: 'lig', structureFormat: 'pdb', topologyFormat: 'itp' } }],
+      [{ id: 'e', source: 's', target: 'x', targetHandle: 'in' }], 'minimal');
+    expect(withTop).toContain('Cannot export a topology for organic');
+
+    const coordsOnly = generatePythonCode(
+      [{ id: 's', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'organic', smiles: 'CCO' } },
+       { id: 'x', type: 'export', position: { x: 100, y: 0 }, data: { outputName: 'lig', structureFormat: 'pdb', topologyFormat: 'none' } }],
+      [{ id: 'e', source: 's', target: 'x', targetHandle: 'in' }], 'minimal');
+    expect(coordsOnly).not.toContain('Cannot export a topology for organic');
   });
 });
