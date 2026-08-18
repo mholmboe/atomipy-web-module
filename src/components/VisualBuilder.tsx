@@ -124,6 +124,8 @@ import { CondenseNode } from "./nodes/CondenseNode";
 import { SimulateNode } from "./nodes/SimulateNode";
 import type { PresetOption } from "./nodes/types";
 import DeletableEdge from "./edges/DeletableEdge";
+// Built-in example workflow (a 3-layer smectite / montmorillonite tutorial system).
+import smectite3wExample from "@/examples/3w_mmt.workflow.json";
 
 const edgeTypes = {
   deletable: DeletableEdge,
@@ -489,6 +491,18 @@ const templateWorkflows: Array<{ id: string; name: string; graph: WorkflowGraph 
     id: "basic",
     name: "Basic Build (Import -> Rep -> Export)",
     graph: { nodes: basicTemplateNodes, edges: basicTemplateEdges },
+  },
+  {
+    // A complete worked example: a 3-layer smectite (montmorillonite) built from
+    // a pyrophyllite unit cell via Al->Mg octahedral substitution, stacked into
+    // three layers with counter-ions and three interlayer water sheets ("3W"),
+    // then MINFF + NVT. Loaded from the bundled tutorial workflow JSON.
+    id: "smectite_3w",
+    name: "Tutorial: 3-layer smectite (montmorillonite) + 3W hydration",
+    graph: {
+      nodes: smectite3wExample.nodes as unknown as Node[],
+      edges: smectite3wExample.edges as unknown as Edge[],
+    },
   },
   {
     id: "solvate_ions_ff",
