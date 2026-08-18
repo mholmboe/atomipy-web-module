@@ -1,0 +1,577 @@
+{
+ "kind": "workflow",
+ "schemaVersion": 1,
+ "app": "atomipy-web",
+ "name": "2L_MMT_glycol",
+ "nodes": [
+  {
+   "id": "s1",
+   "type": "structure",
+   "position": {
+    "x": 100,
+    "y": -120
+   },
+   "data": {
+    "source": "library",
+    "value": "Pyrophyllite_Lee_Guggenheim_1981_ortho_GII_0.063.pdb",
+    "materialName": "Pyrophyllite Lee Guggenheim 1981 ortho",
+    "librarySource": "preset"
+   }
+  },
+  {
+   "id": "r1",
+   "type": "replicate",
+   "position": {
+    "x": 400,
+    "y": -120
+   },
+   "data": {
+    "keepMolid": true,
+    "keepResname": true,
+    "renumberIndex": true,
+    "x": 6,
+    "y": 4
+   }
+  },
+  {
+   "id": "c1",
+   "type": "chemistry",
+   "position": {
+    "x": 700,
+    "y": -120
+   },
+   "data": {
+    "mode": "substitute",
+    "numOct": 16,
+    "numTet": 0,
+    "o1Type": "Al",
+    "o2Type": "Mg",
+    "t1Type": "Si",
+    "t2Type": "Alt",
+    "minO2Dist": 5.5,
+    "minT2Dist": 5.5,
+    "dimension": 3,
+    "fuseRmax": 0.5,
+    "fuseCriteria": "average",
+    "deltaThreshold": -0.5,
+    "maxAdditions": 10
+   }
+  },
+  {
+   "id": "b1",
+   "type": "box",
+   "position": {
+    "x": 1000,
+    "y": -120
+   },
+   "data": {
+    "a": 30.96,
+    "b": 35.864,
+    "c": 40,
+    "alpha": 90,
+    "beta": 90,
+    "gamma": 90
+   }
+  },
+  {
+   "id": "s2",
+   "type": "structure",
+   "position": {
+    "x": 100,
+    "y": 300
+   },
+   "data": {
+    "source": "library",
+    "value": "Pyrophyllite_Lee_Guggenheim_1981_ortho_GII_0.063.pdb",
+    "materialName": "Pyrophyllite Lee Guggenheim 1981 ortho",
+    "librarySource": "preset"
+   }
+  },
+  {
+   "id": "r2",
+   "type": "replicate",
+   "position": {
+    "x": 400,
+    "y": 300
+   },
+   "data": {
+    "keepMolid": true,
+    "keepResname": true,
+    "renumberIndex": true,
+    "x": 6,
+    "y": 4
+   }
+  },
+  {
+   "id": "c2",
+   "type": "chemistry",
+   "position": {
+    "x": 700,
+    "y": 300
+   },
+   "data": {
+    "mode": "substitute",
+    "numOct": 16,
+    "numTet": 0,
+    "o1Type": "Al",
+    "o2Type": "Mg",
+    "t1Type": "Si",
+    "t2Type": "Alt",
+    "minO2Dist": 5.5,
+    "minT2Dist": 5.5,
+    "dimension": 3,
+    "fuseRmax": 0.5,
+    "fuseCriteria": "average",
+    "deltaThreshold": -0.5,
+    "maxAdditions": 10
+   }
+  },
+  {
+   "id": "b2",
+   "type": "box",
+   "position": {
+    "x": 1000,
+    "y": 300
+   },
+   "data": {
+    "a": 30.96,
+    "b": 35.864,
+    "c": 40,
+    "alpha": 90,
+    "beta": 90,
+    "gamma": 90
+   }
+  },
+  {
+   "id": "tf2",
+   "type": "transform",
+   "position": {
+    "x": 1300,
+    "y": 300
+   },
+   "data": {
+    "mode": "translate",
+    "translateMode": "relative",
+    "tx": 0,
+    "ty": 0,
+    "tz": 20,
+    "rotateMode": "random",
+    "rx": 0,
+    "ry": 0,
+    "rz": 0,
+    "sx": 1,
+    "sy": 1,
+    "sz": 1,
+    "radius": 50,
+    "useBox": true,
+    "centerDim": "xyz",
+    "centerResname": ""
+   }
+  },
+  {
+   "id": "add1",
+   "type": "add",
+   "position": {
+    "x": 1600,
+    "y": 80
+   },
+   "data": {}
+  },
+  {
+   "id": "v1",
+   "type": "viewer",
+   "position": {
+    "x": 1900,
+    "y": 80
+   },
+   "data": {}
+  },
+  {
+   "id": "ion1",
+   "type": "ions",
+   "position": {
+    "x": 2200,
+    "y": 80
+   },
+   "data": {
+    "count": 16,
+    "directionValue": 0,
+    "zlo": 0,
+    "zhi": 20
+   }
+  },
+  {
+   "id": "ion2",
+   "type": "ions",
+   "position": {
+    "x": 2500,
+    "y": 80
+   },
+   "data": {
+    "count": 16,
+    "directionValue": 0,
+    "zlo": 20,
+    "zhi": 40
+   }
+  },
+  {
+   "id": "ffm",
+   "type": "forcefield",
+   "position": {
+    "x": 2800,
+    "y": 80
+   },
+   "data": {
+    "forcefield": "minff",
+    "minffVariant": "500",
+    "rmaxLong": 2.45,
+    "rmaxH": 1.2
+   }
+  },
+  {
+   "id": "org",
+   "type": "organic",
+   "position": {
+    "x": 1600,
+    "y": 720
+   },
+   "data": {
+    "smiles": "OCCO",
+    "inputMode": "smiles"
+   }
+  },
+  {
+   "id": "ffg",
+   "type": "forcefield",
+   "position": {
+    "x": 1900,
+    "y": 720
+   },
+   "data": {
+    "forcefield": "gaff",
+    "chargeMethod": "am1bcc"
+   }
+  },
+  {
+   "id": "rg",
+   "type": "replicate",
+   "position": {
+    "x": 2200,
+    "y": 720
+   },
+   "data": {
+    "keepMolid": false,
+    "x": 4,
+    "y": 3,
+    "z": 1
+   }
+  },
+  {
+   "id": "tfg",
+   "type": "transform",
+   "position": {
+    "x": 2500,
+    "y": 720
+   },
+   "data": {
+    "mode": "translate",
+    "translateMode": "relative",
+    "tx": 0,
+    "ty": 0,
+    "tz": 10,
+    "rotateMode": "random",
+    "rx": 0,
+    "ry": 0,
+    "rz": 0,
+    "sx": 1,
+    "sy": 1,
+    "sz": 1,
+    "radius": 50,
+    "useBox": true,
+    "centerDim": "xyz",
+    "centerResname": ""
+   }
+  },
+  {
+   "id": "add2",
+   "type": "add",
+   "position": {
+    "x": 3100,
+    "y": 300
+   },
+   "data": {}
+  },
+  {
+   "id": "v2",
+   "type": "viewer",
+   "position": {
+    "x": 3400,
+    "y": 300
+   },
+   "data": {}
+  },
+  {
+   "id": "top",
+   "type": "topology",
+   "position": {
+    "x": 3700,
+    "y": 300
+   },
+   "data": {}
+  },
+  {
+   "id": "em",
+   "type": "simulate",
+   "position": {
+    "x": 4000,
+    "y": 300
+   },
+   "data": {
+    "simType": "minimize",
+    "miniSteps": 500,
+    "mdSteps": 0,
+    "temperature": 298.15,
+    "timestep": 1,
+    "cutoff": 12,
+    "constraints": "None",
+    "pressure": 1,
+    "frictionCoeff": 1,
+    "switchDistance": 10,
+    "writeDcd": false,
+    "dcdFreq": 1000,
+    "wrapTrajectory": true,
+    "thermoPlots": [
+     "potential"
+    ],
+    "logFreq": 100,
+    "pdbFreq": 100
+   }
+  },
+  {
+   "id": "nvt",
+   "type": "simulate",
+   "position": {
+    "x": 4300,
+    "y": 300
+   },
+   "data": {
+    "simType": "nvt",
+    "miniSteps": 500,
+    "mdSteps": 5000,
+    "temperature": 298.15,
+    "timestep": 1,
+    "cutoff": 12,
+    "constraints": "None",
+    "pressure": 1,
+    "frictionCoeff": 1,
+    "switchDistance": 10,
+    "writeDcd": false,
+    "dcdFreq": 1000,
+    "wrapTrajectory": true,
+    "thermoPlots": [
+     "potential"
+    ],
+    "logFreq": 100,
+    "pdbFreq": 100
+   }
+  },
+  {
+   "id": "npt",
+   "type": "simulate",
+   "position": {
+    "x": 4600,
+    "y": 300
+   },
+   "data": {
+    "simType": "npt",
+    "miniSteps": 500,
+    "mdSteps": 5000,
+    "temperature": 298.15,
+    "timestep": 1,
+    "cutoff": 12,
+    "constraints": "None",
+    "pressure": 1,
+    "frictionCoeff": 1,
+    "switchDistance": 10,
+    "writeDcd": false,
+    "dcdFreq": 1000,
+    "wrapTrajectory": true,
+    "thermoPlots": [
+     "potential"
+    ],
+    "logFreq": 100,
+    "pdbFreq": 100
+   }
+  },
+  {
+   "id": "v3",
+   "type": "viewer",
+   "position": {
+    "x": 4900,
+    "y": 120
+   },
+   "data": {}
+  },
+  {
+   "id": "plot",
+   "type": "plot",
+   "position": {
+    "x": 4900,
+    "y": 540
+   },
+   "data": {}
+  }
+ ],
+ "edges": [
+  {
+   "id": "e_s1_r1_in",
+   "source": "s1",
+   "target": "r1",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_r1_c1_in",
+   "source": "r1",
+   "target": "c1",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_c1_b1_in",
+   "source": "c1",
+   "target": "b1",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_s2_r2_in",
+   "source": "s2",
+   "target": "r2",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_r2_c2_in",
+   "source": "r2",
+   "target": "c2",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_c2_b2_in",
+   "source": "c2",
+   "target": "b2",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_b1_add1_in1",
+   "source": "b1",
+   "target": "add1",
+   "targetHandle": "in1"
+  },
+  {
+   "id": "e_b2_tf2_in",
+   "source": "b2",
+   "target": "tf2",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_tf2_add1_in2",
+   "source": "tf2",
+   "target": "add1",
+   "targetHandle": "in2"
+  },
+  {
+   "id": "e_add1_v1_in",
+   "source": "add1",
+   "target": "v1",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_v1_ion1_in",
+   "source": "v1",
+   "target": "ion1",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_ion1_ion2_in",
+   "source": "ion1",
+   "target": "ion2",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_ion2_ffm_in",
+   "source": "ion2",
+   "target": "ffm",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_org_ffg_in",
+   "source": "org",
+   "target": "ffg",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_ffg_rg_in",
+   "source": "ffg",
+   "target": "rg",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_rg_tfg_in",
+   "source": "rg",
+   "target": "tfg",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_ffm_add2_in1",
+   "source": "ffm",
+   "target": "add2",
+   "targetHandle": "in1"
+  },
+  {
+   "id": "e_tfg_add2_in2",
+   "source": "tfg",
+   "target": "add2",
+   "targetHandle": "in2"
+  },
+  {
+   "id": "e_add2_v2_in",
+   "source": "add2",
+   "target": "v2",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_v2_top_in",
+   "source": "v2",
+   "target": "top",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_top_em_in",
+   "source": "top",
+   "target": "em",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_em_nvt_in",
+   "source": "em",
+   "target": "nvt",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_nvt_npt_in",
+   "source": "nvt",
+   "target": "npt",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_npt_v3_in",
+   "source": "npt",
+   "target": "v3",
+   "targetHandle": "in"
+  },
+  {
+   "id": "e_npt_plot_in",
+   "source": "npt",
+   "target": "plot",
+   "targetHandle": "in"
+  }
+ ]
+}

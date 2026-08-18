@@ -124,8 +124,9 @@ import { CondenseNode } from "./nodes/CondenseNode";
 import { SimulateNode } from "./nodes/SimulateNode";
 import type { PresetOption } from "./nodes/types";
 import DeletableEdge from "./edges/DeletableEdge";
-// Built-in example workflow (a 3-layer smectite / montmorillonite tutorial system).
+// Built-in example workflows (smectite / montmorillonite tutorial systems).
 import smectite3wExample from "@/examples/3w_mmt.workflow.json";
+import smectiteGlycolExample from "@/examples/2l_mmt_glycol.workflow.json";
 
 const edgeTypes = {
   deletable: DeletableEdge,
@@ -502,6 +503,17 @@ const templateWorkflows: Array<{ id: string; name: string; graph: WorkflowGraph 
     graph: {
       nodes: smectite3wExample.nodes as unknown as Node[],
       edges: smectite3wExample.edges as unknown as Edge[],
+    },
+  },
+  {
+    // Two-layer montmorillonite intercalated with ethylene glycol (GAFF): the
+    // clay (MINFF) and glycol (GAFF) branches are merged into one mixed topology,
+    // then run through quick EM -> NVT -> NPT.
+    id: "smectite_glycol_2l",
+    name: "Tutorial: 2-layer smectite + ethylene glycol (GAFF), EM/NVT/NPT",
+    graph: {
+      nodes: smectiteGlycolExample.nodes as unknown as Node[],
+      edges: smectiteGlycolExample.edges as unknown as Edge[],
     },
   },
   {
