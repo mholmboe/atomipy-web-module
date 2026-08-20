@@ -142,8 +142,10 @@ export function checkWorkflowPrerequisites(nodes: Node[], edges: Edge[]): string
     spce: ["JC", "HFE_LM", "IOD_LM"],
     spc: ["JC"],
     tip3p: ["JC", "HFE_LM", "IOD_LM"],
+    tip3pfb: ["HFE_LM", "IOD_LM", "CM_LM"],
     opc3: ["HFE_LM", "IOD_LM", "CM_LM"],
     opc: ["HFE_LM", "IOD_LM", "CM_LM"],
+    tip4p: ["JC"],
     tip4pew: ["HFE_LM", "IOD_LM"],
   };
 
@@ -1318,8 +1320,11 @@ export function generatePythonCode(
       }
       case "solvent": {
         const _wmSolv = getString(data, "waterModel", "opc3");
-        // tip4pew shares the 4-site geometry but isn't a solvate insertion template
-        const model = pyEscape(_wmSolv.toLowerCase() === "tip4pew" ? "tip4p" : _wmSolv);
+        // Some FF water models reuse a sibling's insertion geometry: tip4pew -> tip4p
+        // (both 4-site), tip3pfb -> tip3p (both 3-site). The FF water model itself (used
+        // for the #define / topology) is resolved separately and stays as chosen.
+        const _solvGeom: Record<string, string> = { tip4pew: "tip4p", tip3pfb: "tip3p" };
+        const model = pyEscape(_solvGeom[_wmSolv.toLowerCase()] ?? _wmSolv);
         const dens = getNumber(data, "density", 1.0) * 1000.0;
         const spacing = getNumber(data, "minDistance", 2.0);
         // Max-solvent mode: 'max' fills the box at the given density, 'count'
@@ -1936,7 +1941,7 @@ export function generatePythonCode(
           pythonCode += `        if "CLAYFF" in _d: _ff_variant = "CLAYFF_EXT"\n`;
           pythonCode += `        elif "MINFF" in _d: _ff_variant = _d\n`;
           pythonCode += `        _d_parts = [p.upper() for p in _d.split('_')]\n`;
-          pythonCode += `        for _w in ['spce','opc3','tip3p','opc','tip4pew','spc','tip5p']:\n`;
+          pythonCode += `        for _w in ['spce','opc3','tip3pfb','tip3p','opc','tip4pew','tip4p','spc','tip5p']:\n`;
           pythonCode += `            if _w.upper() in _d_parts or _w.upper() == _d.upper(): _water_model = _w\n`;
           pythonCode += `        for _ion in ['HFE_LM','IOD_LM','CM_LM','JC']:\n`;
           pythonCode += `            if _ion in _d: _ion_model = _d\n`;

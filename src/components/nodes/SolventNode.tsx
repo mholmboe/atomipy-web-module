@@ -47,7 +47,9 @@ export function SolventNode({ id, data }: NodeComponentProps<SolventNodeData>) {
             <option value="spce">SPC/E (3-site, recommended for CLAYFF)</option>
             <option value="spc">SPC (3-site, recommended for CLAYFF)</option>
             <option value="tip3p">TIP3P (3-site)</option>
+            <option value="tip3pfb">TIP3P-FB (3-site)</option>
             <option value="opc">OPC (4-site)</option>
+            <option value="tip4p">TIP4P (4-site)</option>
             <option value="tip4pew">TIP4P-Ew (4-site)</option>
           </select>
           <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
