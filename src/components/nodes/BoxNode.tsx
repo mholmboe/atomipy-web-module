@@ -172,6 +172,33 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
     // component (edges in either direction). Prefer the richest run-time PDB (exact, after
     // a build); if none exists yet, fall back to a composition ESTIMATE from a Topology
     // molecule list or a fixed-count Solvent node so density shows before/without a build.
+    // Directed-upstream replication factor to reach each upstream node's atoms, so a
+    // PDB cached upstream of a Replicate/Scale (e.g. the imported structure) is counted
+    // for the replicated system. Keeps density right: dims and atom count scale together.
+    const primaryOf = (nodeId: string): string | null => {
+      const inc = edges.filter((e) => e.target === nodeId);
+      if (!inc.length) return null;
+      const inA = inc.find((e) => e.targetHandle === "inA");
+      return (inA ?? inc[0]).source;
+    };
+    const upstreamFactor = new Map<string, [number, number, number]>();
+    {
+      let fx = 1, fy = 1, fz = 1;
+      const seen = new Set<string>([id]);
+      let cur = primaryOf(id);
+      while (cur && !seen.has(cur)) {
+        seen.add(cur);
+        upstreamFactor.set(cur, [fx, fy, fz]);
+        const n = getNode(cur);
+        const nd = (n?.data ?? {}) as Record<string, unknown>;
+        const num = (v: unknown, d: number) =>
+          typeof v === "number" && Number.isFinite(v) ? Number(v) : (Number.isFinite(parseFloat(String(v))) ? parseFloat(String(v)) : d);
+        if (n?.type === "replicate") { fx *= Math.max(1, num(nd.x, 1)); fy *= Math.max(1, num(nd.y, 1)); fz *= Math.max(1, num(nd.z, 1)); }
+        else if (n?.type === "scale") { fx *= num(nd.sx, 1); fy *= num(nd.sy, 1); fz *= num(nd.sz, 1); }
+        cur = primaryOf(cur);
+      }
+    }
+
     const visited = new Set<string>([id]);
     const stack = [id];
     let best: { mass: number; count: number; unknown: number; pdbDims: typeof empty.pdbDims } | null = null;
@@ -184,8 +211,20 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
         const nd = (node.data ?? {}) as Record<string, unknown>;
         if (typeof nd.pdb === "string" && nd.pdb.trim()) {
           const parsed = parseAtomsFromPdb(nd.pdb);
-          if (parsed.count > 0 && (!best || parsed.count > best.count)) {
-            best = { ...parsed, pdbDims: cryst1ToBoxDim(nd.pdb) };
+          // A PDB found upstream of Replicate/Scale describes one (pre-transform) cell;
+          // scale its counts/mass/dims so this box reflects the whole replicated system.
+          // Downstream PDBs (e.g. a post-build result) aren't in the map → factor 1.
+          const [fx, fy, fz] = upstreamFactor.get(nodeId) ?? [1, 1, 1];
+          const p = fx * fy * fz;
+          const count = parsed.count * p;
+          if (count > 0 && (!best || count > best.count)) {
+            const dims = cryst1ToBoxDim(nd.pdb);
+            best = {
+              mass: parsed.mass * p,
+              count,
+              unknown: parsed.unknown,
+              pdbDims: dims ? { lx: dims.lx * fx, ly: dims.ly * fy, lz: dims.lz * fz } : null,
+            };
           }
         }
         if (node.type === "topology" && !topo) {
@@ -296,6 +335,33 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
       }
       
       return merged;
+    };
+
+    // Scale a seed's lengths by per-axis factors (same rule inferSeed uses for a
+    // replicate/scale node): a,lx by X; b,ly,xy by Y; c,lz,xz,yz by Z; angles fixed.
+    const scaleSeed = (s: BoxSeed, fx: number, fy: number, fz: number): BoxSeed => ({
+      a: hasValue(s.a) ? s.a! * fx : undefined,
+      b: hasValue(s.b) ? s.b! * fy : undefined,
+      c: hasValue(s.c) ? s.c! * fz : undefined,
+      alpha: s.alpha, beta: s.beta, gamma: s.gamma,
+      lx: hasValue(s.lx) ? s.lx! * fx : undefined,
+      ly: hasValue(s.ly) ? s.ly! * fy : undefined,
+      lz: hasValue(s.lz) ? s.lz! * fz : undefined,
+      xy: hasValue(s.xy) ? s.xy! * fy : undefined,
+      xz: hasValue(s.xz) ? s.xz! * fz : undefined,
+      yz: hasValue(s.yz) ? s.yz! * fz : undefined,
+    });
+
+    // Replicate/scale factors of a node (1s for anything else).
+    const nodeBoxFactors = (node: { type?: string; data?: unknown } | null): [number, number, number] => {
+      const nd = (node?.data ?? {}) as Record<string, unknown>;
+      const num = (v: unknown, d: number) =>
+        typeof v === "number" && Number.isFinite(v) ? Number(v) : (Number.isFinite(parseFloat(String(v))) ? parseFloat(String(v)) : d);
+      if (node?.type === "replicate")
+        return [Math.max(1, num(nd.x, 1)), Math.max(1, num(nd.y, 1)), Math.max(1, num(nd.z, 1))];
+      if (node?.type === "scale")
+        return [num(nd.sx, 1), num(nd.sy, 1), num(nd.sz, 1)];
+      return [1, 1, 1];
     };
 
     const getPrimary = (nodeId: string) => {
@@ -409,11 +475,17 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
         }
       }
       
-      // Keep traversing backwards
+      // Keep traversing backwards. A cached CRYST1 found upstream reflects the cell
+      // BEFORE this node's transform, so apply this node's replicate/scale factor on
+      // the way back — otherwise a Box node placed directly after Replicate reads the
+      // un-replicated box (this path short-circuits the inferSeed path that does scale).
       const incoming = edges.filter((e) => e.target === nodeId);
       if (incoming.length > 0) {
         const inA = incoming.find((e) => e.targetHandle === "inA") || incoming[0];
-        return findDynamicBoxFromPdb(inA.source, visited);
+        const upstream = findDynamicBoxFromPdb(inA.source, visited);
+        if (!upstream) return null;
+        const [fx, fy, fz] = nodeBoxFactors(node);
+        return (fx === 1 && fy === 1 && fz === 1) ? upstream : scaleSeed(upstream, fx, fy, fz);
       }
       return null;
     };
