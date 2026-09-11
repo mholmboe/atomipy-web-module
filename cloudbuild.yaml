@@ -76,9 +76,10 @@ steps:
       # (costs continuously); raise max-instances for more simultaneous users.
       - --min-instances=0
       - --max-instances=6
-      # SIMULATION_MODE controls policy (em_only on the public instance).
-      # The image ships no OpenCL driver, so OpenMM uses the native CPU
-      # platform. Tighten BUILD_TIMEOUT_SECONDS / step caps later to bound cost.
-      - --update-env-vars=SIMULATION_MODE=em_only,WEB_CONCURRENCY=1,OPENFF_WORKER_URL=${_WORKER_URL}
+      # SIMULATION_MODE controls policy (full = EM + NVT/NPT MD allowed on the
+      # public instance; em_only = EM only). The image ships no OpenCL driver, so
+      # OpenMM uses the native CPU platform — NVT/NPT MD is CPU-bound and slow, so
+      # keep an eye on BUILD_TIMEOUT_SECONDS / step caps to bound cost.
+      - --update-env-vars=SIMULATION_MODE=full,WEB_CONCURRENCY=1,OPENFF_WORKER_URL=${_WORKER_URL}
 
 timeout: 1800s
