@@ -27,10 +27,10 @@ function buildMdp(
   const L: string[] = [
     "; Editable GROMACS .mdp — used verbatim when non-blank (blank = auto-generated).",
     ";",
-    "; FORCE-FIELD DEFINES: for SOLVATED/merged systems the FF (e.g. GMINFF_k500 or",
+    "; FORCE-FIELD DEFINES: for SOLVATED/merged systems the FF (e.g. MINFF_k500 or",
     "; CLAYFF_EXT), water and ion #defines are set INSIDE the .top, so leave 'define'",
     "; blank here. For a DRY mineral (no solvent/ions) add them, e.g.:",
-    ";   define = -DGMINFF_k500      (or -DCLAYFF_EXT)",
+    ";   define = -DMINFF_k500      (or -DCLAYFF_EXT)",
   ];
   const push = (k: string, v: string) => L.push(`${k.padEnd(22)}= ${v}`);
   push("define", "");
@@ -246,7 +246,7 @@ Defaults to <code>gmx</code> on PATH — works on Colab (after the launcher's <s
               onChange={(e) => setMdp(e.target.value)}
             />
             <p className="text-[11px] text-muted-foreground/70 leading-snug mt-1">
-              Non-blank is used <strong>verbatim</strong> for this {stageLabel} run. For solvated/merged systems leave <code>define</code> blank (the .top sets the FF/water/ion #defines); for a dry mineral add e.g. <code>define = -DGMINFF_k500</code>.
+              Non-blank is used <strong>verbatim</strong> for this {stageLabel} run. For solvated/merged systems leave <code>define</code> blank (the .top sets the FF/water/ion #defines); for a dry mineral add e.g. <code>define = -DMINFF_k500</code>.
             </p>
           </DialogContent>
         </Dialog>

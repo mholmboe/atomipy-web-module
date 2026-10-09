@@ -1828,7 +1828,7 @@ export function generatePythonCode(
         const minffVariant = mineralFFData ? getString(mineralFFData, "minffVariant", "500") : "500";
         const clayffAngles = mineralFFData ? getString(mineralFFData, "clayffAngles", "none") : "none";
         // CLAYFF defaults to no angles; MINFF "none" also omits angles (and still
-        // needs a nonbonded block → GMINFF_k0).
+        // needs a nonbonded block → MINFF_k0).
         const writeAngles = mineralFF === "clayff" ? (clayffAngles !== "none") : (minffVariant !== "none");
         const minffDefineVariant = minffVariant === "none" ? "0" : minffVariant;
         // atomipy's angle model: scanned θ0 for metal O-M-O/M-O-M at KANGLE, standard
@@ -1853,11 +1853,11 @@ export function generatePythonCode(
 
         // Organic-only / pure-solvent systems must NOT pull in a mineral FF block.
         // Water atomtypes come from a direct water-model #include and ions from the
-        // ion-set define, both independent of GMINFF_k…/CLAYFF — so dropping the
+        // ion-set define, both independent of MINFF_k…/CLAYFF — so dropping the
         // mineral define is safe and avoids loading unused mineral atomtypes.
         // Include the mineral nonbonded define whenever an inorganic FF is upstream
         // (independent of any organic FF), using the variant from that node.
-        const mineralDefine = mineralFF === "clayff" ? "CLAYFF_EXT" : `GMINFF_k${minffDefineVariant}`;
+        const mineralDefine = mineralFF === "clayff" ? "CLAYFF_EXT" : `MINFF_k${minffDefineVariant}`;
         const defines = [
           ...(mineralFFData ? [mineralDefine] : []),
           `${waterModel}_${ionSet}`,
@@ -1936,7 +1936,7 @@ export function generatePythonCode(
           pythonCode += `    _gmx_defines = []  # self-contained .top\n`;
           pythonCode += `elif _has_itp or _has_solvent_or_ions:\n`;
           pythonCode += `    _defines = ${definesExpr}\n`;
-          pythonCode += `    _ff_variant = "GMINFF_k500"; _water_model = "${waterModel.toLowerCase()}"; _ion_model = "SPCE_HFE_LM"\n`;
+          pythonCode += `    _ff_variant = "MINFF_k500"; _water_model = "${waterModel.toLowerCase()}"; _ion_model = "SPCE_HFE_LM"\n`;
           pythonCode += `    for _d in _defines:\n`;
           pythonCode += `        if "CLAYFF" in _d: _ff_variant = "CLAYFF_EXT"\n`;
           pythonCode += `        elif "MINFF" in _d: _ff_variant = _d\n`;
@@ -2175,7 +2175,7 @@ export function generatePythonCode(
         pythonCode += `            _top_path = "${simBase}.top"\n`;
         pythonCode += `            _gro_path = "${simBase}.gro"\n`;
         pythonCode += `            _defines = ${definesExpr}\n`;
-        pythonCode += `            _ff_variant = "GMINFF_k500"\n`;
+        pythonCode += `            _ff_variant = "MINFF_k500"\n`;
         pythonCode += `            _water_model = "${waterModel.toLowerCase()}"\n`;
         pythonCode += `            _ion_model = "SPCE_HFE_LM"\n`;
         pythonCode += `            for _d in _defines:\n`;
@@ -3585,7 +3585,7 @@ export function generatePythonCode(
         const minffVariant = mineralFFData ? getString(mineralFFData, "minffVariant", "500") : "500";
         const clayffAngles = mineralFFData ? getString(mineralFFData, "clayffAngles", "none") : "none";
         // CLAYFF defaults to no angles; MINFF "none" also omits angles (and still
-        // needs a nonbonded block → GMINFF_k0).
+        // needs a nonbonded block → MINFF_k0).
         const writeAngles = mineralFF === "clayff" ? (clayffAngles !== "none") : (minffVariant !== "none");
         const minffDefineVariant = minffVariant === "none" ? "0" : minffVariant;
         // atomipy's angle model: scanned θ0 for metal O-M-O/M-O-M at KANGLE, standard
@@ -3593,7 +3593,7 @@ export function generatePythonCode(
         const mineralKangle = writeAngles ? Number(mineralFF === "clayff" ? clayffAngles : minffVariant) : 0;
         const waterModel = findUpstreamWaterModel(id, upstreamFF);
         const ionSet = findUpstreamIonSet(id, upstreamFF);
-        const ffVariant = mineralFF === "clayff" ? "CLAYFF_EXT" : `GMINFF_k${minffDefineVariant}`;
+        const ffVariant = mineralFF === "clayff" ? "CLAYFF_EXT" : `MINFF_k${minffDefineVariant}`;
         const waterLower = waterModel.toLowerCase();
         const waterUpper = waterModel.toUpperCase();
         const ionCombine = `${waterModel}_${ionSet}`;
@@ -3607,10 +3607,10 @@ export function generatePythonCode(
         const exportExplicit = exportNoAngles ? 0 : 1;
         const exportMaxAngle = exportNoAngles ? "0.0" : "None";
         const exportVariant = exportNoAngles ? "0" : exportAngleTerms;
-        const exportFfVariant = mineralFF === "clayff" ? "CLAYFF_EXT" : `GMINFF_k${exportVariant}`;
+        const exportFfVariant = mineralFF === "clayff" ? "CLAYFF_EXT" : `MINFF_k${exportVariant}`;
         const exportAngleKaPy = exportNoAngles ? "None" : String(exportKangle);
         // LAMMPS Pair Coeffs blocks (gminff_all.json): mineral + ion + water.
-        const lmpMineralBlock = mineralFF === "clayff" ? "CLAYFF_2004" : `GMINFF_k${exportVariant}`;
+        const lmpMineralBlock = mineralFF === "clayff" ? "CLAYFF_2004" : `MINFF_k${exportVariant}`;
 
         pythonCode += `\n# Export Final System Coordinate and Topology Outputs\n`;
 
