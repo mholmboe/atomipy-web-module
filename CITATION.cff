@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+title: "atomipy web module: a visual builder for molecular systems"
+message: "If you use the atomipy web module in your research, please cite it using the metadata below, together with the atomipy library it is built on."
+type: software
+authors:
+  - family-names: Holmboe
+    given-names: Michael
+    email: michael.holmboe@umu.se
+    affiliation: "Umeå University, Sweden"
+version: "0.5.1"
+date-released: 2026-06-25
+license: MIT
+repository-code: "https://github.com/mholmboe/atomipy-web-module"
+url: "https://github.com/mholmboe/atomipy-web-module"
+abstract: >-
+  A node-based visual programming environment for building, manipulating and
+  analysing molecular systems in the browser, built on the atomipy Python
+  library. Systems are assembled through a graph interface, and energy
+  minimisation and molecular dynamics can be run from the same interface using
+  either OpenMM or a local GROMACS engine with the MINFF and CLAYFF force
+  fields.
+keywords:
+  - molecular modelling
+  - molecular dynamics
+  - clay minerals
+  - force field
+  - topology
+  - MINFF
+  - CLAYFF
+  - GROMACS
+  - OpenMM
+  - web application
+references:
+  - type: software
+    title: "atomipy: Atomistic Topology Operations in Python"
+    authors:
+      - family-names: Holmboe
+        given-names: Michael
+    repository-code: "https://github.com/mholmboe/atomipy"
