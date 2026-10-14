@@ -9,6 +9,10 @@ const Footer = () => {
           Based on <a href="https://github.com/mholmboe/atomipy" className="text-primary hover:underline font-medium" target="_blank" rel="noopener noreferrer">atomipy</a> — The atom toolbox in Python.
           Supporting <a href="https://github.com/mholmboe/minff" className="text-primary hover:underline font-medium" target="_blank" rel="noopener noreferrer">MINFF</a> and CLAYFF.
         </div>
+        <div className="text-xs text-muted-foreground">
+          Please cite MINFF: Holmboe, Lavauzelle &amp; Swai (2026),{" "}
+          <a href="https://doi.org/10.48550/arXiv.2610.18220" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">arXiv:2610.18220</a>.
+        </div>
         <div className="text-xs text-muted-foreground/60">
           Built with{" "}
           <a href="https://openmm.org/" target="_blank" rel="noopener noreferrer" className="hover:underline">OpenMM</a>,{" "}
