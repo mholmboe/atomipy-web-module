@@ -884,6 +884,9 @@ async def inorganic_scan(request: Request):
     elif source == "crystal":
         crystals = os.path.join(os.path.dirname(ap.__file__), "structures", "crystals")
         path = _safe_join(crystals, file_name)
+    elif source == "water":
+        water_dir = os.path.join(os.path.dirname(ap.__file__), "structures", "water")
+        path = _safe_join(water_dir, file_name)
     else:
         uc_conf = os.path.join(os.path.dirname(ap.__file__), "structures", "minerals", "UC_conf")
         path = _safe_join(uc_conf, file_name)

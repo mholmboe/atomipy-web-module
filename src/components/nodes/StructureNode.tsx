@@ -271,8 +271,15 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
     setIsScanning(true);
     setInorgScan(null);
     try {
-      // A library material is either a UC_conf preset or a bundled crystal.
-      const scanSource = source === "library" ? (data.librarySource === "crystal" ? "crystal" : "preset") : source;
+      // A library material is a UC_conf preset, a bundled crystal, or a bundled
+      // water box (structures/water). Pass the real sub-source so the backend
+      // resolves the file from the right directory (else a water pick is looked
+      // up under UC_conf and 404s).
+      const scanSource = source === "library"
+        ? (data.librarySource === "crystal" ? "crystal"
+           : data.librarySource === "water" ? "water"
+           : "preset")
+        : source;
       const response = await fetch("/api/inorganic/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
