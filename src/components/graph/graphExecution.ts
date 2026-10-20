@@ -1213,7 +1213,7 @@ export function generatePythonCode(
         const zDiffArg = zDiff !== null ? `, z_diff=${zDiff}` : "";
 
         pythonCode += `${wrappedInAtoms} = ap.wrap(${inAtoms}, ${inBox})\n`;
-        pythonCode += `${insertedVar} = ap.insert(${templateAtoms}, ${limitsExpr}, Box=${inBox}, rotate=${rotateArg}, min_distance=${minDistance}, num_mols=${numMolecules}, solute_atoms=${wrappedInAtoms}${constraintsArg}${zDiffArg})\n`;
+        pythonCode += `${insertedVar} = ap.insert(${templateAtoms}, ${limitsExpr}, Box=${inBox}, rotate=${rotateArg}, min_distance=${minDistance}, num_molecules=${numMolecules}, solute_atoms=${wrappedInAtoms}${constraintsArg}${zDiffArg})\n`;
         pythonCode += `${blockOutAtoms} = ap.update(${inAtoms}, ${insertedVar})\n`;
         stateVars.set(id, { atoms: blockOutAtoms, box: inBox });
         break;
