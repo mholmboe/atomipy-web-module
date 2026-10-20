@@ -91,7 +91,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
     summary:
       "Loads the starting structure for the workflow — almost always the FIRST node. Two tabs: Inorganic (custom file, built-in library, or Build lattice) and Organic (SMILES, file, or molecule library).",
     features: [
-      "Inorganic tab: upload a Custom File, pick from the Library (MINFF presets plus a ~517-entry crystal library), or Build lattice from scratch.",
+      "Inorganic tab: upload a Custom File, pick from the Library (Mineral default presets plus a ~517-entry crystal library), or Build lattice from scratch.",
       "Build lattice — Preset: choose a Bravais lattice (sc, bcc, fcc, hcp, diamond, rock salt, fluorite, perovskite), set the lattice parameter a (and c for hcp), and name the element(s) for each species.",
       "Build lattice — Custom cell: enter the unit cell (a b c α β γ) and a fractional basis table (element, x, y, z); atoms are placed as literal P1 (no symmetry expansion yet). A supercell (nx·ny·nz) can be generated in either mode.",
       "Organic tab: build from a SMILES string, upload a file, or pick from a ~428-molecule library.",

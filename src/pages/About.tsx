@@ -22,8 +22,8 @@ const nodeCategories = [
       {
         name: "Import Structure",
         type: "structure",
-        desc: "Load a structure on the Inorganic tab (Custom File, or the Library = MINFF presets + a 517-crystal Avogadro library) or the Organic tab (SMILES, an uploaded file, or the bundled 428-molecule library). Upload formats: .pdb, .gro, .xyz, .cif/.mmcif, .pqr, .poscar, .cjson (organic molecules: .mol, .mol2, .sdf via the GAFF/Sage parametrizer).",
-        features: ["Inorganic: Custom File + Library (MINFF presets + crystals)", "Organic: SMILES / File / Library (428 molecules)", "Preview & Validate (inorganic scan flags non-MINFF elements → Dummy FF)", "Outputs atoms + box"],
+        desc: "Load a structure on the Inorganic tab (Custom File, or the Library = Mineral default presets + a 517-crystal Avogadro library) or the Organic tab (SMILES, an uploaded file, or the bundled 428-molecule library). Upload formats: .pdb, .gro, .xyz, .cif/.mmcif, .pqr, .poscar, .cjson (organic molecules: .mol, .mol2, .sdf via the GAFF/Sage parametrizer).",
+        features: ["Inorganic: Custom File + Library (Mineral default presets + crystals)", "Organic: SMILES / File / Library (428 molecules)", "Preview & Validate (inorganic scan flags non-MINFF elements → Dummy FF)", "Outputs atoms + box"],
       },
       {
         name: "Organic Molecule (Import → Organic tab)",
