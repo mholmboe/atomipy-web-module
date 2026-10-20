@@ -33,6 +33,10 @@ export function useInorganicLibrary(): InorgCategory[] {
   return cats;
 }
 
-// "amino_acids" → "Amino Acids"; "MINFF presets" stays as-is.
-export const prettyCategory = (name: string) =>
-  name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+// "amino_acids" → "Amino Acids". The internal "MINFF presets" category key is
+// shown to users as "Mineral default presets" (the key itself stays unchanged so
+// the backend name and the category-matching logic keep working).
+export const prettyCategory = (name: string) => {
+  if (name === "MINFF presets") return "Mineral default presets";
+  return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+};

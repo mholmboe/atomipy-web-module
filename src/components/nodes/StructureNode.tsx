@@ -428,7 +428,7 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
                 </div>
                 {inorgLibrary.length === 0 && <p className="text-[9px] text-muted-foreground/70">Loading library…</p>}
                 <p className="text-[9px] text-muted-foreground/70 leading-relaxed">
-                  MINFF presets are force-field-ready; other categories often need the Dummy FF — use Preview &amp; Validate.
+                  Mineral default presets are force-field-ready (MINFF/CLAYFF); other categories often need the Dummy FF — use Preview &amp; Validate.
                 </p>
               </div>
             )}
