@@ -127,8 +127,15 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
   // non-empty value so this never clobbers the transient "" set while picking a category.
   useEffect(() => {
     const v = (data.source === "library" || data.source === "preset") ? (data.value || "") : "";
-    if (v) setInorgCategory(v.includes("/") ? v.split("/")[0] : "MINFF presets");
-  }, [data.value, data.source]);
+    if (!v) return;
+    // Resolve the category authoritatively from the library: the slash heuristic
+    // alone is ambiguous because MINFF presets AND Water presets both use bare
+    // filenames (no "/"), so a water pick like "96spc_hex_ice_h.pdb" would be
+    // mis-derived as "MINFF presets" and snap the dropdown back. Fall back to the
+    // heuristic only before the library has loaded.
+    const hit = inorgLibrary.find((c) => c.materials?.some((m) => m.file === v));
+    setInorgCategory(hit ? hit.name : (v.includes("/") ? v.split("/")[0] : "MINFF presets"));
+  }, [data.value, data.source, inorgLibrary]);
   useEffect(() => {
     const m = data.libraryMolecule || "";
     if (m) setLibCategory(m.split("/")[0] || "");
