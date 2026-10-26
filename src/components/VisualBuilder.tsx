@@ -75,7 +75,7 @@ import { Loader2, Terminal, AlertTriangle, Square, OctagonX, Copy, Ban, Search }
 import { toast } from "sonner";
 import { isValidConnection } from "./graph/connectionValidation";
 import { useGraphHistory } from "./graph/useGraphHistory";
-import { generatePythonCode, checkWorkflowPrerequisites } from "./graph/graphExecution";
+import { generatePythonCode, checkWorkflowPrerequisites, type ReadinessFix } from "./graph/graphExecution";
 
 // Import Custom Nodes
 import { StructureNode } from "./nodes/StructureNode";
@@ -95,6 +95,7 @@ import { ViewerNode } from "./nodes/ViewerNode";
 import { TrajectoryNode } from "./nodes/TrajectoryNode";
 import { InspectorNode } from "./nodes/InspectorNode";
 import { NodeRunStatusContext } from "./nodes/nodeRunStatus";
+import { ReadinessPanel } from "./nodes/ReadinessPanel";
 // New composite nodes
 import { TransformNode } from "./nodes/TransformNode";
 import { PBCNode } from "./nodes/PBCNode";
@@ -1084,6 +1085,17 @@ export default function VisualBuilder() {
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [verboseLog, setVerboseLog] = useState(false);
   const [isWarningsMinimized, setIsWarningsMinimized] = useState(true);
+  // Pre-run readiness panel: on by default, toggleable, persisted.
+  const [readinessEnabled, setReadinessEnabled] = useState<boolean>(() => {
+    try { return localStorage.getItem("atomipy_readiness_enabled") !== "false"; } catch { return true; }
+  });
+  const toggleReadiness = useCallback(() => {
+    setReadinessEnabled((v) => {
+      const nv = !v;
+      try { localStorage.setItem("atomipy_readiness_enabled", nv ? "true" : "false"); } catch { /* ignore */ }
+      return nv;
+    });
+  }, []);
 
   // Build Progress States
   const [isBuilding, setIsBuilding] = useState(false);
@@ -1214,6 +1226,25 @@ export default function VisualBuilder() {
       }))
     );
   }, [edgeType, setEdges]);
+
+  // Center the viewport on a node and select it — used by the readiness panel to
+  // jump to the node an issue concerns.
+  const focusNode = useCallback(
+    (nodeId: string) => {
+      const n = nodes.find((x) => x.id === nodeId);
+      if (!n) return;
+      setNodes((nds) => nds.map((x) => ({ ...x, selected: x.id === nodeId })));
+      if (rfInstance && typeof rfInstance.setCenter === "function") {
+        const w = (n as any).width ?? (n as any).measured?.width ?? 240;
+        const h = (n as any).height ?? (n as any).measured?.height ?? 140;
+        rfInstance.setCenter(n.position.x + w / 2, n.position.y + h / 2, {
+          zoom: 1,
+          duration: 500,
+        });
+      }
+    },
+    [nodes, rfInstance, setNodes],
+  );
 
   const onConnect = useCallback(
     (params: Connection | Edge) =>
@@ -1686,6 +1717,51 @@ export default function VisualBuilder() {
       };
       return deselectedNds.concat(newNode);
     });
+  };
+
+  // One-click fixes offered by the readiness panel. "add*" just drops a node;
+  // the "*Before" fixes splice a new node into the chain upstream of the target
+  // (the target's incoming edges are rerouted through the new node).
+  const applyReadinessFix = (fix: ReadinessFix) => {
+    if (fix.kind === "addImport") {
+      addNode("structure");
+      toast.success("Added an Import Structure node — open it and pick a structure.");
+      return;
+    }
+    if (fix.kind === "addExport") {
+      addNode("export");
+      toast.success("Added an Export node — connect your final system to it.");
+      return;
+    }
+    const target = nodes.find((n) => n.id === fix.targetNodeId);
+    if (!target) return;
+    const type = fix.kind === "addBoxBefore" ? "box" : fix.kind === "insertEmBefore" ? "simulate" : "forcefield";
+    const data: Record<string, unknown> = { presets };
+    if (type === "forcefield") {
+      data.forcefield = "minff"; data.minffVariant = "500"; data.rmaxLong = 2.45; data.rmaxH = 1.2; data.log = false;
+    }
+    if (type === "simulate") {
+      data.simType = "minimize"; data.miniSteps = 500; data.mdSteps = 5000; data.temperature = 298.15;
+      data.timestep = 1.0; data.cutoff = 12.0; data.constraints = "None"; data.pressure = 1.0;
+      data.frictionCoeff = 1.0; data.switchDistance = 10.0; data.writeDcd = false; data.dcdFreq = 1000; data.wrapTrajectory = true;
+    }
+    const stamp = Date.now();
+    const newId = `${type}_${stamp}`;
+    const pos = { x: target.position.x - 340, y: target.position.y };
+    setNodes((nds) => [
+      ...nds.map((n) => (n.selected ? { ...n, selected: false } : n)),
+      { id: newId, type, position: pos, data, selected: true } as Node,
+    ]);
+    // Reroute the target's incoming edges through the new node, then connect it in.
+    setEdges((eds) => {
+      const rerouted = eds.map((e) => (e.target === fix.targetNodeId ? { ...e, target: newId } : e));
+      return [...rerouted, { id: `e_${stamp}`, source: newId, target: fix.targetNodeId!, type: "deletable" } as Edge];
+    });
+    if (rfInstance && typeof rfInstance.setCenter === "function") {
+      rfInstance.setCenter(pos.x + 130, pos.y + 70, { zoom: 1, duration: 500 });
+    }
+    const label = type === "simulate" ? "Energy Minimization" : type === "box" ? "Box" : "Forcefield";
+    toast.success(`Inserted ${label} before the ${target.type} node.`);
   };
 
   const applyWorkflowGraph = useCallback(
@@ -2968,46 +3044,10 @@ export default function VisualBuilder() {
       </div>
 
       <div className="flex-1 rounded-2xl overflow-hidden border border-border bg-muted/20 relative" ref={reactFlowWrapper}>
-        {/* Floating Warnings Alert Banner */}
-        {(() => {
-          const prerequisiteWarnings = checkWorkflowPrerequisites(nodes, edges);
-          if (prerequisiteWarnings.length === 0) return null;
-          
-          if (isWarningsMinimized) {
-            return (
-              <button
-                onClick={() => setIsWarningsMinimized(false)}
-                className="absolute top-3 left-3 z-20 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full py-1.5 px-4 text-[10px] uppercase tracking-wider shadow-lg flex items-center gap-1.5 hover:scale-105 active:scale-95 transition-all duration-200 nodrag"
-                title="Expand workflow warnings"
-              >
-                <AlertTriangle className="w-3.5 h-3.5" />
-                {prerequisiteWarnings.length} Warnings (Expand)
-              </button>
-            );
-          }
-
-          return (
-            <div className="absolute top-3 left-3 z-20 w-[640px] max-w-[calc(100%-300px)] bg-amber-500/10 border border-amber-500/30 text-amber-600 rounded-xl p-4 text-xs space-y-2 backdrop-blur-md shadow-xl transition-all duration-300 nodrag">
-              <div className="flex items-center justify-between font-bold uppercase tracking-wider text-[11px] border-b border-amber-500/20 pb-1.5 mb-1">
-                <div className="flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4" />
-                  Workflow Configuration Warnings
-                </div>
-                <button
-                  onClick={() => setIsWarningsMinimized(true)}
-                  className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 rounded text-amber-700 hover:text-amber-800 transition-all font-sans font-bold normal-case text-[10px]"
-                >
-                  Collapse
-                </button>
-              </div>
-              <div className="space-y-1 max-h-[160px] overflow-y-auto">
-                {prerequisiteWarnings.map((warn, i) => (
-                  <p key={i} className="pl-2 leading-relaxed font-medium">• {warn}</p>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
+        {/* The old "Floating Warnings Alert Banner" (prerequisite warnings only)
+            has been superseded by <ReadinessPanel/> rendered inside ReactFlow,
+            which shows blocking errors + warnings + the ready state and lets the
+            user click an item to jump to the node. */}
 
         {showStatusWindow && (
           <div
@@ -3151,6 +3191,14 @@ export default function VisualBuilder() {
           >
             <Controls />
             <Background gap={20} size={1} color="rgba(0,0,0,0.1)" />
+            <ReadinessPanel
+              nodes={nodes}
+              edges={edges}
+              onFocusNode={focusNode}
+              onApplyFix={applyReadinessFix}
+              enabled={readinessEnabled}
+              onToggleEnabled={toggleReadiness}
+            />
           </ReactFlow>
           </NodeRunStatusContext.Provider>
         </ReactFlowProvider>

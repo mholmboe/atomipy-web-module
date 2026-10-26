@@ -223,6 +223,207 @@ export function checkWorkflowPrerequisites(nodes: Node[], edges: Edge[]): string
   return warnings;
 }
 
+// ---------------------------------------------------------------------------
+// Pre-run readiness: a single, structured checklist the UI shows BEFORE Run,
+// combining the blocking errors (validateWorkflow), the prerequisite warnings
+// (checkWorkflowPrerequisites), and a few extra proactive checks that otherwise
+// only surface as a RuntimeError mid-build. Each item optionally points at the
+// node it concerns so the panel can focus it.
+// ---------------------------------------------------------------------------
+export type ReadinessSeverity = "error" | "warning" | "info";
+export type ReadinessFixKind =
+  | "addBoxBefore"
+  | "insertEmBefore"
+  | "addForcefieldBefore"
+  | "addImport"
+  | "addExport";
+export interface ReadinessFix {
+  kind: ReadinessFixKind;
+  label: string;
+  targetNodeId?: string;
+}
+export interface ReadinessItem {
+  id: string;
+  severity: ReadinessSeverity;
+  message: string;
+  nodeId?: string;
+  fix?: ReadinessFix;
+}
+
+// Node types that terminate a workflow by producing a result the user wants.
+const READINESS_OUTPUT_TYPES = new Set([
+  "export", "simulate", "xrd", "bondAngle", "stats", "viewer", "plot", "analysis",
+]);
+
+export function computeReadiness(nodes: Node[], edges: Edge[]): ReadinessItem[] {
+  const items: ReadinessItem[] = [];
+  const parseNodeId = (msg: string): string | undefined => {
+    const m = msg.match(/Node\s+([\w-]+)/);
+    return m ? m[1] : undefined;
+  };
+  // Strip the "Warning (… Node x):" prefix for display; keep the advice.
+  const clean = (msg: string) => msg.replace(/^Warning\s*\([^)]*\):\s*/, "").trim();
+
+  // 1. Blocking errors — the same gate Run uses.
+  for (const e of validateWorkflow(nodes, edges)) {
+    items.push({ id: `err:${items.length}`, severity: "error", message: e, nodeId: parseNodeId(e) });
+  }
+  if (nodes.length === 0) return items;
+
+  // 2. Prerequisite warnings (forcefield/box/ion-water compat/export format).
+  for (const w of checkWorkflowPrerequisites(nodes, edges)) {
+    items.push({ id: `warn:${items.length}`, severity: "warning", message: clean(w), nodeId: parseNodeId(w) });
+  }
+
+  // 3. Proactive checks not covered above.
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const revAdj = new Map<string, string[]>();
+  nodes.forEach((n) => revAdj.set(n.id, []));
+  edges.forEach((e) => { if (revAdj.has(e.target)) revAdj.get(e.target)!.push(e.source); });
+  const upstreamOf = (id: string): Node[] => {
+    const out: Node[] = []; const seen = new Set<string>(); const q = [id];
+    while (q.length) {
+      const c = q.shift()!;
+      if (seen.has(c)) continue;
+      seen.add(c);
+      const n = byId.get(c);
+      if (n && c !== id) out.push(n);
+      q.push(...(revAdj.get(c) || []));
+    }
+    return out;
+  };
+
+  // Attach one-click fixes to the prerequisite warnings already pushed above,
+  // keyed on the concerned node's type (the remedy is a node to splice upstream).
+  for (const it of items) {
+    if (it.fix || it.severity !== "warning" || !it.nodeId) continue;
+    const n = byId.get(it.nodeId);
+    if (!n) continue;
+    if (n.type === "ions" && /box|forcefield|ionization|limits/i.test(it.message)) {
+      it.fix = { kind: "addBoxBefore", label: "Add Box", targetNodeId: n.id };
+    } else if (n.type === "solvent" && /box/i.test(it.message)) {
+      it.fix = { kind: "addBoxBefore", label: "Add Box", targetNodeId: n.id };
+    } else if (n.type === "simulate" && /forcefield/i.test(it.message) && /connect|upstream/i.test(it.message)) {
+      it.fix = { kind: "addForcefieldBefore", label: "Add Forcefield", targetNodeId: n.id };
+    }
+  }
+
+  // Fully disconnected (orphan) nodes: they have no edges at all, so they take no
+  // part in the run. Flag each, and below we suppress their other (now-subsumed)
+  // per-node warnings — "connect it" covers "needs a box upstream".
+  const touched = new Set<string>();
+  edges.forEach((e) => { touched.add(e.source); touched.add(e.target); });
+  const orphanIds = new Set<string>();
+  if (nodes.length > 1) {
+    for (const n of nodes) {
+      if (touched.has(n.id)) continue;
+      orphanIds.add(n.id);
+      items.push({
+        id: `orphan:${n.id}`, severity: "warning", nodeId: n.id,
+        message: `This ${n.type ?? "node"} node isn't connected to anything — it won't be part of the run. Connect it into the workflow, or delete it.`,
+      });
+    }
+  }
+
+  // Disconnected sub-branches: a group of 2+ connected nodes that contains NO
+  // output node never reaches a result. Only meaningful when the graph has an
+  // output somewhere (otherwise the global "no output" check below covers it).
+  if (nodes.some((n) => READINESS_OUTPUT_TYPES.has(n.type || ""))) {
+    const undir = new Map<string, string[]>();
+    nodes.forEach((n) => undir.set(n.id, []));
+    edges.forEach((e) => {
+      undir.get(e.source)?.push(e.target);
+      undir.get(e.target)?.push(e.source);
+    });
+    const outDeg = new Map<string, number>();
+    edges.forEach((e) => outDeg.set(e.source, (outDeg.get(e.source) || 0) + 1));
+    const seen = new Set<string>();
+    for (const start of nodes) {
+      if (seen.has(start.id)) continue;
+      const comp: Node[] = [];
+      const q = [start.id];
+      while (q.length) {
+        const c = q.shift()!;
+        if (seen.has(c)) continue;
+        seen.add(c);
+        const nn = byId.get(c);
+        if (nn) comp.push(nn);
+        q.push(...(undir.get(c) || []));
+      }
+      if (comp.length < 2) continue; // single-node islands are the orphan case above
+      if (comp.some((n) => READINESS_OUTPUT_TYPES.has(n.type || ""))) continue; // reaches an output
+      const rep = comp.find((n) => (outDeg.get(n.id) || 0) === 0) ?? comp[0]; // branch tip
+      items.push({
+        id: `island:${rep.id}`, severity: "info", nodeId: rep.id,
+        message: `A branch of ${comp.length} nodes doesn't reach an output (Export / Simulate / View) — it won't produce a result. Connect it to your output branch, or add an output node to it.`,
+      });
+    }
+  }
+
+  // (a) A source/structure node must exist.
+  const hasSource = nodes.some((n) => n.type === "structure");
+  if (!hasSource) {
+    items.push({
+      id: "no-source", severity: "error",
+      message: "No Import Structure node — add one (mineral, organic molecule, water box, or built lattice) to start the workflow.",
+      fix: { kind: "addImport", label: "Add Import" },
+    });
+  }
+
+  // (a2) A structure node that hasn't picked/loaded a structure yet.
+  for (const n of nodes) {
+    if (n.type !== "structure") continue;
+    if (orphanIds.has(n.id)) continue;
+    const src = getString(n.data, "source", "upload");
+    let missing = false;
+    if (src === "upload") {
+      missing = !getString(n.data, "filename") && !getString(n.data, "uploadedFilePath") && !getString(n.data, "path");
+    } else if (src === "library" || src === "preset") {
+      missing = !getString(n.data, "value");
+    }
+    if (missing) {
+      items.push({
+        id: `empty-src:${n.id}`, severity: "warning", nodeId: n.id,
+        message: "Import Structure has no structure selected yet — upload a file or pick one from the Library.",
+      });
+    }
+  }
+
+  // (b) Energy Minimization must precede NVT/NPT (an unrelaxed start diverges to
+  //     NaN on the CPU platform). This otherwise only fails mid-build.
+  for (const n of nodes) {
+    if (n.type !== "simulate") continue;
+    if (orphanIds.has(n.id)) continue;
+    const st = getString(n.data, "simType", "minimize");
+    if (st !== "nvt" && st !== "npt") continue;
+    const hasEM = upstreamOf(n.id).some(
+      (u) => u.type === "simulate" && getString(u.data, "simType", "minimize") === "minimize",
+    );
+    if (!hasEM) {
+      items.push({
+        id: `no-em:${n.id}`, severity: "warning", nodeId: n.id,
+        message: `${st.toUpperCase()} has no Energy Minimization upstream — an unrelaxed start diverges ("Particle coordinate is NaN"). Add a Simulate node set to Energy Minimization before this one.`,
+        fix: { kind: "insertEmBefore", label: "Insert EM", targetNodeId: n.id },
+      });
+    }
+  }
+
+  // (c) A terminal/output node is recommended once there is a source.
+  if (hasSource && !nodes.some((n) => READINESS_OUTPUT_TYPES.has(n.type || ""))) {
+    items.push({
+      id: "no-output", severity: "info",
+      message: "No output node yet — add an Export (topology/structure) or Simulate node to produce a result.",
+      fix: { kind: "addExport", label: "Add Export" },
+    });
+  }
+
+  // An orphan node's other per-node warnings (e.g. "needs a box upstream") are
+  // subsumed by its "isn't connected" item — keep only the orphan item for it.
+  return items.filter(
+    (it) => it.id.startsWith("orphan:") || !it.nodeId || !orphanIds.has(it.nodeId),
+  );
+}
+
 export function validateWorkflow(nodes: Node[], edges: Edge[]): string[] {
   const errors: string[] = [];
   if (nodes.length === 0) {
