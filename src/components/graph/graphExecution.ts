@@ -3089,8 +3089,9 @@ export function generatePythonCode(
           const statsLog = pyEscape(getString(data, "statsLogFile", "output.log"));
           pythonCode += `\n# Structure statistics report -> ${statsLog}\n`;
           pythonCode += `try:\n`;
-          pythonCode += `    ap.get_structure_stats(${inAtoms}, ${inBox}, log_file='${statsLog}')\n`;
-          pythonCode += `    print("Wrote structure statistics to ${statsLog}")\n`;
+          pythonCode += `    _stats_report = ap.get_structure_stats(${inAtoms}, ${inBox}, log_file='${statsLog}')\n`;
+          pythonCode += `    print(_stats_report if isinstance(_stats_report, str) else "")\n`;
+          pythonCode += `    print("\\n(Structure statistics also written to ${statsLog})")\n`;
           pythonCode += `except Exception as _e:\n`;
           pythonCode += `    print(f"Structure stats failed: {_e}")\n`;
         } else if (option === "bvs") {
