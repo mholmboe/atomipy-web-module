@@ -813,7 +813,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Instrument: wavelength λ (default Cu Kα ≈ 1.5419 Å), 2θ min/max, and step.",
       "Reflection-class FWHM broadening for 00l, hk0, and hkl peaks.",
       "Preferred-orientation correction along a chosen (h k l); isotropic B-factor; pseudo-Voigt peak shape; neutral-atoms toggle.",
-      "Writes xrd.dat (2θ, intensity) and streams an inline profile + plot data.",
+      "Writes xrd.dat (two columns: 2θ and normalized intensity), renders an inline profile on the node, and streams the curve to a Plot node via the indigo Plot Data handle.",
     ],
     theory: [
       "Allowed reflections come from Bragg's law for the cell, scanned over the 2θ range. Atomic scattering factors are evaluated from tabulated coefficients vs sinθ/λ. The structure factor sums them over all atoms (with occupancy and a Debye–Waller factor); intensity is |F|² scaled by a Lorentz-polarization factor (and optional preferred orientation). Each reflection is drawn as a pseudo-Voigt peak whose width depends on its class.",
@@ -827,14 +827,17 @@ export const NODE_HELP: Record<string, NodeHelp> = {
     ],
     quirks: [
       "Requires a crystalline cell with fractional coordinates; amorphous input gives no meaningful peaks.",
-      "Intensity is normalized so the strongest peak = 1 (the .dat file scales to 100).",
+      "Intensity is normalized so the strongest peak = 1 — the same scale in the inline plot, the Plot node, and the xrd.dat file.",
       "Preferred orientation enhances/suppresses peaks near the chosen (h k l); set strength to 0 to disable.",
     ],
     before: [
-      "Import Structure (crystal) with a valid unit cell; any substitution/edit you want reflected.",
+      "A crystalline Import Structure with a valid unit cell and fractional coordinates — a CIF/mineral from the library or your own crystal file. Amorphous or gas-phase input gives no meaningful peaks.",
+      "Optional structure edits first — Replicate (build a supercell), Chemistry (isomorphic substitution), or any transform. The pattern reflects whatever reaches the node's input.",
     ],
     after: [
-      "Plot 2θ vs intensity (the inline profile also shows on the node). Usually a leaf branch.",
+      "View it: the inline 2θ-vs-intensity profile shows on the node; wire the indigo Plot Data handle to a Plot node to zoom, inspect values, and export the curve as CSV / PNG / SVG.",
+      "Export the data: the run writes xrd.dat (2θ, normalized intensity) — retrieve it via Download Results after the run (results aren't stored on the server, so download promptly).",
+      "Chain it: the main output passes the structure through unchanged, so you can continue to further analysis. XRD is usually a leaf branch.",
     ],
     tips: [
       "Match λ to your source (Cu Kα ≈ 1.5419 Å) so 2θ positions line up with experiment.",
