@@ -3287,15 +3287,18 @@ export function generatePythonCode(
         const hklMax = getNumber(data, "hklMax", 5);
 
         pythonCode += `\n# Execute Powder XRD Diffraction Simulation\n`;
-        pythonCode += `xrd_pattern = ap.xrd(${inAtoms}, ${inBox}, wavelength=${wavelength}, theta_min=${thetaMin}, theta_max=${thetaMax}, hkl_max=${hklMax})\n`;
+        // ap.xrd takes two_theta_range=(min, max) (not theta_min/theta_max) and
+        // returns a (two_theta, intensity) tuple of arrays. Run headless in the
+        // web backend: plot=False / save_output=False (no plt.show(), no PNG).
+        pythonCode += `_xrd_tt, _xrd_I = ap.xrd(${inAtoms}, ${inBox}, wavelength=${wavelength}, two_theta_range=(${thetaMin}, ${thetaMax}), hkl_max=${hklMax}, plot=False, save_output=False)\n`;
         pythonCode += `with open('xrd.dat', 'w') as _xrd:\n`;
-        pythonCode += `    for twotheta, intensity in xrd_pattern:\n`;
+        pythonCode += `    for twotheta, intensity in zip(_xrd_tt, _xrd_I):\n`;
         pythonCode += `        _xrd.write(f"{twotheta:.4f} {intensity:.4f}\\n")\n`;
         pythonCode += `import json\n`;
         // XrdNode renders from data.xrdPlot.points ([[2theta, I], ...]). Emit the
         // dedicated __XRD_DATA_<id>__: marker (the backend turns it into a type:'xrd'
         // SSE event); guard on !strict so it fires in the executed (minimal) script.
-        pythonCode += `_xrd_points = [[float(p[0]), float(p[1])] for p in xrd_pattern]\n`;
+        pythonCode += `_xrd_points = [[float(a), float(b)] for a, b in zip(_xrd_tt, _xrd_I)]\n`;
         if (mode !== "strict") {
           pythonCode += `print("__XRD_DATA_${id}__:" + json.dumps({'points': _xrd_points}))\n`;
         }
