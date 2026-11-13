@@ -49,6 +49,7 @@ const LIVE_SOURCE_LABEL: Record<string, string> = {
   analysis: "Analysis",
   stats: "Structure Stats",
   bvs: "Bond Valence",
+  xrd: "XRD (2θ)",
 };
 
 const SERIES_COLORS = [
@@ -119,7 +120,7 @@ export function PlotNode({ id, data, selected }: NodeComponentProps<PlotNodeData
   const liveSource = useMemo(() => {
     for (const n of upstream) {
       if (!n) continue;
-      if (n.type === "analysis" || n.type === "stats" || n.type === "bvs") return n.type;
+      if (n.type === "analysis" || n.type === "stats" || n.type === "bvs" || n.type === "xrd") return n.type;
       if (n.type === "simulate") {
         const d = n.data as Record<string, unknown>;
         const tp = d?.thermoPlots;

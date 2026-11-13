@@ -481,6 +481,23 @@ describe('graphExecution — review-fix regressions', () => {
     expect(code).not.toContain('__PLOT_DATA__');
   });
 
+  it('xrd node forwards the profile to a connected Data Plotter via __PLOT_<id>__', () => {
+    const nodes: Node[] = [struct,
+      { id: 'x', type: 'xrd', position: { x: 100, y: 0 }, data: {} },
+      { id: 'p', type: 'plot', position: { x: 200, y: 0 }, data: {} }];
+    const edges: Edge[] = [edgeTo('x'), { id: 'e-xp', source: 'x', target: 'p', targetHandle: 'in' }];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    expect(code).toContain('__XRD_DATA_x__:');        // own inline plot still fed
+    expect(code).toContain('__PLOT_p__:');            // profile streamed to the plotter
+    expect(code).toContain("'xLabel': '2θ (degrees)'");
+  });
+
+  it('xrd node emits no __PLOT_ marker when no plotter is connected', () => {
+    const nodes: Node[] = [struct, { id: 'x', type: 'xrd', position: { x: 100, y: 0 }, data: {} }];
+    const code = generatePythonCode(nodes, [edgeTo('x')], 'minimal');
+    expect(code).not.toMatch(/__PLOT_[^_]/);
+  });
+
   it('stats node emits a parseable __PLOT_ marker at runtime (not the broken __PLOT_DATA__)', () => {
     const nodes: Node[] = [struct, { id: 'st', type: 'stats', position: { x: 100, y: 0 }, data: {} }];
     const code = generatePythonCode(nodes, [edgeTo('st')], 'minimal');

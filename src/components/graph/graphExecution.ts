@@ -3301,6 +3301,14 @@ export function generatePythonCode(
         pythonCode += `_xrd_points = [[float(a), float(b)] for a, b in zip(_xrd_tt, _xrd_I)]\n`;
         if (mode !== "strict") {
           pythonCode += `print("__XRD_DATA_${id}__:" + json.dumps({'points': _xrd_points}))\n`;
+          // Also feed a connected Data Plotter node so it can render the profile
+          // and export it (CSV/PNG/SVG). Route via the __PLOT_<id>__ marker the
+          // PlotNode consumes; the XRD node keeps its own inline plot from
+          // __XRD_DATA__. Only emit when a plot node is actually wired up.
+          const xrdPlotTarget = edges.find((e) => e.source === id && nodes.find((nn) => nn.id === e.target)?.type === "plot")?.target;
+          if (xrdPlotTarget) {
+            pythonCode += `print("__PLOT_${xrdPlotTarget}__:" + json.dumps({'series': [{'name': 'XRD', 'points': _xrd_points}], 'xLabel': '2θ (degrees)', 'yLabel': 'normalized intensity'}))\n`;
+          }
         }
 
         pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
