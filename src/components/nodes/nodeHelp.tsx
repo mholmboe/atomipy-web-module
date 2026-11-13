@@ -1095,7 +1095,7 @@ export function NodeHelpButton({ helpKey }: { helpKey?: string }) {
             <Section title="Features" items={help.features} />
             <TheorySection help={help} />
             <Section title="Quirks & gotchas" items={help.quirks} />
-            <Section title="Typically comes after" items={help.before} />
+            <Section title="Typically comes before" items={help.before} />
             <Section title="Typically feeds into" items={help.after} />
             <Section title="Tips" items={help.tips} />
           </div>
