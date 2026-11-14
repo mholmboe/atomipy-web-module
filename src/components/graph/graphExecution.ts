@@ -1869,10 +1869,13 @@ export function generatePythonCode(
           const dRmaxLong = getNumber(data, "rmaxLong", 2.45);
           const dRmaxH = getNumber(data, "rmaxH", 1.2);
           const dumName = sanitizeMolName(getString(data, "moleculeName", "").trim()) || "DUM";
+          // Charges-only: keep the caller's LJ / atom types / mass, compute only charges.
+          const dAssignTypes = getBoolean(data, "assignTypes", true);
+          const dAssignTypesArg = dAssignTypes ? "" : ", assign_types=False";
           pythonCode += `\n# Frozen DUMMY mineral (Dummy FF) -- qualitative; EM/NVT only\n`;
           pythonCode += `if ${inBox} is None:\n`;
           pythonCode += `    raise ValueError("Dummy forcefield requires a mineral structure with a simulation box.")\n`;
-          pythonCode += `ap.assign_dummy_mineral_params(${inAtoms}, Box=${inBox}, charge_mode='${chargeMode}', charge_scale=${chargeScale}, lj_mode='${ljMode}', metal_site='${metalSite}', rmaxlong=${dRmaxLong}, rmaxH=${dRmaxH}, resname='${dumName}')\n`;
+          pythonCode += `ap.assign_dummy_mineral_params(${inAtoms}, Box=${inBox}, charge_mode='${chargeMode}', charge_scale=${chargeScale}, lj_mode='${ljMode}', metal_site='${metalSite}', rmaxlong=${dRmaxLong}, rmaxH=${dRmaxH}, resname='${dumName}'${dAssignTypesArg})\n`;
           pythonCode += `${blockOutAtoms} = ${inAtoms}\n`;
           pythonCode += `${blockOutBox} = ${inBox}\n`;
         } else {

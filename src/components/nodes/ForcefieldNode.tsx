@@ -271,26 +271,23 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
 
         {showMore && (
           <div className="space-y-2 border border-border rounded-md p-2 bg-muted/30">
-            {forcefield !== "dummy" && (
-              <label className="nodrag flex items-start justify-between gap-2 text-xs text-muted-foreground">
-                <span>
-                  Assign atom types
-                  <span className="block text-[10px] text-muted-foreground/80">
-                    On: assign {forcefield.toUpperCase()} atom types from the coordination
-                    environment, then charges. Off: keep the atom types you assigned manually
-                    and only compute the {forcefield.toUpperCase()} charges from them (nothing is
-                    re-typed).
-                  </span>
+            <label className="nodrag flex items-start justify-between gap-2 text-xs text-muted-foreground">
+              <span>
+                {forcefield === "dummy" ? "Assign LJ & atom types" : "Assign atom types"}
+                <span className="block text-[10px] text-muted-foreground/80">
+                  {forcefield === "dummy"
+                    ? "On: assign the Dummy FF LJ, synthetic atom types and mass, then charges. Off: keep the LJ / atom types / mass you set manually and only compute the Dummy charges."
+                    : `On: assign ${forcefield.toUpperCase()} atom types from the coordination environment, then charges. Off: keep the atom types you assigned manually and only compute the ${forcefield.toUpperCase()} charges from them (nothing is re-typed).`}
                 </span>
-                <input
-                  type="checkbox"
-                  className="nodrag mt-0.5"
-                  checked={assignTypes}
-                  onChange={(e) => updateNodeData(id, { ...data, assignTypes: e.target.checked })}
-                  onPointerDown={(e) => e.stopPropagation()}
-                />
-              </label>
-            )}
+              </span>
+              <input
+                type="checkbox"
+                className="nodrag mt-0.5"
+                checked={assignTypes}
+                onChange={(e) => updateNodeData(id, { ...data, assignTypes: e.target.checked })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </label>
 
             <label className="nodrag flex items-start justify-between gap-2 text-xs text-muted-foreground">
               <span>

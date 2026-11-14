@@ -235,6 +235,18 @@ describe('graphExecution Python Generator', () => {
       edge, 'minimal');
     expect(offClayff).toContain('ap.clayff(');
     expect(offClayff).toContain('assign_types=False');
+    // dummy, types OFF -> charges only
+    const offDummy = generatePythonCode(
+      [...base, { id: 'ff', type: 'forcefield', position: { x: 1, y: 0 }, data: { forcefield: 'dummy', assignTypes: false } }],
+      edge, 'minimal');
+    expect(offDummy).toContain('ap.assign_dummy_mineral_params(');
+    expect(offDummy).toContain('assign_types=False');
+    // dummy, types ON (default) -> no assign_types arg
+    const onDummy = generatePythonCode(
+      [...base, { id: 'ff', type: 'forcefield', position: { x: 1, y: 0 }, data: { forcefield: 'dummy' } }],
+      edge, 'minimal');
+    expect(onDummy).toContain('ap.assign_dummy_mineral_params(');
+    expect(onDummy).not.toContain('assign_types=False');
   });
 
   it('names consecutive simulation outputs by type: EM_1, NVT_1, NPT_1', () => {
