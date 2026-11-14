@@ -245,7 +245,14 @@ const parseWorkflowGraph = (value: unknown): WorkflowGraph | null => {
   const nodes = value.nodes;
   const edges = value.edges;
   if (!Array.isArray(nodes) || !Array.isArray(edges)) return null;
-  return { nodes: nodes as Node[], edges: edges as Edge[] };
+  // Back-compat: the separate "data" (Plot Data) output handle was removed; a
+  // node's single "out" handle now feeds both structure and plot inputs. Remap
+  // any legacy edge that left the "data" handle so it still renders (execution
+  // ignores sourceHandle, so this is behavior-preserving).
+  const normEdges = (edges as Edge[]).map((e) =>
+    e && e.sourceHandle === "data" ? { ...e, sourceHandle: "out" } : e
+  );
+  return { nodes: nodes as Node[], edges: normEdges };
 };
 
 const parseSavedWorkflow = (value: unknown): SavedWorkflow | null => {

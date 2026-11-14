@@ -567,14 +567,14 @@ export const NODE_HELP: Record<string, NodeHelp> = {
     quirks: [
       "Analysis-only — passes atoms/box through unchanged; does not assign bonded parameters.",
       "Same-molecule-only restricts bonds to shared molids; turn it off for purely geometric framework coordination.",
-      "A separate data handle exposes the computed terms for a Plot node.",
+      "Connecting its output to a Plot node streams the computed terms.",
     ],
     before: [
       "Import Structure.",
       "Box / geometry (PBC for minimum-image distances).",
     ],
     after: [
-      "Plot (via the data handle), or export the terms log.",
+      "Plot (connect its output to a Data Plotter), or export the terms log.",
     ],
     tips: [
       "Tune rmaxM to match real M–O bond lengths if coordination numbers look wrong.",
@@ -732,7 +732,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Trajectory: MSD / Diffusion (3D/2D/1D, PBC-unwrapped, multi-origin restarts), VACF / Power spectrum (Green-Kubo D + vibrational DOS), Hydrogen Bonds (gmx-hbond geometry, per-molecule distribution).",
       "Ditrigonal Distortion (phyllosilicates): tetrahedral rotation α + apical tilt, τ (O–T–O), Δz basal corrugation, ψ (octahedral flattening); per frame, pooled over a trajectory (within-structure std + frame-to-frame SEM).",
       "RDF/density/MSD/VACF/H-bond/distortion auto-average over all frames when a trajectory is connected; otherwise they use the single structure.",
-      "Exports aligned ASCII .dat (numpy.loadtxt-ready) and JSON; a 'data' handle streams the chosen curve to a Data Plotter.",
+      "Exports aligned ASCII .dat (numpy.loadtxt-ready) and JSON; connect its output to a Data Plotter to stream the chosen curve.",
     ],
     theory: [
       "RDF g(r): histogram of A–B pair distances normalized to a uniform gas at density ρ; → 1 at large r, peaks mark shells. Running n(r) = ∫ g·4πr²ρ dr is the average #B within r of an A (read it at the first g(r) minimum for the shell coordination).",
@@ -777,7 +777,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
     features: [
       "Per-atom BVS, expected oxidation state, and deviation Δ from the formal valence.",
       "Top-N worst (most strained) atoms written to a log; optional per-bond CSV.",
-      "Reports GII and GII-excluding-H; a 'data' handle streams to Plot.",
+      "Reports GII and GII-excluding-H; connect its output to a Plot node to stream the curve.",
     ],
     theory: [
       "Each bond of length R_ij contributes a valence from the empirical bond-valence relation using tabulated R₀ and b ≈ 0.37 Å. An atom's BVS V_i should equal the magnitude of its formal oxidation state; the GII is the RMS deviation across all atoms (small GII = chemically consistent).",
@@ -813,7 +813,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Instrument: wavelength λ (default Cu Kα ≈ 1.5419 Å), 2θ min/max, and step.",
       "Reflection-class FWHM broadening for 00l, hk0, and hkl peaks.",
       "Preferred-orientation correction along a chosen (h k l); isotropic B-factor; pseudo-Voigt peak shape; neutral-atoms toggle.",
-      "Writes xrd.dat (two columns: 2θ and normalized intensity), renders an inline profile on the node, and streams the curve to a Plot node via the indigo Plot Data handle.",
+      "Writes xrd.dat (two columns: 2θ and normalized intensity), renders an inline profile on the node, and streams the curve to a connected Plot node.",
     ],
     theory: [
       "Allowed reflections come from Bragg's law for the cell, scanned over the 2θ range. Atomic scattering factors are evaluated from tabulated coefficients vs sinθ/λ. The structure factor sums them over all atoms (with occupancy and a Debye–Waller factor); intensity is |F|² scaled by a Lorentz-polarization factor (and optional preferred orientation). Each reflection is drawn as a pseudo-Voigt peak whose width depends on its class.",
@@ -835,7 +835,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Optional structure edits first — Replicate (build a supercell), Chemistry (isomorphic substitution), or any transform. The pattern reflects whatever reaches the node's input.",
     ],
     after: [
-      "View it: the inline 2θ-vs-intensity profile shows on the node; wire the indigo Plot Data handle to a Plot node to zoom, inspect values, and export the curve as CSV / PNG / SVG.",
+      "View it: the inline 2θ-vs-intensity profile shows on the node; wire its output to a Plot node to zoom, inspect values, and export the curve as CSV / PNG / SVG.",
       "Export the data: the run writes xrd.dat (2θ, normalized intensity) — retrieve it via Download Results after the run (results aren't stored on the server, so download promptly).",
       "Chain it: the main output passes the structure through unchanged, so you can continue to further analysis. XRD is usually a leaf branch.",
     ],
@@ -1001,7 +1001,7 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Computes and writes structural statistics — atom/element counts, masses, composition, and charge — to a log file. A lightweight pass-through summary node.",
     features: [
       "Auto-calculates composition, masses, and a charge/coordination summary.",
-      "Writes to a named log file (default output.log); exposes a 'data' handle for plotting.",
+      "Writes to a named log file (default output.log); connect its output to a Plot node for plotting.",
     ],
     quirks: [
       "Pass-through: the structure and box continue downstream unchanged.",
