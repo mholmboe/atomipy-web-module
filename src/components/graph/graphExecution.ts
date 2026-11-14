@@ -1884,6 +1884,9 @@ export function generatePythonCode(
           const doLog = getBoolean(data, "log", false);
           const logFile = pyEscape(getString(data, "logFile", `${ff}.log`));
           const resetMolid = getBoolean(data, "resetMolid", false);
+          // Charges-only: keep the user's manual atom types, compute only charges.
+          const assignTypes = getBoolean(data, "assignTypes", true);
+          const assignTypesArg = assignTypes ? "" : ", assign_types=False";
           const logArgs = doLog ? `, log=True, log_file='${logFile}'` : "";
           pythonCode += `if ${inBox} is None:\n`;
           pythonCode += `    raise ValueError("Forcefield node (${ff.toUpperCase()}) requires a mineral structure with a simulation box. Connect a mineral source node, not an organic molecule node.")\n`;
@@ -1898,9 +1901,9 @@ export function generatePythonCode(
             pythonCode += `_ff_in = ${inAtoms}\n`;
           }
           if (ff === "minff") {
-            pythonCode += `${blockOutAtoms} = ap.minff(_ff_in, ${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArgs})\n`;
+            pythonCode += `${blockOutAtoms} = ap.minff(_ff_in, ${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArgs}${assignTypesArg})\n`;
           } else {
-            pythonCode += `${blockOutAtoms} = ap.clayff(_ff_in, ${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArgs})\n`;
+            pythonCode += `${blockOutAtoms} = ap.clayff(_ff_in, ${inBox}, rmaxlong=${rmaxLong}, rmaxH=${rmaxH}${logArgs}${assignTypesArg})\n`;
           }
           // Optional user mineral name -> the built moleculetype follows the resname
           // (merge_top no longer hard-codes 'MIN'), so mixed/different minerals can

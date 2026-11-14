@@ -212,6 +212,31 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain("_defines = []");  // dummy branch must set _defines for chaining/output
   });
 
+  it('forcefield charges-only: assignTypes=false emits assign_types=False', () => {
+    const base: Node[] = [
+      { id: 's', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'preset', value: 'pyrophyllite.pdb' } },
+    ];
+    const edge: Edge[] = [{ id: 'e1', source: 's', target: 'ff', targetHandle: 'in' }];
+    // minff, types ON (default) -> no assign_types arg
+    const onMinff = generatePythonCode(
+      [...base, { id: 'ff', type: 'forcefield', position: { x: 1, y: 0 }, data: { forcefield: 'minff' } }],
+      edge, 'minimal');
+    expect(onMinff).toContain('ap.minff(');
+    expect(onMinff).not.toContain('assign_types=False');
+    // minff, types OFF -> charges only
+    const offMinff = generatePythonCode(
+      [...base, { id: 'ff', type: 'forcefield', position: { x: 1, y: 0 }, data: { forcefield: 'minff', assignTypes: false } }],
+      edge, 'minimal');
+    expect(offMinff).toContain('ap.minff(');
+    expect(offMinff).toContain('assign_types=False');
+    // clayff, types OFF -> charges only
+    const offClayff = generatePythonCode(
+      [...base, { id: 'ff', type: 'forcefield', position: { x: 1, y: 0 }, data: { forcefield: 'clayff', assignTypes: false } }],
+      edge, 'minimal');
+    expect(offClayff).toContain('ap.clayff(');
+    expect(offClayff).toContain('assign_types=False');
+  });
+
   it('names consecutive simulation outputs by type: EM_1, NVT_1, NPT_1', () => {
     const nodes: Node[] = [
       { id: 's', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'preset', value: 'pyrophyllite.pdb' } },

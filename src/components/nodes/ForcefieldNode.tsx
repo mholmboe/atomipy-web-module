@@ -11,6 +11,7 @@ type ForcefieldNodeData = {
   log?: boolean;
   logFile?: string;
   resetMolid?: boolean;
+  assignTypes?: boolean;
   status?: string;
   rmaxLong?: number;
   rmaxH?: number;
@@ -33,6 +34,7 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
   const log = data?.log ?? false;
   const logFile = data?.logFile ?? `${forcefield}.log`;
   const resetMolid = data?.resetMolid ?? true;
+  const assignTypes = data?.assignTypes ?? true;
   const chargeMethod = data?.chargeMethod ?? "am1bcc";
   const isOrganic = ["openff_sage", "openff_parsley", "gaff"].includes(forcefield);
 
@@ -263,12 +265,33 @@ export function ForcefieldNode({ id, data = {} }: NodeComponentProps<ForcefieldN
           onClick={() => setShowMore((prev) => !prev)}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          Global options (mineral typing)
+          Advanced options
           {showMore ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
 
         {showMore && (
           <div className="space-y-2 border border-border rounded-md p-2 bg-muted/30">
+            {forcefield !== "dummy" && (
+              <label className="nodrag flex items-start justify-between gap-2 text-xs text-muted-foreground">
+                <span>
+                  Assign atom types
+                  <span className="block text-[10px] text-muted-foreground/80">
+                    On: assign {forcefield.toUpperCase()} atom types from the coordination
+                    environment, then charges. Off: keep the atom types you assigned manually
+                    and only compute the {forcefield.toUpperCase()} charges from them (nothing is
+                    re-typed).
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="nodrag mt-0.5"
+                  checked={assignTypes}
+                  onChange={(e) => updateNodeData(id, { ...data, assignTypes: e.target.checked })}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              </label>
+            )}
+
             <label className="nodrag flex items-start justify-between gap-2 text-xs text-muted-foreground">
               <span>
                 Reset MolID
