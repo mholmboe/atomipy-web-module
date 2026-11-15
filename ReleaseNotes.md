@@ -2,8 +2,10 @@
 
 *Released 2026-11-15 · embeds atomipy 1.1*
 
-A Box-node release: the **System Box size** node now shows the real unit cell of a
-crystal picked from the Library, and no longer fabricates a bogus 50³ box.
+A Box- and XRD-node release: the **System Box size** node now shows the real unit
+cell of a crystal picked from the Library (and no longer fabricates a bogus 50³
+box), and the **XRD** node gains Advanced options, (hkl) peak labels, super-cell
+Miller-index scaling, and a peak-list export.
 
 ## 📦 Box node — real crystal cell on display
 * **Crystal unit cell now displayed.** Pick a crystal from the Library (e.g.
@@ -23,6 +25,26 @@ crystal picked from the Library, and no longer fabricates a bogus 50³ box.
   not be re-seeded. The toggle now only converts fields that actually hold values;
   an empty box reads **"auto (from upstream)"**. Existing graphs still holding a
   stale `50` can be cleared with the node's **↻ reset** button.
+
+## 🔬 XRD node — Advanced options, (hkl) labels & super-cell scaling
+* **Advanced options** (collapsible) expose the full `ap.xrd` control set that the
+  node previously hard-coded:
+  * **Broadening** — per-family peak widths `fwhm_00l` / `fwhm_hk0` / `fwhm_hkl`
+    and a **Lorentzian** mixing factor (pseudo-Voigt profile).
+  * **Preferred orientation** — a strength parameter + a preferred `(hkl)` direction
+    (exponential `exp(pref·cos2θ)` texture correction).
+  * **B-factor** — an isotropic Debye–Waller `B` (`b_all`) damping the high-angle tail.
+  * **Neutral atoms** — use neutral atomic scattering factors instead of ionic.
+* **(hkl) peak labels.** A *Show (hkl) labels* toggle draws Miller indices above the
+  strongest peaks, both in the node's inline plot (with anti-overlap thinning) and in
+  the exported data. Off by default.
+* **Super-cell Miller scaling.** Enter the system's replication factor as three
+  integers (**nₓ, n_y, n_z**); peaks from a super-cell are **labelled with the reduced
+  (primitive-cell) index** — e.g. a 2×2×4 super-lattice reflection `(2 0 4)` prints as
+  `(1 0 2)` — and super-lattice-only peaks are flagged.
+* **Peak-list export.** XRD now returns a labelled peak list (`two_theta`, intensity,
+  `hkl`, raw index, multiplicity, super-lattice flag); download it as **`peaks.csv`**
+  from the node. (Backed by `ap.xrd(..., return_peaks=True, supercell=…)` in atomipy 1.1.)
 
 ---
 
