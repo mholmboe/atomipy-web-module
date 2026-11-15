@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
 import { FileInput, Upload, File, Loader2, X, ChevronDown, ChevronUp } from "lucide-react";
 import { NodeHeader } from "./NodeHeader";
@@ -56,8 +56,13 @@ type StructureNodeData = {
   path?: string;
   // Inorganic library selection: librarySource 'preset' -> UC_conf/<value>,
   // 'crystal' -> ap.load_crystal(<value>). value holds the file path.
-  librarySource?: "preset" | "crystal";
+  librarySource?: "preset" | "crystal" | "water";
   materialName?: string;
+  // Unit cell of the selected library material, fetched lazily on selection so the
+  // downstream Box node can DISPLAY the (replicated) cell before any build. Crystals
+  // carry no static metrics (the cell lives inside the CIF), so without this the Box
+  // only shows "auto". Lengths Å, angles degrees.
+  cellMetrics?: { a: number; b: number; c: number; alpha: number; beta: number; gamma: number };
 
   // Organic/SMILES properties
   smiles?: string;
@@ -87,7 +92,7 @@ type StructureNodeData = {
 };
 
 export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData>) {
-  const { updateNodeData } = useReactFlow();
+  const { updateNodeData, getNode } = useReactFlow();
   const [uploading, setUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isParametrizing, setIsParametrizing] = useState(false);
@@ -140,6 +145,43 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
     const m = data.libraryMolecule || "";
     if (m) setLibCategory(m.split("/")[0] || "");
   }, [data.libraryMolecule]);
+
+  // Fetch the selected library material's unit cell so the downstream Box node can
+  // DISPLAY the real (replicated) crystal cell. Crystals carry no static metrics
+  // (their cell lives inside the CIF, which the browser never parses), so without
+  // this the Box only ever shows "auto". Best-effort: on any failure the Box simply
+  // keeps its "auto (from upstream)" fallback.
+  const fetchCellMetrics = useCallback(async (file: string, src: string) => {
+    try {
+      const resp = await fetch(`/api/inorganic/cell?file=${encodeURIComponent(file)}&source=${encodeURIComponent(src)}`);
+      if (!resp.ok) return;
+      const j = await resp.json();
+      const c = j?.cell;
+      if (!c || typeof c.a !== "number" || typeof c.b !== "number" || typeof c.c !== "number") return;
+      // The fetch is async — only apply if the node still points at this file
+      // (the user may have picked another material meanwhile).
+      const cur = getNode(id)?.data as StructureNodeData | undefined;
+      if (cur?.value !== file) return;
+      updateNodeData(id, {
+        cellMetrics: {
+          a: c.a, b: c.b, c: c.c,
+          alpha: typeof c.alpha === "number" ? c.alpha : 90,
+          beta: typeof c.beta === "number" ? c.beta : 90,
+          gamma: typeof c.gamma === "number" ? c.gamma : 90,
+        },
+      });
+    } catch {
+      /* best-effort: Box falls back to "auto (from upstream)" */
+    }
+  }, [getNode, id, updateNodeData]);
+
+  // Backfill the cell for an already-selected crystal (saved graph, or a node that
+  // had `value` set before this feature existed) that has no cellMetrics yet.
+  useEffect(() => {
+    if ((data.source === "library" || data.source === "preset") && data.value && data.librarySource && !data.cellMetrics) {
+      void fetchCellMetrics(data.value, data.librarySource);
+    }
+  }, [data.source, data.value, data.librarySource, data.cellMetrics, fetchCellMetrics]);
 
   // ---- Build-lattice helpers ----
   const latticeMode = data.latticeMode ?? "preset";
@@ -415,8 +457,12 @@ export function StructureNode({ id, data }: NodeComponentProps<StructureNodeData
                     value={data.value || ""}
                     disabled={!inorgCategory}
                     onChange={(e) => {
-                      const m = inorgMatsForCat.find((x) => x.file === e.target.value);
-                      updateNodeData(id, { ...data, source: "library", value: e.target.value, librarySource: m?.source, materialName: m?.name, previewJobId: undefined });
+                      const file = e.target.value;
+                      const m = inorgMatsForCat.find((x) => x.file === file);
+                      // Clear any previous cell immediately; fetch the new one so the
+                      // downstream Box can display the real (replicated) crystal cell.
+                      updateNodeData(id, { ...data, source: "library", value: file, librarySource: m?.source, materialName: m?.name, cellMetrics: undefined, previewJobId: undefined });
+                      if (file && m?.source) void fetchCellMetrics(file, m.source);
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
                   >

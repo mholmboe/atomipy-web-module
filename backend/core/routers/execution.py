@@ -1010,3 +1010,87 @@ async def inorganic_library():
         "attribution": "Avogadro2 crystals library (public domain; IZA zeolites + "
                        "Crystallography Open Database)",
     }
+
+
+@router.get("/inorganic/cell")
+async def inorganic_cell(file: str, source: str = "crystal"):
+    """Return the unit-cell metrics {a,b,c,alpha,beta,gamma} of a library structure.
+
+    Lets the frontend's Box node DISPLAY a crystal's (replicated) cell before any
+    build. The crystal library's ``file`` is just a path (e.g.
+    ``oxides/SiO2-Quartz-alpha.cif``) — the cell lives inside the CIF, which the
+    browser never parses, so the Box fell back to showing nothing ("auto"). This
+    reads the cell cheaply (CIF header for crystals; import for other sources) so
+    the Box can show the real numbers. Lengths in Å, angles in degrees.
+    """
+    import re
+    import atomipy as ap
+
+    if not file:
+        raise HTTPException(status_code=400, detail="No structure file given.")
+
+    if source == "crystal":
+        base = os.path.join(os.path.dirname(ap.__file__), "structures", "crystals")
+    elif source == "water":
+        base = os.path.join(os.path.dirname(ap.__file__), "structures", "water")
+    elif source == "upload":
+        base = OUTPUTS_DIR
+    else:  # preset (UC_conf) and anything else
+        base = os.path.join(os.path.dirname(ap.__file__), "structures", "minerals", "UC_conf")
+    path = _safe_join(base, file)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail=f"Structure not found: {file}")
+
+    def _num(tok: str):
+        # CIF values may carry an uncertainty, e.g. "4.9124(1)" -> 4.9124.
+        tok = tok.split("(")[0].strip()
+        try:
+            return float(tok)
+        except ValueError:
+            return None
+
+    cell = None
+    # Fast path for .cif: read the six _cell_* header tags directly.
+    if path.lower().endswith((".cif", ".mmcif", ".mcif")):
+        try:
+            with open(path, "r", errors="replace") as fh:
+                txt = fh.read()
+            keys = [
+                ("a", "_cell_length_a"), ("b", "_cell_length_b"), ("c", "_cell_length_c"),
+                ("alpha", "_cell_angle_alpha"), ("beta", "_cell_angle_beta"), ("gamma", "_cell_angle_gamma"),
+            ]
+            parsed = {}
+            for name, tag in keys:
+                m = re.search(rf"^\s*{re.escape(tag)}\s+([-\d.eE+()]+)", txt, re.MULTILINE)
+                if m:
+                    parsed[name] = _num(m.group(1))
+            if all(parsed.get(k) is not None for k in ("a", "b", "c")):
+                cell = {
+                    "a": parsed["a"], "b": parsed["b"], "c": parsed["c"],
+                    "alpha": parsed.get("alpha") or 90.0,
+                    "beta": parsed.get("beta") or 90.0,
+                    "gamma": parsed.get("gamma") or 90.0,
+                }
+        except Exception:
+            cell = None
+
+    # Fallback (non-CIF, or CIF without a cell header): import and derive the cell.
+    if cell is None:
+        try:
+            _atoms, box = ap.import_auto(path)
+            if box is not None and len(box) >= 3:
+                if len(box) == 6 and (box[3] or box[4] or box[5]):
+                    # Already a Cell [a,b,c,alpha,beta,gamma].
+                    c = list(box)
+                    cell = {"a": c[0], "b": c[1], "c": c[2],
+                            "alpha": c[3] or 90.0, "beta": c[4] or 90.0, "gamma": c[5] or 90.0}
+                else:
+                    c = ap.Box_dim2Cell(list(box))
+                    cell = {"a": c[0], "b": c[1], "c": c[2],
+                            "alpha": c[3] or 90.0, "beta": c[4] or 90.0, "gamma": c[5] or 90.0}
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Could not read cell: {exc}")
+
+    if cell is None:
+        raise HTTPException(status_code=422, detail=f"No unit cell found in {file}.")
+    return {"file": file, "source": source, "cell": cell}

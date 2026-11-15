@@ -378,8 +378,24 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
       if (!node) return null;
       const nd = (node.data ?? {}) as Record<string, unknown>;
 
-      if (node.type === "structure" || node.type === "preset")
-        return findSeedFromPresetData(nd as { source?: string; value?: string; presets?: PresetOption[] });
+      if (node.type === "structure" || node.type === "preset") {
+        const preset = findSeedFromPresetData(nd as { source?: string; value?: string; presets?: PresetOption[] });
+        if (preset) return preset;
+        // Crystals (and other library materials) carry no static preset metrics —
+        // their cell lives in the CIF. The Structure node fetches it on selection and
+        // stores it as `cellMetrics`, letting the Box display the real (replicated)
+        // cell before any build (the Replicate/Scale branches scale it on the way down).
+        const cm = (nd as { cellMetrics?: { a?: number; b?: number; c?: number; alpha?: number; beta?: number; gamma?: number } }).cellMetrics;
+        if (cm && hasValue(cm.a) && hasValue(cm.b) && hasValue(cm.c)) {
+          const seed: BoxSeed = {
+            a: cm.a, b: cm.b, c: cm.c,
+            alpha: cm.alpha ?? 90, beta: cm.beta ?? 90, gamma: cm.gamma ?? 90,
+          };
+          const bd = cellToBoxDim(seed.a!, seed.b!, seed.c!, seed.alpha!, seed.beta!, seed.gamma!);
+          return { ...seed, ...bd };
+        }
+        return null;
+      }
 
       if (node.type === "box") {
         const own = nd as BoxNodeData;
