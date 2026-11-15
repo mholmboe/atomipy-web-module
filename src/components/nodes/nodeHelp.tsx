@@ -810,10 +810,10 @@ export const NODE_HELP: Record<string, NodeHelp> = {
     summary:
       "Simulates a powder X-ray diffraction pattern (2θ vs intensity) from the crystal structure using atomic structure factors. Configurable wavelength, 2θ range/step, peak broadening, preferred orientation, temperature factor, and peak shape.",
     features: [
-      "Instrument: wavelength λ (default Cu Kα ≈ 1.5419 Å), 2θ min/max, and step.",
-      "Reflection-class FWHM broadening for 00l, hk0, and hkl peaks.",
-      "Preferred-orientation correction along a chosen (h k l); isotropic B-factor; pseudo-Voigt peak shape; neutral-atoms toggle.",
-      "Writes xrd.dat (two columns: 2θ and normalized intensity), renders an inline profile on the node, and streams the curve to a connected Plot node.",
+      "Instrument (always shown): wavelength λ (default Cu Kα ≈ 1.54187 Å), 2θ min/max, and step.",
+      "Advanced options (collapsible): reflection-class FWHM broadening for 00l / hk0 / hkl, preferred-orientation correction along a chosen (h k l), isotropic B-factor, pseudo-Voigt peak shape, and neutral-atoms toggle.",
+      "Miller indices: optionally label the (hkl) family above each peak, and set the supercell replication (nx, ny, nz) so indices are scaled back to the underlying cell.",
+      "Writes xrd.dat (two columns: 2θ and normalized intensity), renders an inline profile on the node, streams the curve to a connected Plot node, and offers a peaks.csv export (2θ, hkl, intensity, multiplicity).",
     ],
     theory: [
       "Allowed reflections come from Bragg's law for the cell, scanned over the 2θ range. Atomic scattering factors are evaluated from tabulated coefficients vs sinθ/λ. The structure factor sums them over all atoms (with occupancy and a Debye–Waller factor); intensity is |F|² scaled by a Lorentz-polarization factor (and optional preferred orientation). Each reflection is drawn as a pseudo-Voigt peak whose width depends on its class.",
@@ -829,10 +829,11 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Requires a crystalline cell with fractional coordinates; amorphous input gives no meaningful peaks.",
       "Intensity is normalized so the strongest peak = 1 — the same scale in the inline plot, the Plot node, and the xrd.dat file.",
       "Preferred orientation enhances/suppresses peaks near the chosen (h k l); set strength to 0 to disable.",
+      "Supercell relabeling only divides the displayed indices — it never changes the computed pattern. Indices that don't divide evenly by (nx, ny, nz) are kept as superlattice reflections (these appear only when a perfect supercell's symmetry is broken, e.g. by substitution).",
     ],
     before: [
       "A crystalline Import Structure with a valid unit cell and fractional coordinates — a CIF/mineral from the library or your own crystal file. Amorphous or gas-phase input gives no meaningful peaks.",
-      "Optional structure edits first — Replicate (build a supercell), Chemistry (isomorphic substitution), or any transform. The pattern reflects whatever reaches the node's input.",
+      "Optional structure edits first — Replicate (build a supercell), Chemistry (isomorphic substitution), or any transform. The pattern reflects whatever reaches the node's input. If you built a supercell, set the matching replication under Advanced options so the (hkl) labels read against the original cell.",
     ],
     after: [
       "View it: the inline 2θ-vs-intensity profile shows on the node; wire its output to a Plot node to zoom, inspect values, and export the curve as CSV / PNG / SVG.",
@@ -840,8 +841,9 @@ export const NODE_HELP: Record<string, NodeHelp> = {
       "Chain it: the main output passes the structure through unchanged, so you can continue to further analysis. XRD is usually a leaf branch.",
     ],
     tips: [
-      "Match λ to your source (Cu Kα ≈ 1.5419 Å) so 2θ positions line up with experiment.",
+      "Match λ to your source (Cu Kα ≈ 1.54187 Å) so 2θ positions line up with experiment.",
       "Increase 00l FWHM to mimic turbostratic/layered broadening; raise the B-factor to damp high-angle peaks.",
+      "Turn on Show (hkl) labels to index the peaks; download peaks.csv from the inline plot for the full peak table (2θ, hkl, intensity, multiplicity).",
     ],
   },
 

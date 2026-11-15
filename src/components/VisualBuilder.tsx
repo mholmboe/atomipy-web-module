@@ -2596,12 +2596,13 @@ export default function VisualBuilder() {
                 )
               );
             } else if (data.type === "xrd") {
-              // XRD diffraction pattern -> XrdNode renders data.xrdPlot.points.
-              const { nodeId, points } = data;
+              // XRD diffraction pattern -> XrdNode renders data.xrdPlot.points
+              // and (when present) data.xrdPlot.peaks for Miller-index labels.
+              const { nodeId, points, peaks } = data;
               setNodes((nds) =>
                 nds.map((node) =>
                   node.id === nodeId
-                    ? { ...node, data: { ...node.data, xrdPlot: { points } } }
+                    ? { ...node, data: { ...node.data, xrdPlot: { points, peaks } } }
                     : node
                 )
               );

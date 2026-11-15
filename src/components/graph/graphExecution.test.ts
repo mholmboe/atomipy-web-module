@@ -535,6 +535,49 @@ describe('graphExecution — review-fix regressions', () => {
     expect(code).not.toMatch(/__PLOT_[^_]/);
   });
 
+  it('xrd node requests the labeled peak list and includes it in the marker', () => {
+    const nodes: Node[] = [struct, { id: 'x', type: 'xrd', position: { x: 100, y: 0 }, data: {} }];
+    const code = generatePythonCode(nodes, [edgeTo('x')], 'minimal');
+    expect(code).toContain('return_peaks=True');
+    expect(code).toContain('_xrd_tt, _xrd_I, _xrd_peaks = ap.xrd(');
+    expect(code).toContain("'peaks': _xrd_peaks");
+  });
+
+  it('xrd node reads the 2θ range from twoThetaMin/twoThetaMax (not the dead thetaMin keys)', () => {
+    const nodes: Node[] = [struct,
+      { id: 'x', type: 'xrd', position: { x: 100, y: 0 }, data: { twoThetaMin: 7, twoThetaMax: 70 } }];
+    const code = generatePythonCode(nodes, [edgeTo('x')], 'minimal');
+    expect(code).toContain('two_theta_range=(7, 70)');
+  });
+
+  it('xrd node wires broadening, preferred orientation, B-factor, lorentzian and neutral atoms', () => {
+    const nodes: Node[] = [struct,
+      { id: 'x', type: 'xrd', position: { x: 100, y: 0 }, data: {
+        angleStep: 0.05, fwhm00l: 1.3, fwhmhk0: 0.4, fwhmhkl: 0.6,
+        bAll: 0.8, lorentzianFactor: 0.7, neutralAtoms: true,
+        pref: 0.5, prefH: 0, prefK: 0, prefL: 1 } }];
+    const code = generatePythonCode(nodes, [edgeTo('x')], 'minimal');
+    expect(code).toContain('angle_step=0.05');
+    expect(code).toContain('fwhm_00l=1.3');
+    expect(code).toContain('fwhm_hk0=0.4');
+    expect(code).toContain('fwhm_hkl=0.6');
+    expect(code).toContain('b_all=0.8');
+    expect(code).toContain('lorentzian_factor=0.7');
+    expect(code).toContain('neutral_atoms=True');
+    expect(code).toContain('pref=0.5');
+    expect(code).toContain('preferred_orientation=(0, 0, 1)');
+  });
+
+  it('xrd node defaults the supercell to (1, 1, 1) and passes a custom replication', () => {
+    const def = generatePythonCode(
+      [struct, { id: 'x', type: 'xrd', position: { x: 100, y: 0 }, data: {} }], [edgeTo('x')], 'minimal');
+    expect(def).toContain('supercell=(1, 1, 1)');
+    const sc = generatePythonCode(
+      [struct, { id: 'x', type: 'xrd', position: { x: 100, y: 0 }, data: { superX: 2, superY: 2, superZ: 1 } }],
+      [edgeTo('x')], 'minimal');
+    expect(sc).toContain('supercell=(2, 2, 1)');
+  });
+
   it('stats node emits a parseable __PLOT_ marker at runtime (not the broken __PLOT_DATA__)', () => {
     const nodes: Node[] = [struct, { id: 'st', type: 'stats', position: { x: 100, y: 0 }, data: {} }];
     const code = generatePythonCode(nodes, [edgeTo('st')], 'minimal');

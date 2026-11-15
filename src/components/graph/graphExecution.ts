@@ -3287,26 +3287,47 @@ export function generatePythonCode(
         break;
       }
       case "xrd": {
-        const wavelength = getNumber(data, "wavelength", 1.5418);
-        const thetaMin = getNumber(data, "thetaMin", 5.0);
-        const thetaMax = getNumber(data, "thetaMax", 90.0);
+        const wavelength = getNumber(data, "wavelength", 1.54187);
+        const angleStep = getNumber(data, "angleStep", 0.02);
+        // Node stores the 2θ range under twoThetaMin/twoThetaMax (the old codegen
+        // read thetaMin/thetaMax, which no node ever wrote, so the range — and
+        // every control below — was silently ignored).
+        const thetaMin = getNumber(data, "twoThetaMin", 2.0);
+        const thetaMax = getNumber(data, "twoThetaMax", 90.0);
         const hklMax = getNumber(data, "hklMax", 5);
+        const fwhm00l = getNumber(data, "fwhm00l", 1.0);
+        const fwhmhk0 = getNumber(data, "fwhmhk0", 0.5);
+        const fwhmhkl = getNumber(data, "fwhmhkl", 0.5);
+        const bAll = getNumber(data, "bAll", 0.0);
+        const lorentzianFactor = getNumber(data, "lorentzianFactor", 1.0);
+        const neutralAtoms = getBoolean(data, "neutralAtoms", false);
+        const pref = getNumber(data, "pref", 0);
+        const prefH = getNumber(data, "prefH", 0);
+        const prefK = getNumber(data, "prefK", 0);
+        const prefL = getNumber(data, "prefL", 1);
+        // Supercell replication (nx, ny, nz) — relabels Miller indices back to the
+        // underlying cell; (1,1,1) = no relabeling. Only affects peak labels.
+        const superX = Math.max(1, Math.round(getNumber(data, "superX", 1)));
+        const superY = Math.max(1, Math.round(getNumber(data, "superY", 1)));
+        const superZ = Math.max(1, Math.round(getNumber(data, "superZ", 1)));
 
         pythonCode += `\n# Execute Powder XRD Diffraction Simulation\n`;
         // ap.xrd takes two_theta_range=(min, max) (not theta_min/theta_max) and
-        // returns a (two_theta, intensity) tuple of arrays. Run headless in the
-        // web backend: plot=False / save_output=False (no plt.show(), no PNG).
-        pythonCode += `_xrd_tt, _xrd_I = ap.xrd(${inAtoms}, ${inBox}, wavelength=${wavelength}, two_theta_range=(${thetaMin}, ${thetaMax}), hkl_max=${hklMax}, plot=False, save_output=False)\n`;
+        // returns a (two_theta, intensity[, peaks]) tuple of arrays. Run headless
+        // in the web backend: plot=False / save_output=False (no plt.show(), no
+        // PNG). return_peaks=True adds the labeled Miller-index peak list.
+        pythonCode += `_xrd_tt, _xrd_I, _xrd_peaks = ap.xrd(${inAtoms}, ${inBox}, wavelength=${wavelength}, angle_step=${angleStep}, two_theta_range=(${thetaMin}, ${thetaMax}), hkl_max=${hklMax}, b_all=${bAll}, lorentzian_factor=${lorentzianFactor}, neutral_atoms=${neutralAtoms ? "True" : "False"}, fwhm_00l=${fwhm00l}, fwhm_hk0=${fwhmhk0}, fwhm_hkl=${fwhmhkl}, pref=${pref}, preferred_orientation=(${prefH}, ${prefK}, ${prefL}), supercell=(${superX}, ${superY}, ${superZ}), plot=False, save_output=False, return_peaks=True)\n`;
         pythonCode += `with open('xrd.dat', 'w') as _xrd:\n`;
         pythonCode += `    for twotheta, intensity in zip(_xrd_tt, _xrd_I):\n`;
         pythonCode += `        _xrd.write(f"{twotheta:.4f} {intensity:.4f}\\n")\n`;
         pythonCode += `import json\n`;
-        // XrdNode renders from data.xrdPlot.points ([[2theta, I], ...]). Emit the
-        // dedicated __XRD_DATA_<id>__: marker (the backend turns it into a type:'xrd'
+        // XrdNode renders from data.xrdPlot.points ([[2theta, I], ...]) and
+        // data.xrdPlot.peaks (labeled Miller indices). Emit the dedicated
+        // __XRD_DATA_<id>__: marker (the backend turns it into a type:'xrd'
         // SSE event); guard on !strict so it fires in the executed (minimal) script.
         pythonCode += `_xrd_points = [[float(a), float(b)] for a, b in zip(_xrd_tt, _xrd_I)]\n`;
         if (mode !== "strict") {
-          pythonCode += `print("__XRD_DATA_${id}__:" + json.dumps({'points': _xrd_points}))\n`;
+          pythonCode += `print("__XRD_DATA_${id}__:" + json.dumps({'points': _xrd_points, 'peaks': _xrd_peaks}))\n`;
           // Also feed a connected Data Plotter node so it can render the profile
           // and export it (CSV/PNG/SVG). Route via the __PLOT_<id>__ marker the
           // PlotNode consumes; the XRD node keeps its own inline plot from
