@@ -177,6 +177,21 @@ describe('graphExecution Python Generator', () => {
     expect(code).toContain('ap.Cell2Box_dim(ap.fit_box(');
   });
 
+  it('box cell mode with empty fields passes the upstream cell through (no fabricated 50)', () => {
+    // A crystal downstream Box starts empty (no static cell to seed). It must
+    // reconstruct the real upstream cell, never override it with a 50³ box.
+    const nodes: Node[] = [
+      { id: 'imp', type: 'structure', position: { x: 0, y: 0 }, data: { source: 'library', librarySource: 'crystal', value: 'oxides/SiO2-Quartz-alpha.cif' } },
+      { id: 'box', type: 'box', position: { x: 100, y: 0 }, data: { inputMode: 'cell' } },
+    ];
+    const edges: Edge[] = [{ id: 'e1', source: 'imp', target: 'box', targetHandle: 'in' }];
+    const code = generatePythonCode(nodes, edges, 'minimal');
+    // Pulls the real cell from the upstream box and rebuilds it — no hardcoded 50.
+    expect(code).toContain('ap.Box_dim2Cell(');
+    expect(code).toMatch(/cell_\d+\[0\]/);
+    expect(code).not.toMatch(/Cell2Box_dim\(\[\s*50\b/);
+  });
+
   it('box fit mode can keep original positions (center=False)', () => {
     const nodes: Node[] = [
       { id: 'org', type: 'organic', position: { x: 0, y: 0 }, data: { smiles: 'CCO', forcefield: 'gaff-2.11' } },

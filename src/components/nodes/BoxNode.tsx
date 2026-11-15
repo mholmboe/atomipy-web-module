@@ -554,20 +554,23 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
   // ------- Mode switch with live conversion --------
   const switchMode = (newMode: BoxMode) => {
     if (newMode === mode) return;
+    const isSet = (v: number | undefined): v is number => typeof v === "number" && Number.isFinite(v);
     let update: Partial<BoxNodeData> = { inputMode: newMode };
 
+    // Only CONVERT real values across the two numeric modes. If the source
+    // fields are empty (the box is auto/pass-through — always the case for a
+    // crystal, which has no static cell to seed from), leave the target fields
+    // undefined too. Fabricating `?? 50` defaults here used to materialise a
+    // 50³ box on a bare tab toggle, which then overrode the real upstream cell
+    // (wrong XRD) and could not be re-seeded. The toggle must never invent a box.
     if (newMode === "box_dim" && mode === "cell") {
-      const a = data.a ?? 50, b = data.b ?? 50, c = data.c ?? 50;
-      const alpha = data.alpha ?? 90, beta = data.beta ?? 90, gamma = data.gamma ?? 90;
-      if (Number.isFinite(a) && Number.isFinite(b) && Number.isFinite(c)) {
-        const bd = cellToBoxDim(a, b, c, alpha, beta, gamma);
+      if (isSet(data.a) && isSet(data.b) && isSet(data.c)) {
+        const bd = cellToBoxDim(data.a, data.b, data.c, data.alpha ?? 90, data.beta ?? 90, data.gamma ?? 90);
         update = { ...update, lx: fmt(bd.lx), ly: fmt(bd.ly), lz: fmt(bd.lz), xy: fmt(bd.xy), xz: fmt(bd.xz), yz: fmt(bd.yz) };
       }
     } else if (newMode === "cell" && mode === "box_dim") {
-      const lx = data.lx ?? 50, ly = data.ly ?? 50, lz = data.lz ?? 50;
-      const xy = data.xy ?? 0, xz = data.xz ?? 0, yz = data.yz ?? 0;
-      if (Number.isFinite(lx) && Number.isFinite(ly) && Number.isFinite(lz)) {
-        const cell = boxDimToCell(lx, ly, lz, xy, xz, yz);
+      if (isSet(data.lx) && isSet(data.ly) && isSet(data.lz)) {
+        const cell = boxDimToCell(data.lx, data.ly, data.lz, data.xy ?? 0, data.xz ?? 0, data.yz ?? 0);
         update = { ...update, a: fmt(cell.a), b: fmt(cell.b), c: fmt(cell.c), alpha: fmt(cell.alpha), beta: fmt(cell.beta), gamma: fmt(cell.gamma) };
       }
     }
@@ -735,7 +738,13 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
             </label>
             <div className="text-[10px] text-foreground/80 font-mono text-center leading-relaxed">
               {mode === "cell" ? (() => {
-                const bd = cellToBoxDim(data.a ?? 50, data.b ?? 50, data.c ?? 50, data.alpha ?? 90, data.beta ?? 90, data.gamma ?? 90);
+                // Empty (auto) box: don't fabricate a 50³ equivalent — it reads as
+                // a real box and hides that the node is passing the upstream cell through.
+                const isSet = (v: number | undefined) => typeof v === "number" && Number.isFinite(v);
+                if (!isSet(data.a) || !isSet(data.b) || !isSet(data.c)) {
+                  return <div className="text-muted-foreground/70">auto (from upstream)</div>;
+                }
+                const bd = cellToBoxDim(data.a!, data.b!, data.c!, data.alpha ?? 90, data.beta ?? 90, data.gamma ?? 90);
                 return (
                   <>
                     <div className="border-b border-indigo-500/10 pb-0.5 mb-0.5">
@@ -747,7 +756,11 @@ export function BoxNode({ id, data }: NodeComponentProps<BoxNodeData>) {
                   </>
                 );
               })() : (() => {
-                const c = boxDimToCell(data.lx ?? 50, data.ly ?? 50, data.lz ?? 50, data.xy ?? 0, data.xz ?? 0, data.yz ?? 0);
+                const isSet = (v: number | undefined) => typeof v === "number" && Number.isFinite(v);
+                if (!isSet(data.lx) || !isSet(data.ly) || !isSet(data.lz)) {
+                  return <div className="text-muted-foreground/70">auto (from upstream)</div>;
+                }
+                const c = boxDimToCell(data.lx!, data.ly!, data.lz!, data.xy ?? 0, data.xz ?? 0, data.yz ?? 0);
                 return (
                   <>
                     <div className="border-b border-indigo-500/10 pb-0.5 mb-0.5">
