@@ -1,3 +1,31 @@
+# Release Notes: atomipy Visual Builder (`atomipy-web-module`) v0.5.2
+
+*Released 2026-11-15 · embeds atomipy 1.1*
+
+A Box-node release: the **System Box size** node now shows the real unit cell of a
+crystal picked from the Library, and no longer fabricates a bogus 50³ box.
+
+## 📦 Box node — real crystal cell on display
+* **Crystal unit cell now displayed.** Pick a crystal from the Library (e.g.
+  *Oxides → SiO₂-Quartz-α*) and the downstream Box shows its actual cell —
+  `4.9124, 4.9124, 5.4039 / 90, 90, 120` — instead of the old `auto`/placeholder.
+  A crystal's cell lives inside its CIF, which the browser never parsed, so the
+  Box previously had no numbers to show. A new backend endpoint
+  (`GET /api/inorganic/cell`) reads the cell from the CIF and the Structure node
+  fetches it on selection; the Box reads it through the normal upstream trace.
+* **Scales with Replicate/Scale.** With a Replicate 2×2×4 in between, the Box now
+  reads `9.8248, 9.8248, 21.6154` (volume ×16), angles preserved — the cell is
+  display-only and never enters the generated Python, so `load_crystal` stays the
+  authoritative source and the numbers match the build.
+* **No more phantom 50³ box.** Toggling the **Cell ↔ Box Dim** tabs on an empty
+  (pass-through) box used to materialise a fake `50 × 50 × 50` cell, which then
+  overrode the real upstream cell (wrong downstream results, e.g. XRD) and could
+  not be re-seeded. The toggle now only converts fields that actually hold values;
+  an empty box reads **"auto (from upstream)"**. Existing graphs still holding a
+  stale `50` can be cleared with the node's **↻ reset** button.
+
+---
+
 # Release Notes: atomipy Visual Builder (`atomipy-web-module`) v0.5.1
 
 *Released 2026-06-25 · embeds atomipy 0.97*
